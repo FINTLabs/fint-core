@@ -1,0 +1,46 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-provider-gateway
+  namespace: REPLACE-DASHED
+  labels:
+    app.kubernetes.io/name: fint-core-provider-gateway
+    app.kubernetes.io/instance: fint-core-provider-gateway_REPLACE
+    app.kubernetes.io/version: latest
+    app.kubernetes.io/component: provider
+    app.kubernetes.io/part-of: fint-core
+    fintlabs.no/team: core
+    fintlabs.no/org-id: REPLACE
+spec:
+  port: 8080
+  orgId: REPLACE
+  image: ghcr.io/fintlabs/fint-core-provider-gateway:latest
+  onePassword:
+    itemPath: REPLACE
+  env:
+    - name: JAVA_TOOL_OPTIONS
+      value: -XX:+ExitOnOutOfMemoryError -Xmx15G
+  database:
+    database: fint-core
+  ingress:
+    routes:
+      - host: REPLACE
+        path: /provider
+  kafka:
+    enabled: true
+    acls:
+      - topic: '*.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: 16Gi
+    requests:
+      cpu: 100m
+      memory: 16Gi
+  observability:
+    logging:
+      loki: true
+  prometheus:
+    enabled: true
+    path: /provider/gateway/actuator/prometheus
+    port: '8080'

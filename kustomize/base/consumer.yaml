@@ -1,0 +1,52 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer
+  namespace: REPLACE-DASHED
+  labels:
+    app.kubernetes.io/name: fint-core-consumer
+    app.kubernetes.io/instance: fint-core-consumer_REPLACE
+    app.kubernetes.io/version: latest
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: fint-core
+    fintlabs.no/team: core
+    fintlabs.no/org-id: REPLACE
+spec:
+  port: 8080
+  orgId: REPLACE
+  image: ghcr.io/fintlabs/fint-core-consumer:latest
+  replicas: 1
+  onePassword:
+    itemPath: REPLACE
+  env:
+    - name: fint.relation.base-url
+      value: REPLACE
+    - name: fint.consumer.org-id
+      value: REPLACE
+    - name: spring.kafka.consumer.fetch-min-size
+      value: "1"
+    - name: spring.kafka.consumer.fetch-max-wait
+      value: "500ms"
+    - name: spring.data.mongodb.database
+      value: fintcache
+    - name: fint.consumer.kafka.startup-jitter
+      value: 0ms
+    - name: JAVA_TOOL_OPTIONS
+      value: |
+        -XX:MaxRAMPercentage=80
+        -XX:+ExitOnOutOfMemoryError
+  kafka:
+    enabled: true
+    acls:
+      - topic: "REPLACE.fint-core.*"
+        permission: admin
+      - topic: "REPLACE.fint-core.event.consumer-error"
+        permission: admin
+      - topic: "REPLACE.fint-core.event.sync-status"
+        permission: admin
+  resources:
+    limits:
+      memory: 2Gi
+    requests:
+      memory: 128Mi
+      cpu: 100m

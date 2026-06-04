@@ -1,0 +1,117 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Fans the per-overlay values (ConfigMap "fint-org" from each leaf) out to both the
+# consumer and provider Application. Holds org-specific values (org-id in 3 forms,
+# mongodb uri, 1Password item) and env-specific values (host, base-url). Source is a
+# local-only generated resource, so it exists before these replacements run.
+replacements:
+  # dotted (org.id) -> orgId + org-id label (both) + consumer org-id env
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.id-dotted
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - spec.orgId
+          - metadata.labels.[fintlabs.no/org-id]
+          - spec.env.[name=fint.consumer.org-id].value
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - spec.orgId
+          - metadata.labels.[fintlabs.no/org-id]
+
+  # dashed (org-id) -> namespace (both) + consumer kafka acl prefixes
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.id-dashed
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - metadata.namespace
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - metadata.namespace
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - spec.kafka.acls.0.topic
+          - spec.kafka.acls.1.topic
+          - spec.kafka.acls.2.topic
+        options:
+          delimiter: "."
+          index: 0
+
+  # underscore (org_id) -> instance label (both)
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.id-underscore
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - metadata.labels.[app.kubernetes.io/instance]
+        options:
+          delimiter: "_"
+          index: 1
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - metadata.labels.[app.kubernetes.io/instance]
+        options:
+          delimiter: "_"
+          index: 1
+
+  # per-org 1Password item path -> both
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.onepassword-itempath
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - spec.onePassword.itemPath
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - spec.onePassword.itemPath
+
+  # env base-url -> consumer relation base-url
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.base-url
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - spec.env.[name=fint.relation.base-url].value
+
+  # env host -> provider ingress host
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.host
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - spec.ingress.routes.0.host
