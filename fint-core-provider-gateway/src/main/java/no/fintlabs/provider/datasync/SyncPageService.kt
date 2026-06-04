@@ -16,6 +16,7 @@ class SyncPageService(
     private val entityProducer: EntityProducer,
     private val metaDataKafkaProducer: MetaDataKafkaProducer,
     private val resourceCacheWriter: ResourceCacheWriter,
+    private val syncCompletionTracker: SyncCompletionTracker,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -30,7 +31,9 @@ class SyncPageService(
         }
 
         mutateMetadata(syncPage.metadata, domainName, packageName, entity)
-        writeToCache(syncPage, domainName, packageName, entity)
+        val resourceKey = ResourceRef.keyOf(domainName, packageName, entity)
+        writeToCache(syncPage, resourceKey)
+        trackForEviction(syncPage, resourceKey)
         val syncType = syncPage.syncType.toString().lowercase()
         val eventName = "adapter-$syncType-sync"
         metaDataKafkaProducer.send(syncPage.metadata, eventName)
@@ -49,15 +52,26 @@ class SyncPageService(
 
     private fun writeToCache(
         page: SyncPage,
-        domainName: String,
-        packageName: String,
-        entity: String,
+        resourceKey: String,
     ) {
-        val resourceKey = ResourceRef.keyOf(domainName, packageName, entity)
         val timestamp = page.metadata.time
         page.resources.forEach { entry ->
             resourceCacheWriter.write(resourceKey, entry.identifier, entry.resource, timestamp)
         }
+    }
+
+    private fun trackForEviction(
+        page: SyncPage,
+        resourceKey: String,
+    ) {
+        if (page.syncType != SyncType.FULL) return
+        syncCompletionTracker.track(
+            resourceKey,
+            page.metadata.corrId,
+            page.metadata.totalSize,
+            page.metadata.time,
+            page.resources.size,
+        )
     }
 
     private fun sendEntities(page: SyncPage) {

@@ -31,6 +31,10 @@ dependencies {
     implementation 'no.fintlabs:fint-antlr:1.1.1'
     implementation 'org.reflections:reflections:0.10.2'
 
+    // Adapter models (SyncType etc.) are provided at runtime by the host app (consumer/provider),
+    // which pin their own version; compile against a known one here.
+    compileOnly 'no.fintlabs:fint-core-infra-models:2.1.0'
+
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
     testImplementation 'org.testcontainers:mongodb'
 }
