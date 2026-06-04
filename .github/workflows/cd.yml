@@ -147,6 +147,13 @@ jobs:
           renderEngine: 'kustomize'
           kustomizationPath: 'kustomize/overlays/${{ matrix.environment }}/${{ matrix.org }}'
 
+      - name: Pin image to the release version
+        # k8s-deploy's image substitution only rewrites pod-spec containers, not the
+        # FLAIS Application CRD's spec.image — so pin the tag in the baked manifest here.
+        env:
+          TAG: ${{ needs.setup.outputs.version }}
+        run: yq -i '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' "${{ steps.bake.outputs.manifestsBundle }}"
+
       - name: Ensure namespace ${{ matrix.org }}
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
 
@@ -155,6 +162,3 @@ jobs:
         with:
           namespace: ${{ matrix.org }}
           manifests: ${{ steps.bake.outputs.manifestsBundle }}
-          images: |
-            ghcr.io/fintlabs/fint-core-consumer-db:${{ needs.setup.outputs.version }}
-            ghcr.io/fintlabs/fint-core-provider-gateway-db:${{ needs.setup.outputs.version }}
