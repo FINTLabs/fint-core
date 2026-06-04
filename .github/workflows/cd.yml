@@ -1,0 +1,163 @@
+name: CD
+
+# Tag push  -> build+push both images, then deploy:
+#   tag contains "rc" -> beta
+#   stable tag        -> beta + api
+# Manual run -> deploy an already-built version to one chosen env (alpha is manual-only).
+on:
+  push:
+    tags: ['*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [alpha, beta, api]
+        default: alpha
+      version:
+        description: Image version to deploy (e.g. 1.11.9-rc.1-4.0.10)
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      environments: ${{ steps.v.outputs.environments }}
+      build: ${{ steps.v.outputs.build }}
+      stable: ${{ steps.v.outputs.stable }}
+    steps:
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "environments=[\"${{ inputs.environment }}\"]" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            # Clean release tag = SEMVER[-rc.N]-IMODEL with nothing trailing (no branch suffix).
+            if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              if [[ "$VERSION" == *-rc.* ]]; then
+                echo 'environments=["beta"]' >> "$GITHUB_OUTPUT"
+                echo "stable=false" >> "$GITHUB_OUTPUT"
+              else
+                echo 'environments=["beta","api"]' >> "$GITHUB_OUTPUT"
+                echo "stable=true" >> "$GITHUB_OUTPUT"
+              fi
+            else
+              # Branch / non-standard tag: build the image, but DO NOT auto-deploy.
+              echo 'environments=[]' >> "$GITHUB_OUTPUT"
+              echo "stable=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$VERSION is not a clean release tag — image built, no auto-deploy. Use the Run workflow button to deploy it."
+            fi
+          fi
+
+  build-and-push:
+    needs: setup
+    if: ${{ needs.setup.outputs.build == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [fint-core-consumer, fint-core-provider-gateway]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          tags: |
+            type=raw,value=${{ needs.setup.outputs.version }}
+            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=raw,value=latest,enable=${{ needs.setup.outputs.stable == 'true' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: [setup, build-and-push]
+    # Runs after a successful build (tag push) or directly on manual dispatch (build skipped).
+    if: ${{ always() && needs.setup.result == 'success' && needs.setup.outputs.environments != '[]' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.setup.outputs.environments) }}
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve cluster + resource group
+        id: aks
+        run: |
+          case "${{ matrix.environment }}" in
+            alpha) echo "cluster=aks-alpha-fint-2021-11-18" >> "$GITHUB_OUTPUT" ;;
+            beta)  echo "cluster=aks-beta-fint-2021-11-23"  >> "$GITHUB_OUTPUT" ;;
+            api)   echo "cluster=aks-api-fint-2022-02-08"   >> "$GITHUB_OUTPUT" ;;
+            *) echo "unknown environment ${{ matrix.environment }}"; exit 1 ;;
+          esac
+          echo "resource-group=rg-aks-${{ matrix.environment }}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets[format('AKS_{0}_FINT_GITHUB', matrix.environment)] }}
+
+      - uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.0.26'
+
+      - uses: azure/aks-set-context@v4
+        with:
+          cluster-name: ${{ steps.aks.outputs.cluster }}
+          resource-group: ${{ steps.aks.outputs.resource-group }}
+          admin: 'true'
+          use-kubelogin: 'true'
+
+      - name: Install kustomize
+        run: |
+          curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Deploy all orgs in ${{ matrix.environment }}
+        env:
+          TAG: ${{ needs.setup.outputs.version }}
+        run: |
+          shopt -s nullglob
+          dirs=(kustomize/overlays/${{ matrix.environment }}/*/)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No org overlays under kustomize/overlays/${{ matrix.environment }}"; exit 0
+          fi
+          for org in "${dirs[@]}"; do
+            ns="$(basename "$org")"
+            echo "::group::deploy $ns @ $TAG"
+            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+            kustomize build "$org" \
+              | yq eval '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' - \
+              | kubectl apply -f -
+            echo "::endgroup::"
+          done
