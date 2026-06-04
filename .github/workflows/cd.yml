@@ -108,6 +108,8 @@ jobs:
       fail-fast: false
       matrix:
         environment: ${{ fromJson(needs.setup.outputs.environments) }}
+        # One leg per org; add overlay dir names here as orgs are onboarded.
+        org: [fintlabs-no]
     environment: ${{ matrix.environment }}
     steps:
       - uses: actions/checkout@v5
@@ -138,30 +140,21 @@ jobs:
           admin: 'true'
           use-kubelogin: 'true'
 
-      - name: Install kustomize
-        run: |
-          KUSTOMIZE_VERSION=v5.5.0
-          curl -sSLo /tmp/kustomize.tar.gz \
-            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
-          tar -xzf /tmp/kustomize.tar.gz -C /tmp
-          sudo install -m 0755 /tmp/kustomize /usr/local/bin/kustomize
-          kustomize version
+      - name: Bake manifests with kustomize
+        id: bake
+        uses: azure/k8s-bake@v3
+        with:
+          renderEngine: 'kustomize'
+          kustomizationPath: 'kustomize/overlays/${{ matrix.environment }}/${{ matrix.org }}'
 
-      - name: Deploy all orgs in ${{ matrix.environment }}
-        env:
-          TAG: ${{ needs.setup.outputs.version }}
-        run: |
-          shopt -s nullglob
-          dirs=(kustomize/overlays/${{ matrix.environment }}/*/)
-          if [ ${#dirs[@]} -eq 0 ]; then
-            echo "No org overlays under kustomize/overlays/${{ matrix.environment }}"; exit 0
-          fi
-          for org in "${dirs[@]}"; do
-            ns="$(basename "$org")"
-            echo "::group::deploy $ns @ $TAG"
-            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
-            kustomize build "$org" \
-              | yq eval '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' - \
-              | kubectl apply -f -
-            echo "::endgroup::"
-          done
+      - name: Ensure namespace ${{ matrix.org }}
+        run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy
+        uses: azure/k8s-deploy@v5
+        with:
+          namespace: ${{ matrix.org }}
+          manifests: ${{ steps.bake.outputs.manifestsBundle }}
+          images: |
+            ghcr.io/fintlabs/fint-core-consumer-db:${{ needs.setup.outputs.version }}
+            ghcr.io/fintlabs/fint-core-provider-gateway-db:${{ needs.setup.outputs.version }}
