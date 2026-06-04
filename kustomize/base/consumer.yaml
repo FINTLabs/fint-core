@@ -35,6 +35,12 @@ spec:
       value: |
         -XX:MaxRAMPercentage=80
         -XX:+ExitOnOutOfMemoryError
+  ingress:
+    routes:
+      - host: REPLACE
+        path: /
+        headers:
+          x-org-id: REPLACE
   kafka:
     enabled: true
     acls:

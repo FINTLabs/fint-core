@@ -18,6 +18,7 @@ replacements:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
           - spec.env.[name=fint.consumer.org-id].value
+          - spec.ingress.routes.0.headers.x-org-id
       - select:
           kind: Application
           name: fint-core-provider-gateway
@@ -105,12 +106,17 @@ replacements:
         fieldPaths:
           - spec.env.[name=fint.relation.base-url].value
 
-  # env host -> provider ingress host
+  # env host -> consumer + provider ingress host
   - source:
       kind: ConfigMap
       name: fint-org
       fieldPath: data.host
     targets:
+      - select:
+          kind: Application
+          name: fint-core-consumer
+        fieldPaths:
+          - spec.ingress.routes.0.host
       - select:
           kind: Application
           name: fint-core-provider-gateway
