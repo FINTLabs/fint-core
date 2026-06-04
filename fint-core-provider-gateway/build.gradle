@@ -22,9 +22,7 @@ java {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     implementation "no.novari:fint-utdanning-resource-model-java:${fintVersion}"
@@ -34,35 +32,22 @@ dependencies {
     implementation "no.novari:fint-ressurs-resource-model-java:${fintVersion}"
     implementation "no.novari:fint-arkiv-resource-model-java:${fintVersion}"
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
     implementation "jakarta.annotation:jakarta.annotation-api:3.0.0-M1"
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
     implementation "org.jetbrains.kotlin:kotlin-reflect"
-
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core'
 
     implementation 'no.fint:fint-event-model:3.0.2'
     implementation 'no.fintlabs:fint-core-infra-models:2.1.0-rc-5'
-    implementation 'no.novari:kafka:6.0.0'
     implementation 'no.novari:fint-core-principal:4.1.0'
-    // Version 3 of metamodel supports v4 of information model
-    implementation 'no.novari:fint-core-metamodel:3.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
-    compileOnly 'org.projectlombok:lombok'
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     runtimeOnly 'org.postgresql:postgresql'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-    annotationProcessor 'org.projectlombok:lombok'
 
-    testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation "io.mockk:mockk:1.13.13"
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
