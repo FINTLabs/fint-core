@@ -26,8 +26,6 @@ spec:
     routes:
       - host: REPLACE
         path: /provider
-    headers:
-      x-org-id: REPLACE
   kafka:
     enabled: true
     acls:
