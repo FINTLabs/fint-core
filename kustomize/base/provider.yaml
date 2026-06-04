@@ -39,10 +39,3 @@ spec:
     requests:
       cpu: 100m
       memory: 16Gi
-  observability:
-    logging:
-      loki: true
-  prometheus:
-    enabled: true
-    path: /provider/gateway/actuator/prometheus
-    port: '8080'

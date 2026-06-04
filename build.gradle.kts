@@ -22,8 +22,6 @@ subprojects {
             "compileOnly"("org.projectlombok:lombok")
             "annotationProcessor"("org.projectlombok:lombok")
 
-            "runtimeOnly"("io.micrometer:micrometer-registry-prometheus")
-
             "testImplementation"("io.mockk:mockk:1.13.13")
             "testImplementation"("org.springframework.boot:spring-boot-starter-test")
             "testImplementation"("org.springframework.kafka:spring-kafka-test")

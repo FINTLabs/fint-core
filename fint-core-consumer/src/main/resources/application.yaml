@@ -3,7 +3,6 @@ fint:
     opa:
       enabled: false
     exposed-endpoints:
-      - /actuator/prometheus
       - /actuator/health
   relation:
     base-url: https://api.felleskomponent.no
@@ -43,7 +42,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: prometheus,health
+        include: health
 
 logging:
   level:
