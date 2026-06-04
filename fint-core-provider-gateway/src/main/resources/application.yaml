@@ -15,6 +15,9 @@ novari:
       batch-size: 64KB
 
 spring:
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/fint-provider}
   jpa:
     properties:
       jdbc:

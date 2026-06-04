@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
+import no.fintlabs.consumer.resource.ResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.concurrent.CompletableFuture
@@ -14,6 +15,7 @@ import kotlin.time.measureTime
 class SyncPageService(
     private val entityProducer: EntityProducer,
     private val metaDataKafkaProducer: MetaDataKafkaProducer,
+    private val resourceCacheWriter: ResourceCacheWriter,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -28,6 +30,7 @@ class SyncPageService(
         }
 
         mutateMetadata(syncPage.metadata, domainName, packageName, entity)
+        writeToCache(syncPage, domainName, packageName, entity)
         val syncType = syncPage.syncType.toString().lowercase()
         val eventName = "adapter-$syncType-sync"
         metaDataKafkaProducer.send(syncPage.metadata, eventName)
@@ -44,7 +47,21 @@ class SyncPageService(
         syncPageMetadata.uriRef = domainName.lowercase() + '/' + packageName.lowercase() + '/' + resourceName.lowercase()
     }
 
+    private fun writeToCache(
+        page: SyncPage,
+        domainName: String,
+        packageName: String,
+        entity: String,
+    ) {
+        val resourceKey = ResourceRef.keyOf(domainName, packageName, entity)
+        val timestamp = page.metadata.time
+        page.resources.forEach { entry ->
+            resourceCacheWriter.write(resourceKey, entry.identifier, entry.resource, timestamp)
+        }
+    }
+
     private fun sendEntities(page: SyncPage) {
+        // Put all resources in mongodb and update related relations
         val futures = page.resources.map { syncPageEntry ->
             entityProducer.sendSyncEntity(page, syncPageEntry)
                 .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
