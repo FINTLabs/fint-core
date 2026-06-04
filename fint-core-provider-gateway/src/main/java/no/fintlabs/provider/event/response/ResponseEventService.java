@@ -4,9 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.models.event.RequestFintEvent;
 import no.fintlabs.adapter.models.event.ResponseFintEvent;
+import no.fintlabs.adapter.models.sync.SyncPageEntry;
 import no.fintlabs.adapter.operation.OperationType;
+import no.fintlabs.consumer.resource.ResourceRef;
 import no.novari.resource.server.authentication.CorePrincipal;
 import no.fintlabs.provider.datasync.EntityProducer;
+import no.fintlabs.provider.datasync.ResourceCacheWriter;
 import no.fintlabs.provider.event.request.RequestEventService;
 import no.fintlabs.provider.exception.InvalidOrgIdException;
 import no.fintlabs.provider.exception.InvalidResponseFintEventException;
@@ -24,6 +27,7 @@ public class ResponseEventService {
     private final ResponseFintEventProducer responseFintEventProducer;
     private final RequestEventService requestEventService;
     private final EntityProducer entityProducer;
+    private final ResourceCacheWriter resourceCacheWriter;
 
     public void handleEvent(ResponseFintEvent responseFintEvent, CorePrincipal corePrincipal) throws NoRequestFoundException, InvalidOrgIdException {
         RequestFintEvent requestEvent = requestEventService.getEvent(responseFintEvent.getCorrId())
@@ -36,9 +40,21 @@ public class ResponseEventService {
 
         if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
             entityProducer.sendEventEntity(requestEvent, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
+            writeToCache(requestEvent, responseFintEvent);
         } else {
             log.info("Not sending entity to Kafka because it is a validate event or create request failed");
         }
+    }
+
+    /**
+     * Persists the event's resulting resource straight into the shared Mongo store via the same
+     * engine used for sync, keeping the cache in step with create/update/delete events (mirrors what
+     * the entity topic does for the consumer). A null resource value is treated as a delete.
+     */
+    private void writeToCache(RequestFintEvent request, ResponseFintEvent response) {
+        SyncPageEntry value = response.getValue();
+        String resourceKey = ResourceRef.keyOf(request.getDomainName(), request.getPackageName(), request.getResourceName());
+        resourceCacheWriter.write(resourceKey, value.getIdentifier(), value.getResource(), response.getHandledAt());
     }
 
     /**
