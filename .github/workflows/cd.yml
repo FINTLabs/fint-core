@@ -152,7 +152,9 @@ jobs:
         # FLAIS Application CRD's spec.image — so pin the tag in the baked manifest here.
         env:
           TAG: ${{ needs.setup.outputs.version }}
-        run: yq -i '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' "${{ steps.bake.outputs.manifestsBundle }}"
+        run: |
+          yq -i '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' "${{ steps.bake.outputs.manifestsBundle }}"
+          echo "pinned spec.image ->"; yq '.spec.image' "${{ steps.bake.outputs.manifestsBundle }}"
 
       - name: Ensure namespace ${{ matrix.org }}
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
