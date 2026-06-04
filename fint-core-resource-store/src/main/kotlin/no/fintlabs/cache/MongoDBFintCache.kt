@@ -324,6 +324,101 @@ class MongoDBFintCache(
     }
 
     /**
+     * Bulk back-link reconciliation: applies all [ops] across this collection in one `bulkWrite`,
+     * reusing the same aggregation-pipeline stages as the single-op [addBackLink]/[removeBackLink].
+     * Adds upsert a stub for an absent target; removes never create one.
+     */
+    override fun applyBackLinkOps(
+        ops: List<BackLinkOp>,
+        timestamp: Long,
+    ) {
+        if (ops.isEmpty()) return
+        val models =
+            ops.mapNotNull { op ->
+                when (op) {
+                    is BackLinkOp.Add ->
+                        addBackLinkStage(op.relation, op.link, timestamp)?.let { stage ->
+                            UpdateOneModel<Document>(
+                                Document(FIELD_ID, op.resourceId),
+                                listOf(stage),
+                                UpdateOptions().upsert(true),
+                            )
+                        }
+
+                    is BackLinkOp.Remove ->
+                        UpdateOneModel<Document>(
+                            Document(FIELD_ID, op.resourceId),
+                            listOf(removeBackLinkStage(op.relation, op.ref, timestamp)),
+                        )
+                }
+            }
+        if (models.isEmpty()) return
+        collection().bulkWrite(models, BulkWriteOptions().ordered(false))
+        bumpLastUpdated(timestamp)
+    }
+
+    /** `$set` stage appending [link]'s back-link entry, de-duplicated by `(relation, ref)`. */
+    private fun addBackLinkStage(
+        relation: String,
+        link: Link,
+        timestamp: Long,
+    ): Document? {
+        val entry = codec.linkEntry(relation, link) ?: return null
+        return Document(
+            "\$set",
+            Document(
+                FIELD_BACK_LINKS,
+                Document(
+                    "\$concatArrays",
+                    listOf(
+                        filterOutBackLink(entry.getString(FIELD_RELATION_NAME), entry.getString(FIELD_RELATION_REF)),
+                        listOf(entry),
+                    ),
+                ),
+            ).append(FIELD_HAS_DATA, Document("\$ifNull", listOf("\$$FIELD_HAS_DATA", false)))
+                .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
+        )
+    }
+
+    /** `$set` stage dropping the back-link matching `(relation, ref)`. */
+    private fun removeBackLinkStage(
+        relation: String,
+        ref: String,
+        timestamp: Long,
+    ): Document =
+        Document(
+            "\$set",
+            Document(FIELD_BACK_LINKS, filterOutBackLink(relation.lowercase(), ref))
+                .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
+        )
+
+    /** `$filter` expression removing back-link entries matching `(relationName, ref)`. */
+    private fun filterOutBackLink(
+        relationName: String,
+        ref: String,
+    ): Document =
+        Document(
+            "\$filter",
+            Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
+                .append("as", "b")
+                .append(
+                    "cond",
+                    Document(
+                        "\$not",
+                        listOf(
+                            Document(
+                                "\$and",
+                                listOf(
+                                    Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relationName)),
+                                    Document("\$eq", listOf("\$\$b.$FIELD_RELATION_REF", ref)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+        )
+
+    /**
      * Pipeline expression raising the stored timestamp to [timestamp] only when the document already
      * holds data; stubs keep their (absent) timestamp so [put] can still detect and fill them.
      */

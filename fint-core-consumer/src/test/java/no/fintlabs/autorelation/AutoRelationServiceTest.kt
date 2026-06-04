@@ -3,11 +3,13 @@ package no.fintlabs.autorelation
 import io.mockk.clearAllMocks
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import no.fintlabs.autorelation.cache.RelationRuleRegistry
 import no.fintlabs.autorelation.model.EntityDescriptor
 import no.fintlabs.autorelation.model.MetricReason
 import no.fintlabs.autorelation.model.RelationSyncRule
+import no.fintlabs.cache.BackLinkOp
 import no.fintlabs.cache.CacheService
 import no.fintlabs.cache.FintCache
 import no.fintlabs.consumer.links.LinkService
@@ -16,6 +18,8 @@ import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.model.resource.Link
 import no.novari.fint.model.resource.utdanning.vurdering.ElevfravarResource
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -114,6 +118,46 @@ class AutoRelationServiceTest {
 
             verify(exactly = 1) { cache.removeBackLink("t1", inverseRelation, sourceRef, any()) }
             verify(exactly = 1) { metricService.incrementUpdateApplied(targetKey, "removed") }
+        }
+    }
+
+    @Nested
+    inner class BatchReconcile {
+        @Test
+        fun `batches adds for the same target collection into one applyBackLinkOps`() {
+            every { cache.findIdsByBackLink(any(), any()) } returns emptySet()
+
+            service.applyRelations(
+                sourceKey,
+                listOf(
+                    "source-1" to sourceWithTarget("source-1", "t1"),
+                    "source-2" to sourceWithTarget("source-2", "t2"),
+                ),
+                123L,
+            )
+
+            val ops = slot<List<BackLinkOp>>()
+            verify(exactly = 1) { cache.applyBackLinkOps(capture(ops), 123L) }
+            assertEquals(2, ops.captured.size)
+            assertTrue(ops.captured.all { it is BackLinkOp.Add })
+        }
+
+        @Test
+        fun `batch applyRemoval flushes removals via applyBackLinkOps`() {
+            every { cache.findIdsByBackLink(inverseRelation, sourceRef) } returns setOf("t1")
+
+            service.applyRemoval(sourceKey, listOf("source-1" to elevfravar("source-1")), 123L)
+
+            val ops = slot<List<BackLinkOp>>()
+            verify(exactly = 1) { cache.applyBackLinkOps(capture(ops), 123L) }
+            assertEquals(listOf(BackLinkOp.Remove("t1", inverseRelation, sourceRef)), ops.captured)
+        }
+
+        @Test
+        fun `empty batch never touches the cache`() {
+            service.applyRelations(sourceKey, emptyList(), 123L)
+
+            verify(exactly = 0) { cache.applyBackLinkOps(any(), any()) }
         }
     }
 

@@ -64,6 +64,15 @@ interface FintCache {
         timestamp: Long,
     )
 
+    /**
+     * Bulk back-link reconciliation: applies all [ops] (adds/removes) to this collection in a single
+     * round-trip. Adds upsert a stub for an absent target; removes never create one.
+     */
+    fun applyBackLinkOps(
+        ops: List<BackLinkOp>,
+        timestamp: Long,
+    )
+
     fun getList(
         size: Long,
         offset: Long,

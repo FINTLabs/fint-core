@@ -5,9 +5,11 @@ import no.fintlabs.autorelation.model.AutoRelationException
 import no.fintlabs.autorelation.model.EntityDescriptor
 import no.fintlabs.autorelation.model.MetricReason
 import no.fintlabs.autorelation.model.RelationState
+import no.fintlabs.autorelation.model.RelationSyncRule
 import no.fintlabs.autorelation.model.createEntityDescriptor
 import no.fintlabs.autorelation.model.toEmptyRelationState
 import no.fintlabs.autorelation.model.toRelationState
+import no.fintlabs.cache.BackLinkOp
 import no.fintlabs.cache.CacheDocumentCodec
 import no.fintlabs.cache.CacheService
 import no.fintlabs.consumer.links.LinkService
@@ -60,6 +62,56 @@ class AutoRelationService(
         relationRuleRegistry.getRules(source).forEach { rule ->
             runRule(source, resourceId, rule.inverseRelation) {
                 process(rule.toEmptyRelationState(resource, resourceId))
+            }
+        }
+    }
+
+    /**
+     * Batch variant of [applyRelations] for a whole sync page: reconciles every source's relations,
+     * accumulating the resulting back-link changes per target collection and flushing each target as
+     * a single bulk write instead of one update per source.
+     */
+    fun applyRelations(
+        sourceKey: String,
+        resources: List<Pair<String, FintResource>>,
+        timestamp: Long,
+    ) = batchReconcile(sourceKey, resources, timestamp) { rule, resource, id ->
+        rule.toRelationState(resource, id)
+    }
+
+    /**
+     * Batch variant of [applyRemoval]: applies empty state for every source so targets drop their
+     * back-links, grouped into one bulk write per target collection.
+     */
+    fun applyRemoval(
+        sourceKey: String,
+        removed: List<Pair<String, FintResource>>,
+        timestamp: Long,
+    ) = batchReconcile(sourceKey, removed, timestamp) { rule, resource, id ->
+        rule.toEmptyRelationState(resource, id)
+    }
+
+    private fun batchReconcile(
+        sourceKey: String,
+        items: List<Pair<String, FintResource>>,
+        timestamp: Long,
+        toState: (RelationSyncRule, FintResource, String) -> RelationState,
+    ) {
+        if (items.isEmpty()) return
+        val source = sourceKey.toDescriptor()
+        val rules = relationRuleRegistry.getRules(source)
+        if (rules.isEmpty()) return
+        val opsByTarget = HashMap<String, MutableList<BackLinkOp>>()
+        items.forEach { (resourceId, resource) ->
+            rules.forEach { rule ->
+                runRule(source, resourceId, rule.inverseRelation) {
+                    collectOps(toState(rule, resource, resourceId), opsByTarget)
+                }
+            }
+        }
+        opsByTarget.forEach { (targetKey, ops) ->
+            if (ops.isNotEmpty()) {
+                runApply(targetKey) { cacheService.getCache(targetKey).applyBackLinkOps(ops, timestamp) }
             }
         }
     }
@@ -119,6 +171,36 @@ class AutoRelationService(
                 cache.addBackLink(id, inverseRelation, mappedSourceLink, state.timestamp)
                 metricService.incrementUpdateApplied(targetKey, "added")
             }
+        }
+    }
+
+    /**
+     * Like [process] but accumulates the diff into [opsByTarget] (keyed by target collection) instead
+     * of applying each change immediately, so a whole page flushes as one bulk write per target. The
+     * lookup read is still per source/relation.
+     */
+    private fun collectOps(
+        state: RelationState,
+        opsByTarget: MutableMap<String, MutableList<BackLinkOp>>,
+    ) {
+        val targetKey = state.targetEntity.toKey()
+        val inverseRelation = state.binding.relationName
+        val sourceLink = state.binding.link
+        val sourceRef = CacheDocumentCodec.relationRef(sourceLink.href) ?: return
+        val cache = cacheService.getCache(targetKey)
+
+        val desired = state.targetIds.toSet()
+        val resolved = cache.findIdsByBackLink(inverseRelation, sourceRef)
+        val ops = opsByTarget.getOrPut(targetKey) { mutableListOf() }
+
+        (resolved - desired).forEach { id ->
+            ops += BackLinkOp.Remove(id, inverseRelation, sourceRef)
+            metricService.incrementUpdateApplied(targetKey, "removed")
+        }
+        val mappedSourceLink = linkService.mapRelationLink(targetKey, inverseRelation, Link.with(sourceLink.href))
+        (desired - resolved).forEach { id ->
+            ops += BackLinkOp.Add(id, inverseRelation, mappedSourceLink)
+            metricService.incrementUpdateApplied(targetKey, "added")
         }
     }
 

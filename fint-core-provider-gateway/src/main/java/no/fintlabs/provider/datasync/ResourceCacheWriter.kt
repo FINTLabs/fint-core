@@ -58,7 +58,7 @@ class ResourceCacheWriter(
         cache.putAll(upserts, timestamp)
         val removed = cache.removeAll(deleteIds, timestamp)
 
-        upserts.forEach { (id, resource) -> autoRelationService.applyRelations(resourceKey, id, resource) }
-        removed.forEach { (id, resource) -> autoRelationService.applyRemoval(resourceKey, id, resource) }
+        autoRelationService.applyRelations(resourceKey, upserts, timestamp)
+        autoRelationService.applyRemoval(resourceKey, removed, timestamp)
     }
 }
