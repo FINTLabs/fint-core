@@ -58,6 +58,10 @@ dependencies {
 
 kotlin { jvmToolchain(25) }
 
+jar {
+    enabled = false
+}
+
 testing {
     suites {
         integrationTest(JvmTestSuite) {
