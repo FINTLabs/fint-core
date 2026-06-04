@@ -1,4 +1,4 @@
-# fint-core-felleskomponent
+# fint-core
 
 Monorepo for the FINT core platform that brokers FINT resources between adapters
 (data sources) and county clients. Two deployable services plus a shared engine:

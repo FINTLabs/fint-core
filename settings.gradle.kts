@@ -1,4 +1,4 @@
-rootProject.name = "fint-felleskomponent"
+rootProject.name = "fint-core"
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
