@@ -1,0 +1,57 @@
+fint:
+  security:
+    opa:
+      enabled: false
+    exposed-endpoints:
+      - /actuator/prometheus
+      - /actuator/health
+  relation:
+    base-url: https://api.felleskomponent.no
+  consumer:
+    pod-url: http://fint-core-consumer:8080
+    base-url: ${fint.relation.base-url}
+    org-id: ${fint.org-id}
+    coreVersionHeader: 2
+    kafka:
+      entity-concurrency: 6
+      relation-concurrency: 6
+      fetchMinBytes: 1
+      fetchMaxWaitMs: 500
+
+novari:
+  kafka:
+    topic:
+      org-id: ${fint.org-id}
+      domain-context: fint-core
+    application-id: fint-core-consumer-${fint.org-id}-mongodb
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    consumer:
+      group-id: ${novari.kafka.application-id}
+      auto-offset-reset: earliest
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fintcache
+      auto-index-creation: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health
+
+logging:
+  level:
+      org.apache.kafka: WARN
+      no.novari.kafka: WARN
+#      org.apache.kafka.clients.NetworkClient: INFO
+#      org.apache.kafka.clients.consumer.internals.AbstractCoordinator: DEBUG
+#      org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: DEBUG
+#      org.apache.kafka.clients.consumer.internals.Fetcher: DEBUG
+#      org.springframework.kafka.listener: DEBUG
+#      no.fintlabs.kafka: DEBUG

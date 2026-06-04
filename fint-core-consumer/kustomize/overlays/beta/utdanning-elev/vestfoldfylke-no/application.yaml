@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-utdanning-elev
+  namespace: vestfoldfylke-no
+spec:
+  url:
+    hostname: beta.felleskomponent.no
+  ingress:
+    basePaths:
+      - /utdanning/elev
+    headers:
+      x-org-id: vestfoldfylke.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'vestfoldfylke-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-okonomi-faktura
+  namespace: nfk-no
+spec:
+  url:
+    hostname: alpha.felleskomponent.no
+  ingress:
+    basePaths:
+      - /okonomi/faktura
+    headers:
+      x-org-id: nfk.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'nfk-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

@@ -1,0 +1,48 @@
+server:
+  port: 8085
+  servlet:
+    context-path: /provider
+
+fint:
+  metamodel:
+    base-url: http://localhost:8082
+  kafka:
+    enable-ssl: false
+
+novari:
+  kafka:
+    application-id: provider
+    default-replicas: 1
+
+spring:
+  jpa:
+    properties:
+      jdbc:
+        time_zone: UTC
+        lob:
+          non_contextual_creation: true
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      enable_lazy_load_no_trans: true
+    hibernate:
+      ddl-auto: create-drop
+  datasource:
+    url: jdbc:postgresql://localhost:5436/contract
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      schema: public
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: provider
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  level:
+    root: INFO

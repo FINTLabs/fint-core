@@ -1,0 +1,60 @@
+fint:
+  metamodel:
+    base-url: http://fint-core-consumer-metamodel:8080
+  kafka:
+    enable-ssl: true
+
+novari:
+  kafka:
+    topic:
+      org-id: fintlabs-no
+      domain-context: fint-core
+    application-id: provider
+    producer:
+      linger: 0ms
+      batch-size: 64KB
+
+spring:
+  jpa:
+    properties:
+      jdbc:
+        time_zone: UTC
+        lob:
+          non_contextual_creation: true
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      enable_lazy_load_no_trans: true
+    hibernate:
+      ddl-auto: create
+  datasource:
+    url: ${fint.database.url}
+    username: ${fint.database.username}
+    password: ${fint.database.password}
+    driver-class-name: org.postgresql.Driver
+  config:
+    import:
+      - classpath:components.yaml
+      - classpath:cleanup-topics.yaml
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    consumer:
+      group-id: provider
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  level:
+    root: INFO
+    org.apache.kafka: WARN
+server:
+  servlet:
+    context-path: /provider
+  tomcat:
+    threads:
+      max: 400
+    max-connections: 30000

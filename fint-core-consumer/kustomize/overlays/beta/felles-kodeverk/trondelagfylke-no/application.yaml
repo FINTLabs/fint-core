@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-felles-kodeverk
+  namespace: trondelagfylke-no
+spec:
+  url:
+    hostname: beta.felleskomponent.no
+  ingress:
+    basePaths:
+      - /felles/kodeverk
+    headers:
+      x-org-id: trondelagfylke.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'trondelagfylke-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
