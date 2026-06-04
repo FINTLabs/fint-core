@@ -82,7 +82,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}-db
           tags: |
             type=raw,value=${{ needs.setup.outputs.version }}
             type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short

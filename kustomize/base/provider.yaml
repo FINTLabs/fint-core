@@ -14,7 +14,7 @@ metadata:
 spec:
   port: 8080
   orgId: REPLACE
-  image: ghcr.io/fintlabs/fint-core-provider-gateway:latest
+  image: ghcr.io/fintlabs/fint-core-provider-gateway-db:latest
   onePassword:
     itemPath: REPLACE
   env:

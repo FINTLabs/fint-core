@@ -38,7 +38,7 @@ Examples:
 | `v1.0.0-rc.1-4.0.30-my-branch` | Branch test build |
 
 The full version string (everything after the leading `v`) becomes the Docker
-image tag, e.g. `ghcr.io/<owner>/fint-core-consumer:1.0.0-rc.1-4.0.30`.
+image tag, e.g. `ghcr.io/<owner>/fint-core-consumer-db:1.0.0-rc.1-4.0.30`.
 
 ### What a tag deploys
 
