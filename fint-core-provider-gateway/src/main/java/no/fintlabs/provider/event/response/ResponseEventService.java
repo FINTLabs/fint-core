@@ -8,7 +8,6 @@ import no.fintlabs.adapter.models.sync.SyncPageEntry;
 import no.fintlabs.adapter.operation.OperationType;
 import no.fintlabs.consumer.resource.ResourceRef;
 import no.novari.resource.server.authentication.CorePrincipal;
-import no.fintlabs.provider.datasync.EntityProducer;
 import no.fintlabs.provider.datasync.ResourceCacheWriter;
 import no.fintlabs.provider.event.request.RequestEventService;
 import no.fintlabs.provider.exception.InvalidOrgIdException;
@@ -26,7 +25,6 @@ public class ResponseEventService {
 
     private final ResponseFintEventProducer responseFintEventProducer;
     private final RequestEventService requestEventService;
-    private final EntityProducer entityProducer;
     private final ResourceCacheWriter resourceCacheWriter;
 
     public void handleEvent(ResponseFintEvent responseFintEvent, CorePrincipal corePrincipal) throws NoRequestFoundException, InvalidOrgIdException {
@@ -39,10 +37,9 @@ public class ResponseEventService {
         requestEventService.removeEvent(responseFintEvent.getCorrId());
 
         if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
-            entityProducer.sendEventEntity(requestEvent, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
             writeToCache(requestEvent, responseFintEvent);
         } else {
-            log.info("Not sending entity to Kafka because it is a validate event or create request failed");
+            log.info("Skipping cache write: validate event or failed create");
         }
     }
 

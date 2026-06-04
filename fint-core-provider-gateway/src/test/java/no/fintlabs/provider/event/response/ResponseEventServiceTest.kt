@@ -7,7 +7,6 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
-import no.fintlabs.provider.datasync.EntityProducer
 import no.fintlabs.provider.datasync.ResourceCacheWriter
 import no.fintlabs.provider.event.request.RequestEventService
 import no.novari.resource.server.authentication.CorePrincipal
@@ -17,7 +16,6 @@ import java.util.Optional
 class ResponseEventServiceTest {
     private val responseFintEventProducer = mockk<ResponseFintEventProducer>(relaxed = true)
     private val requestEventService = mockk<RequestEventService>(relaxed = true)
-    private val entityProducer = mockk<EntityProducer>(relaxed = true)
     private val resourceCacheWriter = mockk<ResourceCacheWriter>(relaxed = true)
     private val corePrincipal = mockk<CorePrincipal>(relaxed = true)
 
@@ -25,7 +23,6 @@ class ResponseEventServiceTest {
         ResponseEventService(
             responseFintEventProducer,
             requestEventService,
-            entityProducer,
             resourceCacheWriter,
         )
 

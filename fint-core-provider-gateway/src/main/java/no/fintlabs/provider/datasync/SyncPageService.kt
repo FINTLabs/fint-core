@@ -7,13 +7,11 @@ import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.consumer.resource.ResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.util.concurrent.CompletableFuture
 import kotlin.time.measureTime
 
 @RequiredArgsConstructor
 @Service
 class SyncPageService(
-    private val entityProducer: EntityProducer,
     private val metaDataKafkaProducer: MetaDataKafkaProducer,
     private val resourceCacheWriter: ResourceCacheWriter,
     private val syncCompletionTracker: SyncCompletionTracker,
@@ -37,7 +35,6 @@ class SyncPageService(
         val syncType = syncPage.syncType.toString().lowercase()
         val eventName = "adapter-$syncType-sync"
         metaDataKafkaProducer.send(syncPage.metadata, eventName)
-        sendEntities(syncPage)
     }
 
     private fun mutateMetadata(
@@ -72,33 +69,6 @@ class SyncPageService(
             page.metadata.time,
             page.resources.size,
         )
-    }
-
-    private fun sendEntities(page: SyncPage) {
-        // Put all resources in mongodb and update related relations
-        val futures = page.resources.map { syncPageEntry ->
-            entityProducer.sendSyncEntity(page, syncPageEntry)
-                .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
-        }
-        CompletableFuture.allOf(*futures.toTypedArray()).join()
-    }
-
-    private fun logSendOutcome(page: SyncPage, throwable: Throwable?) {
-        if (throwable == null) {
-            log.debug(
-                "Successfully sent entity [orgId={}, uriRef={}]",
-                page.metadata.orgId,
-                page.metadata.uriRef,
-            )
-        } else {
-            log.error(
-                "Failed to send entity [orgId={}, uriRef={}]: {}",
-                page.metadata.orgId,
-                page.metadata.uriRef,
-                throwable.message,
-                throwable,
-            )
-        }
     }
 
     private inline fun SyncPage.logSync(action: () -> Unit) {

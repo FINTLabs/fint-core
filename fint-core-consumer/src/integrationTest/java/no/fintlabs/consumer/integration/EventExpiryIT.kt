@@ -1,12 +1,10 @@
 package no.fintlabs.consumer.integration
 
 import no.fintlabs.Application
-import no.fintlabs.config.KafkaTestConfig
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.kafka.test.context.EmbeddedKafka
 import org.springframework.test.annotation.DirtiesContext
@@ -30,7 +28,6 @@ import java.time.Duration
         "fint.consumer.event.defaults.eviction=1s",
     ],
 )
-@Import(KafkaTestConfig::class)
 @DirtiesContext
 class EventExpiryIT {
     @LocalServerPort
