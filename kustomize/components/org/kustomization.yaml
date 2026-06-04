@@ -24,6 +24,7 @@ replacements:
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
+          - spec.ingress.routes.0.headers.x-org-id
 
   # dashed (org-id) -> namespace (both) + consumer kafka acl prefixes
   - source:
