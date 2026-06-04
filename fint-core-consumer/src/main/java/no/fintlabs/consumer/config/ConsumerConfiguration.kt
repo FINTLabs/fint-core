@@ -1,5 +1,6 @@
 package no.fintlabs.consumer.config
 
+import no.fintlabs.consumer.links.LinkConfiguration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.Name
 import java.time.Duration
@@ -7,14 +8,14 @@ import java.time.Duration
 // TODO: Split up the configuration to be more modular, there's too many unrelated configurations in one location
 @ConfigurationProperties(prefix = "fint.consumer")
 data class ConsumerConfiguration(
-    val baseUrl: String,
+    override val baseUrl: String,
     @param:Name("org-id")
     private val orgIdValue: String,
     val podUrl: String,
     val autorelation: AutorelationConfig = AutorelationConfig(),
     val coreVersionHeader: String = "2",
     val kafka: KafkaConfiguration = KafkaConfiguration(),
-) {
+) : LinkConfiguration {
     init {
         require(baseUrl == baseUrl.lowercase()) { "baseUrl must be lowercase: $baseUrl" }
     }

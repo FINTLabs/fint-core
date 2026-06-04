@@ -2,7 +2,7 @@ package no.fintlabs.consumer.links.nested;
 
 import lombok.extern.slf4j.Slf4j;
 import no.novari.fint.model.resource.FintLinks;
-import no.fintlabs.consumer.config.ConsumerConfiguration;
+import no.fintlabs.consumer.links.LinkConfiguration;
 import no.fintlabs.consumer.links.LinkParser;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +14,11 @@ import java.util.Objects;
 @Service
 public class NestedLinkService {
 
-    private final ConsumerConfiguration configuration;
+    private final LinkConfiguration configuration;
     private final LinkParser linkParser;
     private final Map<String, String> packageToUriMap;
 
-    public NestedLinkService(ConsumerConfiguration configuration, NestedLinkMapper nestedLinkMapper, LinkParser linkParser) {
+    public NestedLinkService(LinkConfiguration configuration, NestedLinkMapper nestedLinkMapper, LinkParser linkParser) {
         this.configuration = configuration;
         this.linkParser = linkParser;
         this.packageToUriMap = nestedLinkMapper.getPackageToUriMap();

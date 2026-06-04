@@ -2,7 +2,6 @@ package no.fintlabs.consumer.links;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import no.fintlabs.consumer.config.ConsumerConfiguration;
 import no.fintlabs.consumer.resource.ResourceRef;
 import no.fintlabs.consumer.resource.context.ResourceContext;
 import no.novari.fint.model.resource.FintResource;
@@ -16,7 +15,7 @@ import java.util.ArrayList;
 @RequiredArgsConstructor
 public class LinkGenerator {
 
-    private final ConsumerConfiguration configuration;
+    private final LinkConfiguration configuration;
     private final ResourceContext resourceContext;
 
     public void resetSelfLinks(String resourceName, FintResource resource) {

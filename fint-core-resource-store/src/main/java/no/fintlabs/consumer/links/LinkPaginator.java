@@ -3,7 +3,6 @@ package no.fintlabs.consumer.links;
 import lombok.RequiredArgsConstructor;
 import no.fintlabs.model.resource.FintResources;
 import no.novari.fint.model.resource.Link;
-import no.fintlabs.consumer.config.ConsumerConfiguration;
 import no.fintlabs.consumer.resource.ResourceRef;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -12,7 +11,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class LinkPaginator {
 
-    private final ConsumerConfiguration configuration;
+    private final LinkConfiguration configuration;
 
     public void addPagination(String resourceName, FintResources resources, int offset, int size, int totalItems) {
         String selfUrl = selfUrl(resourceName);
