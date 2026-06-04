@@ -51,10 +51,7 @@ class SyncPageService(
         page: SyncPage,
         resourceKey: String,
     ) {
-        val timestamp = page.metadata.time
-        page.resources.forEach { entry ->
-            resourceCacheWriter.write(resourceKey, entry.identifier, entry.resource, timestamp)
-        }
+        resourceCacheWriter.writeBatch(resourceKey, page.resources, page.metadata.time)
     }
 
     private fun trackForEviction(

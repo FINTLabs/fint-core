@@ -1,11 +1,15 @@
 package no.fintlabs.cache
 
 import com.mongodb.ErrorCategory
+import com.mongodb.MongoBulkWriteException
 import com.mongodb.MongoWriteException
 import com.mongodb.client.MongoCollection
+import com.mongodb.client.model.BulkWriteOptions
+import com.mongodb.client.model.DeleteOneModel
 import com.mongodb.client.model.IndexOptions
 import com.mongodb.client.model.Indexes
 import com.mongodb.client.model.Sorts
+import com.mongodb.client.model.UpdateOneModel
 import com.mongodb.client.model.UpdateOptions
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.cache.CacheDocumentCodec.Companion.FIELD_BACK_LINKS
@@ -124,6 +128,40 @@ class MongoDBFintCache(
         } catch (e: MongoWriteException) {
             if (ErrorCategory.fromErrorCode(e.code) == ErrorCategory.DUPLICATE_KEY) false else throw e
         }
+
+    /**
+     * Bulk [put]: conditionally upserts all [items] in one `bulkWrite`. A per-entry duplicate-key
+     * error is the expected "rejected older write" outcome and is ignored; any other bulk error is
+     * rethrown. Unordered so a rejected entry does not stop the rest.
+     */
+    override fun putAll(
+        items: List<Pair<String, FintResource>>,
+        timestamp: Long,
+    ) {
+        if (items.isEmpty()) return
+        val models =
+            items.map { (resourceId, resource) ->
+                UpdateOneModel<Document>(
+                    Document(FIELD_ID, resourceId)
+                        .append(
+                            "\$or",
+                            listOf(
+                                Document(FIELD_TIMESTAMP, Document("\$lte", timestamp)),
+                                Document(FIELD_HAS_DATA, Document("\$ne", true)),
+                            ),
+                        ),
+                    Document("\$set", codec.toSetDocument(resource, timestamp))
+                        .append("\$setOnInsert", Document(FIELD_BACK_LINKS, emptyList<Document>())),
+                    UpdateOptions().upsert(true),
+                )
+            }
+        try {
+            collection().bulkWrite(models, BulkWriteOptions().ordered(false))
+        } catch (e: MongoBulkWriteException) {
+            if (e.writeErrors.any { ErrorCategory.fromErrorCode(it.code) != ErrorCategory.DUPLICATE_KEY }) throw e
+        }
+        bumpLastUpdated(timestamp)
+    }
 
     override fun get(resourceId: String): FintResource? {
         val doc =
@@ -376,6 +414,32 @@ class MongoDBFintCache(
         if (result.deletedCount > 0) {
             bumpLastUpdated(timestamp)
         }
+    }
+
+    override fun removeAll(
+        resourceIds: List<String>,
+        timestamp: Long,
+    ): List<Pair<String, FintResource>> {
+        if (resourceIds.isEmpty()) return emptyList()
+        val existing = mutableListOf<Pair<String, FintResource>>()
+        collection()
+            .find(Document(FIELD_ID, Document("\$in", resourceIds)).append(FIELD_HAS_DATA, true))
+            .iterator()
+            .use { cursor ->
+                while (cursor.hasNext()) {
+                    val doc = cursor.next()
+                    existing.add(codec.resourceId(doc) to codec.fromDocument(doc))
+                }
+            }
+        val models =
+            resourceIds.map { resourceId ->
+                DeleteOneModel<Document>(
+                    Document(FIELD_ID, resourceId).append(FIELD_TIMESTAMP, Document("\$lt", timestamp)),
+                )
+            }
+        val result = collection().bulkWrite(models, BulkWriteOptions().ordered(false))
+        if (result.deletedCount > 0) bumpLastUpdated(timestamp)
+        return existing
     }
 
     /**

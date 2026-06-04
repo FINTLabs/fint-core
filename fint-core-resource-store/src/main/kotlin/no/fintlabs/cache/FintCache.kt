@@ -13,6 +13,15 @@ interface FintCache {
         timestamp: Long,
     ): Boolean
 
+    /**
+     * Bulk variant of [put]: conditionally upserts every entry (sharing [timestamp]) in one
+     * round-trip. Entries with a newer stored timestamp are left unchanged.
+     */
+    fun putAll(
+        items: List<Pair<String, FintResource>>,
+        timestamp: Long,
+    )
+
     fun get(resourceId: String): FintResource?
 
     fun lastUpdatedByResourceId(resourceId: String): Long?
@@ -66,6 +75,15 @@ interface FintCache {
         resourceId: String,
         timestamp: Long,
     )
+
+    /**
+     * Bulk variant of [remove]: deletes every id (timestamp guard) in one round-trip and returns the
+     * entries that existed beforehand, so callers can retract their back-links.
+     */
+    fun removeAll(
+        resourceIds: List<String>,
+        timestamp: Long,
+    ): List<Pair<String, FintResource>>
 
     fun evictExpired(timestamp: Long): Set<Pair<String, FintResource>>
 }

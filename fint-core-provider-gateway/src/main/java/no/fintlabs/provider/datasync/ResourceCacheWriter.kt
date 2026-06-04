@@ -1,5 +1,6 @@
 package no.fintlabs.provider.datasync
 
+import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.autorelation.AutoRelationService
 import no.fintlabs.cache.CacheService
 import no.fintlabs.consumer.resource.ResourceConverter
@@ -35,5 +36,29 @@ class ResourceCacheWriter(
             cache.put(resourceId, resource, timestamp)
             autoRelationService.applyRelations(resourceKey, resourceId, resource)
         }
+    }
+
+    /**
+     * Batch variant for a whole sync page: converts + maps links for every resource up front, then
+     * applies all upserts and all deletes to the cache in one bulk round-trip each, and finally
+     * reconciles relations. Avoids the per-resource round-trips of [write].
+     */
+    fun writeBatch(
+        resourceKey: String,
+        entries: List<SyncPageEntry>,
+        timestamp: Long,
+    ) {
+        val cache = cacheService.getCache(resourceKey)
+        val upserts =
+            entries.mapNotNull { entry ->
+                entry.resource?.let { raw -> entry.identifier to resourceConverter.convertAndMapLinks(resourceKey, raw) }
+            }
+        val deleteIds = entries.filter { it.resource == null }.map { it.identifier }
+
+        cache.putAll(upserts, timestamp)
+        val removed = cache.removeAll(deleteIds, timestamp)
+
+        upserts.forEach { (id, resource) -> autoRelationService.applyRelations(resourceKey, id, resource) }
+        removed.forEach { (id, resource) -> autoRelationService.applyRemoval(resourceKey, id, resource) }
     }
 }
