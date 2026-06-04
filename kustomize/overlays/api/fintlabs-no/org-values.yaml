@@ -10,4 +10,4 @@ data:
   id-underscore: fintlabs_no
   host: api.felleskomponent.no
   base-url: https://api.felleskomponent.no
-  onepassword-itempath: "vaults/aks-api-vault/items/azurerator"
+  onepassword-itempath: "vaults/aks-api-vault/items/fint-core-consumer-cluster-api"

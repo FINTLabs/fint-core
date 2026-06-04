@@ -10,4 +10,4 @@ data:
   id-underscore: fintlabs_no
   host: alpha.felleskomponent.no
   base-url: https://alpha.felleskomponent.no
-  onepassword-itempath: "vaults/aks-alpha-vault/items/azurerator"
+  onepassword-itempath: "vaults/aks-alpha-vault/items/fint-core-consumer-cluster-alpha"
