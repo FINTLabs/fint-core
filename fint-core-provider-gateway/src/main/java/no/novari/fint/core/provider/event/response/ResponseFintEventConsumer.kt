@@ -2,6 +2,7 @@ package no.novari.fint.core.provider.event.response
 
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.novari.fint.core.provider.config.KafkaConfig
+import no.novari.fint.core.provider.config.ProviderProperties
 import no.novari.fint.core.provider.event.request.RequestEventService
 import no.novari.kafka.consuming.ErrorHandlerConfiguration
 import no.novari.kafka.consuming.ErrorHandlerFactory
@@ -25,6 +26,7 @@ class ResponseFintEventConsumer(
     private val requestEventService: RequestEventService,
     private val metamodelService: MetamodelService,
     private val kafkaConfig: KafkaConfig,
+    private val providerProperties: ProviderProperties,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -53,13 +55,16 @@ class ResponseFintEventConsumer(
                 .topicNamePatternPrefixParameters(
                     TopicNamePatternPrefixParameters
                         .stepBuilder()
-                        .orgId(TopicNamePatternParameterPattern.any())
+                        .orgId(TopicNamePatternParameterPattern.anyOf(configuredOrgIds()))
                         .domainContextApplicationDefault()
                         .build()
                 )
                 .eventName(TopicNamePatternParameterPattern.anyOf(*createEventNames()))
                 .build()
         )
+
+    private fun configuredOrgIds(): List<String> =
+        providerProperties.components.flatMap { it.orgIds }.distinct()
 
     // Example topic: utdanning-vurdering-response
     private fun createEventNames(): Array<String> =
