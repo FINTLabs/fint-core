@@ -11,7 +11,7 @@ sources) and county clients. Two deployable Spring Boot services plus a shared e
   adapter sync pages, runs autorelation and eviction, writes into MongoDB. Web MVC + JPA (Postgres,
   for adapter contracts) + OAuth2 resource server. Servlet context-path `/provider`.
 - **`fint-core-consumer`** — client-facing. **Read-only over the Mongo resource store.** Serves a
-  HATEOAS REST API and forwards client mutations to adapters over Kafka. WebFlux.
+  HATEOAS REST API and forwards client mutations to adapters over Kafka. Spring MVC on virtual threads.
 - **`fint-core-resource-store`** — shared `java-library` (the "resource engine"): the Mongo cache,
   autorelation, link mapping, metamodel reflection. Depended on by both services.
 
@@ -20,9 +20,7 @@ per org. There is **no shared cross-org state** at runtime.
 
 `README.md` (repo root) is the authoritative reference for **versioning, CI, CD, and kustomize
 deployment** — consult it rather than re-deriving those. This file covers code architecture and the
-build/test workflow. Note the two module-level READMEs are partly stale: `fint-core-consumer/README.md`
-still describes the pre-migration design where the consumer ingested resources from Kafka — it no
-longer does (see *Architecture* below).
+build/test workflow.
 
 ## Build / test / run
 
@@ -37,7 +35,7 @@ JDK 25 toolchain, Kotlin 2.3.21, Spring Boot 3.5.12, Gradle 9.5.1 (via wrapper).
 ./gradlew :fint-core-provider-gateway:test   # provider tests (unit + integration live together here)
 
 # single test class / method
-./gradlew :fint-core-consumer:test --tests "no.fintlabs.consumer.resource.ResourceServiceTest"
+./gradlew :fint-core-consumer:test --tests "no.novari.fint.core.consumer.resource.ResourceServiceTest"
 ./gradlew :fint-core-consumer:integrationTest --tests "*KontaktpersonLinkIT*"
 
 ./gradlew ktlintCheck                         # lint (consumer + resource-store only; NOT provider)
@@ -58,11 +56,12 @@ root Gradle files rebuilds both services. The `ci-ok` job is the single required
 
 ## Architecture
 
-Both services are thin shells around the shared engine in `fint-core-resource-store`. The engine's
-packages live under `no.fintlabs.{cache,autorelation,reflection,model}` and — confusingly —
-`no.fintlabs.consumer.{links,resource,resource.context}` (these are *shared*, despite the `consumer`
-name, and are used by the provider too). Both `Application` classes component-scan `no.fintlabs` +
-`no.novari` with `@ConfigurationPropertiesScan`.
+Both services are thin shells around the shared engine in `fint-core-resource-store`. All first-party
+code lives under `no.novari.fint.core.*` (Gradle group `no.novari`): the engine under
+`no.novari.fint.core.shared.{cache, autorelation, reflection, resource, link, sync}` (shared by both
+services), the apps under `no.novari.fint.core.{consumer,provider}.*`. **External FINT libraries keep
+their `no.fintlabs.adapter` / `no.fintlabs.status` / `no.fint.antlr` names — never rename those.** Both
+`Application` classes component-scan `no.novari` with `@ConfigurationPropertiesScan`.
 
 **Two distinct data paths — keep them separate in your head:**
 
@@ -85,14 +84,17 @@ name, and are used by the provider too). Both `Application` classes component-sc
 - **`CacheService` / `MongoDBFintCache`** — one Mongo collection per resource type, named
   `cache_<key>`. Writes are timestamp-monotonic conditional upserts (a single `updateOne`/`bulkWrite`,
   no JVM lock) so concurrent replicas sharing one Mongo can't regress an entry. Bidirectional
-  relations are stored as `backLinks` on the *target* document and mutated via atomic
-  aggregation-pipeline updates; a back-link to a not-yet-cached target upserts a data-less stub
-  (`hasData=false`) that a later refresh fills. A shared `cache_meta` collection tracks `lastUpdated`
-  per collection. OData `$filter` is applied in-app over the streamed cursor.
+  relations (back-links) live as individual rows in a shared **`backlinks`** collection — one row per
+  `(coll, target, relation, ref)`, indexed for O(matches) add/remove/lookup — **not** as an array on
+  the target doc (that array was unbounded and pegged Mongo under load). A target's back-links are
+  merged into its `_links` on read via one batched query; there is no stub-document model. A shared
+  `cache_meta` collection tracks `lastUpdated` + a monotonic `version` (the latter invalidates the
+  memoised `size`) per collection. OData `$filter` is applied in-app over the streamed cursor.
 - **`AutoRelationService`** — reconciles relations by diffing the source's *desired* target set
-  against the targets that *already* hold the back-link, then applying the delta. Rules come from
-  `RelationRuleRegistry` (built from the metamodel). The full rule table is generated into
-  `fint-core-consumer/RELATION_RULES.md` by `RelationRuleDocGeneratorIT`.
+  against the targets that *already* hold the back-link (looked up per sync page with one batched
+  `findIdsByBackLinks` per `(target collection, relation)`), then applying the delta as one bulk write
+  per target collection. Rules come from `RelationRuleRegistry` (built from the metamodel). The full
+  rule table is generated into `fint-core-consumer/RELATION_RULES.md` by `RelationRuleDocGeneratorIT`.
 - **`ResourceRef`** — the canonical identity. Resource names are **not** globally unique (`person`
   exists in many components), so everything keys off the qualified `domain_package_resource` (e.g.
   `utdanning_vurdering_sluttvurdering`), never the bare name. Use `ResourceRef.keyOf(...)` /
@@ -136,6 +138,10 @@ module(s) **and** retag with the matching imodel suffix. The provider also reads
 - **Kafka** goes through `no.novari:kafka` (`ParameterizedListenerContainerFactoryService`,
   topic-name patterns), not raw `@KafkaListener`. The consumer staggers listener startup
   (`KafkaListenerStartupJitter`) to avoid a thundering herd when many consumers restart at once.
-- **Auth:** provider = OAuth2 resource server, JWT → `CorePrincipal`, requires the adapter scope and
-  per-component authorization on sync paths (`SecurityConfiguration`). Consumer = OPA-driven
-  field/relation filtering (`OpaFilter`, `@EnableFintFilter`), gated by `fint.security.opa.enabled`.
+- **Auth:** both services are **servlet** OAuth2 resource servers with their own `SecurityConfiguration`
+  built on `no.novari:fint-core-principal` (JWT → `CorePrincipal`). Provider requires the adapter scope
+  + per-component authorization on sync paths. Consumer (own OPA layer in
+  `no.novari.fint.core.consumer.security`) authorizes per component then calls OPA, and prunes response
+  fields/relations via `OpaFilter` + a servlet `ResponseBodyAdvice`; gated by `fint.security.enabled` /
+  `fint.security.opa.enabled`. The reactive `core-resource-server` was dropped when the consumer moved
+  to MVC.

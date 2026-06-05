@@ -13,15 +13,15 @@ import org.testcontainers.utility.DockerImageName
  * `META-INF/services/org.junit.jupiter.api.extension.Extension` service file so every integration
  * test sees a fresh, container-backed Mongo without per-class boilerplate.
  *
- * Each test class also gets a clean slate via [beforeAll], which drops every `cache_*`
- * collection so leftover data from a prior test class cannot leak in.
+ * Each test class also gets a clean slate via [beforeAll], which drops the `cache_*`, `sync_*` and
+ * `backlinks` collections so leftover data from a prior test class cannot leak in.
  */
 class MongoTestcontainerInitializer : BeforeAllCallback {
     override fun beforeAll(context: ExtensionContext) {
         val db = mongoClient.getDatabase(DB_NAME)
         db
             .listCollectionNames()
-            .filter { it.startsWith("cache_") || it.startsWith("sync_") }
+            .filter { it.startsWith("cache_") || it.startsWith("sync_") || it == "backlinks" }
             .forEach { db.getCollection(it).drop() }
     }
 
