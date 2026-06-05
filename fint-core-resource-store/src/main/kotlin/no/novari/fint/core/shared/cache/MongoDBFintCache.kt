@@ -252,6 +252,70 @@ class MongoDBFintCache(
     }
 
     /**
+     * Batched [findIdsByBackLink] for whole-page relation reconciliation: one aggregation matches
+     * every target holding a back-link under [relation] to any of [refs] and projects which of those
+     * refs each holds, so P×R per-ref round-trips collapse to one query per (collection, relation).
+     * The back-link arrays stay server-side; only the matched refs and ids cross the wire.
+     */
+    override fun findIdsByBackLinks(
+        relation: String,
+        refs: Set<String>,
+    ): Map<String, Set<String>> {
+        if (refs.isEmpty()) return emptyMap()
+        val relationName = relation.lowercase()
+        val refList = refs.toList()
+        val matchedRefs =
+            Document(
+                "\$map",
+                Document(
+                    "input",
+                    Document(
+                        "\$filter",
+                        Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
+                            .append("as", "b")
+                            .append(
+                                "cond",
+                                Document(
+                                    "\$and",
+                                    listOf(
+                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relationName)),
+                                        Document("\$in", listOf("\$\$b.$FIELD_RELATION_REF", refList)),
+                                    ),
+                                ),
+                            ),
+                    ),
+                ).append("as", "b").append("in", "\$\$b.$FIELD_RELATION_REF"),
+            )
+        val pipeline =
+            listOf(
+                Document(
+                    "\$match",
+                    Document(
+                        FIELD_BACK_LINKS,
+                        Document(
+                            "\$elemMatch",
+                            Document(FIELD_RELATION_NAME, relationName)
+                                .append(FIELD_RELATION_REF, Document("\$in", refList)),
+                        ),
+                    ),
+                ),
+                Document("\$project", Document(FIELD_MATCHED_REFS, matchedRefs)),
+            )
+        val result = HashMap<String, MutableSet<String>>()
+        collection().aggregate(pipeline).iterator().use { cursor ->
+            while (cursor.hasNext()) {
+                val doc = cursor.next()
+                val id = doc.getString(FIELD_ID)
+
+                @Suppress("UNCHECKED_CAST")
+                val matched = doc.get(FIELD_MATCHED_REFS) as? List<String> ?: emptyList()
+                matched.forEach { ref -> result.getOrPut(ref) { mutableSetOf() }.add(id) }
+            }
+        }
+        return result
+    }
+
+    /**
      * Atomic back-link add via an aggregation-pipeline update: existing entries for the same
      * `(relation, ref)` are filtered out and the new entry appended, so the write is idempotent and
      * needs no read-modify-write. Upserts a data-less stub (`hasData=false`, no `timestamp`) when the
@@ -629,5 +693,6 @@ class MongoDBFintCache(
         const val META_COLLECTION = "cache_meta"
         const val FIELD_LAST_UPDATED = "lastUpdated"
         const val FIELD_VERSION = "version"
+        private const val FIELD_MATCHED_REFS = "matchedRefs"
     }
 }

@@ -60,6 +60,7 @@ class AutoRelationServiceTest {
         every { cacheService.getCache(any()) } returns cache
         every { relationRuleRegistry.getRules(sourceDescriptor) } returns listOf(rule)
         every { cache.findIdsByBackLink(any(), any()) } returns emptySet()
+        every { cache.findIdsByBackLinks(any(), any()) } returns emptyMap()
     }
 
     @AfterEach
@@ -125,8 +126,6 @@ class AutoRelationServiceTest {
     inner class BatchReconcile {
         @Test
         fun `batches adds for the same target collection into one applyBackLinkOps`() {
-            every { cache.findIdsByBackLink(any(), any()) } returns emptySet()
-
             service.applyRelations(
                 sourceKey,
                 listOf(
@@ -144,7 +143,7 @@ class AutoRelationServiceTest {
 
         @Test
         fun `batch applyRemoval flushes removals via applyBackLinkOps`() {
-            every { cache.findIdsByBackLink(inverseRelation, sourceRef) } returns setOf("t1")
+            every { cache.findIdsByBackLinks(inverseRelation, any()) } returns mapOf(sourceRef to setOf("t1"))
 
             service.applyRemoval(sourceKey, listOf("source-1" to elevfravar("source-1")), 123L)
 

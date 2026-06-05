@@ -382,6 +382,34 @@ class FintCacheTest {
         assertEquals(2, cache.getList(0L, 0L, 0L, null).size)
     }
 
+    @Test
+    fun `findIdsByBackLinks resolves multiple refs in a single query`() {
+        cache.put("A", createElevResource("A"), 0)
+        cache.put("B", createElevResource("B"), 1)
+        cache.put("C", createElevResource("C"), 2)
+        cache.addBackLink("A", "elevforhold", Link.with("systemid/forhold-1"), 3)
+        cache.addBackLink("B", "elevforhold", Link.with("systemid/forhold-1"), 4)
+        cache.addBackLink("C", "elevforhold", Link.with("systemid/forhold-2"), 5)
+
+        val result =
+            cache.findIdsByBackLinks(
+                "elevforhold",
+                setOf("systemid/forhold-1", "systemid/forhold-2", "systemid/absent"),
+            )
+
+        assertEquals(setOf("A", "B"), result["systemid/forhold-1"])
+        assertEquals(setOf("C"), result["systemid/forhold-2"])
+        assertNull(result["systemid/absent"])
+    }
+
+    @Test
+    fun `findIdsByBackLinks returns an empty map for empty refs`() {
+        cache.put("A", createElevResource("A"), 0)
+        cache.addBackLink("A", "elevforhold", Link.with("systemid/forhold-1"), 1)
+
+        assertEquals(emptyMap(), cache.findIdsByBackLinks("elevforhold", emptySet()))
+    }
+
     private fun createElevResource(id: String): ElevResource {
         val elevResource = ElevResource()
         elevResource.systemId =

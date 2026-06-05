@@ -41,6 +41,16 @@ interface FintCache {
     ): Set<String>
 
     /**
+     * Batched [findIdsByBackLink]: resolves the back-link holders for every ref in [refs] under
+     * [relation] in a single query, returning a map from ref to the ids pointing back to it. Refs
+     * with no holder are absent from the map. Used to collapse a sync page's per-source lookups.
+     */
+    fun findIdsByBackLinks(
+        relation: String,
+        refs: Set<String>,
+    ): Map<String, Set<String>>
+
+    /**
      * Atomically add (or replace) a back-link under [relation] on resource [resourceId], upserting a
      * data-less stub if the target has not yet been cached. [timestamp] is the relation-event time,
      * applied to the target's timestamp only when it already holds data so incremental readers see

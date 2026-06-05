@@ -101,13 +101,23 @@ class AutoRelationService(
         val source = sourceKey.toDescriptor()
         val rules = relationRuleRegistry.getRules(source)
         if (rules.isEmpty()) return
-        val opsByTarget = HashMap<String, MutableList<BackLinkOp>>()
+
+        val requestsByGroup = HashMap<GroupKey, MutableList<ReconcileRequest>>()
         items.forEach { (resourceId, resource) ->
             rules.forEach { rule ->
                 runRule(source, resourceId, rule.inverseRelation) {
-                    collectOps(toState(rule, resource, resourceId), opsByTarget)
+                    val state = toState(rule, resource, resourceId)
+                    val sourceRef = CacheDocumentCodec.relationRef(state.binding.link.href) ?: return@runRule
+                    requestsByGroup
+                        .getOrPut(GroupKey(state.targetEntity.toKey(), state.binding.relationName)) { mutableListOf() }
+                        .add(ReconcileRequest(sourceRef, state.targetIds.toSet(), state.binding.link))
                 }
             }
+        }
+
+        val opsByTarget = HashMap<String, MutableList<BackLinkOp>>()
+        requestsByGroup.forEach { (group, requests) ->
+            runApply(group.targetKey) { collectGroupOps(group, requests, opsByTarget) }
         }
         opsByTarget.forEach { (targetKey, ops) ->
             if (ops.isNotEmpty()) {
@@ -175,34 +185,43 @@ class AutoRelationService(
     }
 
     /**
-     * Like [process] but accumulates the diff into [opsByTarget] (keyed by target collection) instead
-     * of applying each change immediately, so a whole page flushes as one bulk write per target. The
-     * lookup read is still per source/relation.
+     * Accumulates a whole (target, relation) group's diff into [opsByTarget] using a single batched
+     * lookup of the current back-link holders for every source ref in the group, instead of one
+     * lookup per source. Mirrors [process]'s diff (removals first, then mapped additions) but defers
+     * the writes so the page flushes as one bulk write per target collection.
      */
-    private fun collectOps(
-        state: RelationState,
+    private fun collectGroupOps(
+        group: GroupKey,
+        requests: List<ReconcileRequest>,
         opsByTarget: MutableMap<String, MutableList<BackLinkOp>>,
     ) {
-        val targetKey = state.targetEntity.toKey()
-        val inverseRelation = state.binding.relationName
-        val sourceLink = state.binding.link
-        val sourceRef = CacheDocumentCodec.relationRef(sourceLink.href) ?: return
-        val cache = cacheService.getCache(targetKey)
-
-        val desired = state.targetIds.toSet()
-        val resolved = cache.findIdsByBackLink(inverseRelation, sourceRef)
-        val ops = opsByTarget.getOrPut(targetKey) { mutableListOf() }
-
-        (resolved - desired).forEach { id ->
-            ops += BackLinkOp.Remove(id, inverseRelation, sourceRef)
-            metricService.incrementUpdateApplied(targetKey, "removed")
-        }
-        val mappedSourceLink = linkService.mapRelationLink(targetKey, inverseRelation, Link.with(sourceLink.href))
-        (desired - resolved).forEach { id ->
-            ops += BackLinkOp.Add(id, inverseRelation, mappedSourceLink)
-            metricService.incrementUpdateApplied(targetKey, "added")
+        val cache = cacheService.getCache(group.targetKey)
+        val resolvedByRef = cache.findIdsByBackLinks(group.relation, requests.mapTo(mutableSetOf()) { it.sourceRef })
+        val ops = opsByTarget.getOrPut(group.targetKey) { mutableListOf() }
+        requests.forEach { request ->
+            val resolved = resolvedByRef[request.sourceRef] ?: emptySet()
+            (resolved - request.desired).forEach { id ->
+                ops += BackLinkOp.Remove(id, group.relation, request.sourceRef)
+                metricService.incrementUpdateApplied(group.targetKey, "removed")
+            }
+            val mappedLink = linkService.mapRelationLink(group.targetKey, group.relation, Link.with(request.sourceLink.href))
+            (request.desired - resolved).forEach { id ->
+                ops += BackLinkOp.Add(id, group.relation, mappedLink)
+                metricService.incrementUpdateApplied(group.targetKey, "added")
+            }
         }
     }
+
+    private data class GroupKey(
+        val targetKey: String,
+        val relation: String,
+    )
+
+    private data class ReconcileRequest(
+        val sourceRef: String,
+        val desired: Set<String>,
+        val sourceLink: Link,
+    )
 
     private fun runApply(
         targetKey: String,
