@@ -54,6 +54,11 @@ services:
       - broker-kafka
     ports:
       - 27019:27017
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2g
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.12.0

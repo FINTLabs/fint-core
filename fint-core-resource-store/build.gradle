@@ -6,7 +6,7 @@ plugins {
     id 'org.jlleitschuh.gradle.ktlint'
 }
 
-group = 'no.fintlabs'
+group = 'no.novari'
 version = '0.0.1-SNAPSHOT'
 
 java {

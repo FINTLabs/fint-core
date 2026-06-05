@@ -10,7 +10,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.lombok'
 }
 
-group = 'no.fintlabs'
+group = 'no.novari'
 version = System.getenv("RELEASE_VERSION") ?: '0.0.1-SNAPSHOT'
 
 def fintVersion = '4.0.10'
