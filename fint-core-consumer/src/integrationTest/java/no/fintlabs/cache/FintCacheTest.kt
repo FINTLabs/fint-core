@@ -320,6 +320,68 @@ class FintCacheTest {
         assertTrue(back.first().href!!.endsWith("systemid/forhold-1", ignoreCase = true))
     }
 
+    @Test
+    fun `size stays correct when a new entry arrives with an older timestamp than the newest`() {
+        val elevA = createElevResource("A")
+        val elevB = createElevResource("B")
+        cache.put(elevA.systemId.identifikatorverdi, elevA, 100)
+        assertEquals(1, cache.size)
+
+        cache.put(elevB.systemId.identifikatorverdi, elevB, 50)
+        assertEquals(2, cache.size)
+    }
+
+    @Test
+    fun `size stays correct after eviction that does not move lastUpdated`() {
+        val elevA = createElevResource("A")
+        val elevB = createElevResource("B")
+        val elevC = createElevResource("C")
+        cache.put(elevA.systemId.identifikatorverdi, elevA, 10)
+        cache.put(elevB.systemId.identifikatorverdi, elevB, 11)
+        cache.put(elevC.systemId.identifikatorverdi, elevC, 20)
+        assertEquals(3, cache.size)
+
+        cache.evictExpired(15)
+
+        assertEquals(20, cache.lastUpdated)
+        assertEquals(1, cache.size)
+    }
+
+    @Test
+    fun `size stays correct when a stub is filled with data`() {
+        cache.addBackLink("A", "elevforhold", Link.with("systemid/forhold-1"), 5)
+        assertEquals(0, cache.size)
+
+        cache.put("A", createElevResource("A"), 10)
+        assertEquals(1, cache.size)
+    }
+
+    @Test
+    fun `getList without filter returns the requested page in timestamp order`() {
+        val elevA = createElevResource("A")
+        val elevB = createElevResource("B")
+        val elevC = createElevResource("C")
+        val elevD = createElevResource("D")
+        cache.put(elevA.systemId.identifikatorverdi, elevA, 0)
+        cache.put(elevB.systemId.identifikatorverdi, elevB, 1)
+        cache.put(elevC.systemId.identifikatorverdi, elevC, 2)
+        cache.put(elevD.systemId.identifikatorverdi, elevD, 3)
+
+        val page = cache.getList(2L, 1L, 0L, null)
+
+        assertEquals(listOf("B", "C"), page.map { (it as ElevResource).systemId.identifikatorverdi })
+    }
+
+    @Test
+    fun `getList without size returns every entry`() {
+        val elevA = createElevResource("A")
+        val elevB = createElevResource("B")
+        cache.put(elevA.systemId.identifikatorverdi, elevA, 0)
+        cache.put(elevB.systemId.identifikatorverdi, elevB, 1)
+
+        assertEquals(2, cache.getList(0L, 0L, 0L, null).size)
+    }
+
     private fun createElevResource(id: String): ElevResource {
         val elevResource = ElevResource()
         elevResource.systemId =

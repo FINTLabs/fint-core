@@ -29,6 +29,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.util.Spliterator
 import java.util.Spliterators
+import java.util.concurrent.atomic.AtomicReference
 import java.util.stream.Stream
 import java.util.stream.StreamSupport
 
@@ -49,6 +50,7 @@ class MongoDBFintCache(
     private val collectionName: String,
 ) : FintCache {
     private val oDataFilterService = ODataFilterService()
+    private val sizeMemo = AtomicReference<Pair<Long, Int>?>(null)
 
     init {
         ensureIndexes()
@@ -57,15 +59,32 @@ class MongoDBFintCache(
     private fun collection(): MongoCollection<Document> = mongoTemplate.getCollection(collectionName)
 
     /**
-     * Tracks the timestamp of the last accepted mutation (put or remove) for this collection,
-     * including removals — which leave no document behind and so cannot be recovered from the data.
-     * A single shared `cache_meta` document keyed by collection name keeps this cross-replica
-     * correct; the monotonic `$max` makes concurrent and out-of-order bumps idempotent.
+     * Updates the shared `cache_meta` document for this collection on every accepted mutation:
+     * raises `lastUpdated` to [timestamp] (monotonic `$max`, so concurrent and out-of-order bumps
+     * stay idempotent) and increments a monotonic `version` counter in the same write. The version
+     * is the invalidation key for the memoised [size]: `lastUpdated` alone is unreliable for that
+     * (a `$max` does not move when a new entry arrives with an older timestamp, and eviction does
+     * not touch it), whereas the version advances on any mutation that could change the entry count.
+     * A single shared document keeps both cross-replica correct.
      */
-    private fun bumpLastUpdated(timestamp: Long) {
+    private fun bumpMeta(timestamp: Long) {
         mongoTemplate.getCollection(META_COLLECTION).updateOne(
             Document(FIELD_ID, collectionName),
-            Document("\$max", Document(FIELD_LAST_UPDATED, timestamp)),
+            Document("\$max", Document(FIELD_LAST_UPDATED, timestamp))
+                .append("\$inc", Document(FIELD_VERSION, 1L)),
+            UpdateOptions().upsert(true),
+        )
+    }
+
+    /**
+     * Advances only the `version` counter, leaving `lastUpdated` untouched — used by eviction, which
+     * removes entries (so the memoised [size] must be invalidated) but carries no tombstone for
+     * incremental readers and so deliberately does not move `lastUpdated`.
+     */
+    private fun bumpVersion() {
+        mongoTemplate.getCollection(META_COLLECTION).updateOne(
+            Document(FIELD_ID, collectionName),
+            Document("\$inc", Document(FIELD_VERSION, 1L)),
             UpdateOptions().upsert(true),
         )
     }
@@ -123,7 +142,7 @@ class MongoDBFintCache(
                     .append("\$setOnInsert", Document(FIELD_BACK_LINKS, emptyList<Document>())),
                 UpdateOptions().upsert(true),
             )
-            bumpLastUpdated(timestamp)
+            bumpMeta(timestamp)
             true
         } catch (e: MongoWriteException) {
             if (ErrorCategory.fromErrorCode(e.code) == ErrorCategory.DUPLICATE_KEY) false else throw e
@@ -160,7 +179,7 @@ class MongoDBFintCache(
         } catch (e: MongoBulkWriteException) {
             if (e.writeErrors.any { ErrorCategory.fromErrorCode(it.code) != ErrorCategory.DUPLICATE_KEY }) throw e
         }
-        bumpLastUpdated(timestamp)
+        bumpMeta(timestamp)
     }
 
     override fun get(resourceId: String): FintResource? {
@@ -278,7 +297,7 @@ class MongoDBFintCache(
                     .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
             )
         collection().updateOne(Document(FIELD_ID, resourceId), listOf(stage), UpdateOptions().upsert(true))
-        bumpLastUpdated(timestamp)
+        bumpMeta(timestamp)
     }
 
     /**
@@ -320,7 +339,7 @@ class MongoDBFintCache(
                     .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
             )
         val result = collection().updateOne(Document(FIELD_ID, resourceId), listOf(stage))
-        if (result.matchedCount > 0) bumpLastUpdated(timestamp)
+        if (result.matchedCount > 0) bumpMeta(timestamp)
     }
 
     /**
@@ -354,7 +373,7 @@ class MongoDBFintCache(
             }
         if (models.isEmpty()) return
         collection().bulkWrite(models, BulkWriteOptions().ordered(false))
-        bumpLastUpdated(timestamp)
+        bumpMeta(timestamp)
     }
 
     /** `$set` stage appending [link]'s back-link entry, de-duplicated by `(relation, ref)`. */
@@ -435,8 +454,10 @@ class MongoDBFintCache(
     /**
      * Get a paged, `(timestamp, _id)`-sorted list of cached resources, optionally filtered.
      *
-     * When [filter] is supplied the cursor is streamed and filtering is applied in-app via
-     * [ODataFilterService] before pagination so OData semantics remain unchanged.
+     * Without a [filter], `skip`/`limit` are pushed to Mongo so only the requested page is fetched
+     * and deserialised (the sort is served by `timestamp_id_idx`). When [filter] is supplied the
+     * cursor is streamed and filtering is applied in-app via [ODataFilterService] before pagination,
+     * so OData semantics remain unchanged.
      */
     override fun getList(
         size: Long,
@@ -448,23 +469,32 @@ class MongoDBFintCache(
         if (sinceTimestamp > 0L) {
             criteria.append(FIELD_TIMESTAMP, Document("\$gte", sinceTimestamp))
         }
-        val cursor =
+        val find =
             collection()
                 .find(criteria)
                 .sort(Sorts.ascending(FIELD_TIMESTAMP, FIELD_ID))
-                .iterator()
 
-        return cursor.use { c ->
+        if (filter.isNullOrBlank()) {
+            if (size > 0) {
+                if (offset > 0) find.skip(offset.toInt())
+                find.limit(size.toInt())
+            }
+            return find.iterator().use { c ->
+                val resources = ArrayList<FintResource>()
+                while (c.hasNext()) {
+                    resources.add(codec.fromDocument(c.next()))
+                }
+                resources
+            }
+        }
+
+        return find.iterator().use { c ->
             val baseStream =
                 StreamSupport.stream(
                     Spliterators.spliteratorUnknownSize(c, Spliterator.ORDERED or Spliterator.NONNULL),
                     false,
                 )
-
-            var resources: Stream<FintResource> = baseStream.map { codec.fromDocument(it) }
-            if (!filter.isNullOrBlank()) {
-                resources = applyODataFilter(resources, filter)
-            }
+            var resources: Stream<FintResource> = applyODataFilter(baseStream.map { codec.fromDocument(it) }, filter)
             if (size > 0) {
                 if (offset > 0) {
                     resources = resources.skip(offset)
@@ -494,8 +524,31 @@ class MongoDBFintCache(
                 ?.getLong(FIELD_LAST_UPDATED)
                 ?: 0L
 
+    /**
+     * Number of cached entries holding data (`hasData=true`). The underlying `countDocuments` is a
+     * full scan, so the result is memoised against the `cache_meta` version counter and recomputed
+     * only after a mutation advances it. The version is read before the count so the pairing can
+     * only be over-invalidated, never served stale, across concurrent writers and replicas.
+     */
     override val size: Int
-        get() = collection().countDocuments(Document(FIELD_HAS_DATA, true)).toInt()
+        get() {
+            val version = currentVersion()
+            sizeMemo.get()?.let { (cachedVersion, cachedSize) ->
+                if (cachedVersion == version) return cachedSize
+            }
+            val computed = collection().countDocuments(Document(FIELD_HAS_DATA, true)).toInt()
+            sizeMemo.set(version to computed)
+            return computed
+        }
+
+    private fun currentVersion(): Long =
+        mongoTemplate
+            .getCollection(META_COLLECTION)
+            .find(Document(FIELD_ID, collectionName))
+            .projection(Document(FIELD_VERSION, 1))
+            .first()
+            ?.getLong(FIELD_VERSION)
+            ?: 0L
 
     override fun remove(
         resourceId: String,
@@ -507,7 +560,7 @@ class MongoDBFintCache(
                     .append(FIELD_TIMESTAMP, Document("\$lt", timestamp)),
             )
         if (result.deletedCount > 0) {
-            bumpLastUpdated(timestamp)
+            bumpMeta(timestamp)
         }
     }
 
@@ -533,7 +586,7 @@ class MongoDBFintCache(
                 )
             }
         val result = collection().bulkWrite(models, BulkWriteOptions().ordered(false))
-        if (result.deletedCount > 0) bumpLastUpdated(timestamp)
+        if (result.deletedCount > 0) bumpMeta(timestamp)
         return existing
     }
 
@@ -565,6 +618,7 @@ class MongoDBFintCache(
         }
         if (expired.isNotEmpty()) {
             coll.deleteMany(criteria)
+            bumpVersion()
         }
         return expired
     }
@@ -572,5 +626,6 @@ class MongoDBFintCache(
     companion object {
         const val META_COLLECTION = "cache_meta"
         const val FIELD_LAST_UPDATED = "lastUpdated"
+        const val FIELD_VERSION = "version"
     }
 }
