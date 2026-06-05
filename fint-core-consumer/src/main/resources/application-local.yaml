@@ -41,5 +41,5 @@ logging:
   level:
     org.apache.kafka: OFF
     no.novari.kafka: OFF
-    no.fintlabs.cache: DEBUG
-    no.fintlabs.consumer.security: DEBUG
+    no.novari.fint.core.shared.cache: DEBUG
+    no.novari.fint.core.consumer.security: DEBUG
