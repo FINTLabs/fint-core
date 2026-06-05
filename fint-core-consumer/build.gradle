@@ -28,7 +28,8 @@ configurations {
 dependencies {
     implementation project(':fint-core-resource-store')
 
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
     implementation 'org.springframework.boot:spring-boot-configuration-processor'
@@ -44,7 +45,7 @@ dependencies {
     implementation 'no.novari:fint-core-relations:1.0.0-rc.1'
     implementation 'no.fintlabs:fint-core-infra-models:2.1.0'
     implementation 'no.fintlabs:fint-core-status-models:1.0.0'
-    implementation 'no.fintlabs:core-resource-server:3.0.0-rc-8'
+    implementation 'no.novari:fint-core-principal:4.1.0'
 
     implementation 'com.google.guava:guava:33.5.0-jre'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
@@ -52,6 +53,7 @@ dependencies {
 
     testImplementation 'org.awaitility:awaitility-kotlin:4.3.0'
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
+    testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:kafka'
     testImplementation 'org.testcontainers:mongodb'
 }
@@ -88,6 +90,13 @@ testing {
                 }
             }
         }
+    }
+}
+
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
     }
 }
 

@@ -3,17 +3,20 @@ package no.fintlabs.consumer.integration
 import no.fintlabs.Application
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.MediaType
 import org.springframework.kafka.test.context.EmbeddedKafka
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.TestPropertySource
-import org.springframework.test.web.reactive.server.WebTestClient
-import org.springframework.test.web.reactive.server.returnResult
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 import java.time.Duration
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [Application::class])
+@SpringBootTest(classes = [Application::class])
+@AutoConfigureMockMvc
 @EmbeddedKafka(partitions = 1)
 @TestPropertySource(
     properties = [
@@ -30,46 +33,30 @@ import java.time.Duration
 )
 @DirtiesContext
 class EventExpiryIT {
-    @LocalServerPort
-    private var port: Int = 0
+    @Autowired
+    private lateinit var mockMvc: MockMvc
 
-    private val client by lazy {
-        WebTestClient
-            .bindToServer()
-            .baseUrl("http://localhost:$port/utdanning/elev")
-            .responseTimeout(Duration.ofSeconds(10))
-            .build()
-    }
-
-    private val resourceName = "elev"
+    private val base = "/utdanning/elev/elev"
 
     @Test
     fun `corrId expires before adapter responds - status endpoint returns 410`() {
         val location =
-            client
-                .post()
-                .uri("/$resourceName")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(mapOf("systemId" to mapOf("identifikatorverdi" to "123")))
-                .exchange()
-                .expectStatus()
-                .isAccepted
-                .returnResult<Void>()
-                .responseHeaders
-                .location
-                ?.toString()
+            mockMvc
+                .post(base) {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = """{"systemId":{"identifikatorverdi":"123"}}"""
+                }.andExpect { status { isAccepted() } }
+                .andReturn()
+                .response
+                .getHeader("Location")
                 ?: error("No Location header in response")
 
         val corrId = location.substringAfterLast("/")
 
-        // Wait for the request to be tracked (202), then for the eviction to kick in (410)
         await.atMost(Duration.ofSeconds(10)).untilAsserted {
-            client
-                .get()
-                .uri("/$resourceName/status/$corrId")
-                .exchange()
-                .expectStatus()
-                .isEqualTo(410)
+            mockMvc
+                .get("$base/status/$corrId")
+                .andExpect { status { isEqualTo(410) } }
         }
     }
 }

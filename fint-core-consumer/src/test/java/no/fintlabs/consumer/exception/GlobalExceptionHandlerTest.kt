@@ -12,18 +12,19 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.junit.jupiter.MockitoExtension
 import org.springframework.http.ResponseEntity
-import org.springframework.test.web.reactive.server.WebTestClient
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RestController
-import reactor.core.publisher.Mono
 
 @ExtendWith(MockitoExtension::class)
 class GlobalExceptionHandlerTest {
     @Mock
     private lateinit var consumerErrorPublisher: ConsumerErrorPublisher
 
-    private lateinit var webTestClient: WebTestClient
+    private lateinit var mockMvc: MockMvc
 
     @BeforeEach
     fun setUp() {
@@ -33,23 +34,18 @@ class GlobalExceptionHandlerTest {
                 orgIdValue = "fintlabs.no",
                 podUrl = "http://test",
             )
-        webTestClient =
-            WebTestClient
-                .bindToController(NotFoundController(), ErrorController())
-                .controllerAdvice(GlobalExceptionHandler(consumerErrorPublisher, configuration))
+        mockMvc =
+            MockMvcBuilders
+                .standaloneSetup(NotFoundController(), ErrorController())
+                .setControllerAdvice(GlobalExceptionHandler(consumerErrorPublisher, configuration))
                 .build()
     }
 
     @Test
     @DisplayName("Should return 404 when id is not found")
     fun shouldReturn404OnNotFoundId() {
-        // No route matches /{resource}/{id} (only 2 segments) — WebFlux returns 404 at routing level
-        webTestClient
-            .get()
-            .uri("/elevfravar/1234")
-            .exchange()
-            .expectStatus()
-            .isNotFound()
+        // No route matches /{resource}/{id} (only 2 segments) — MVC returns 404 at routing level
+        mockMvc.get("/elevfravar/1234").andExpect { status { isNotFound() } }
 
         verifyNoInteractions(consumerErrorPublisher)
     }
@@ -58,12 +54,7 @@ class GlobalExceptionHandlerTest {
     @DisplayName("Should return 404 when resource is not found")
     fun shouldReturn404WhenResourceIsNotFound() {
         // Route matches but handler returns notFound() — no exception raised
-        webTestClient
-            .get()
-            .uri("/elevfravar/systemid/1234")
-            .exchange()
-            .expectStatus()
-            .isNotFound()
+        mockMvc.get("/elevfravar/systemid/1234").andExpect { status { isNotFound() } }
 
         verifyNoInteractions(consumerErrorPublisher)
     }
@@ -71,12 +62,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("Should return 500 when we get a RuntimeException")
     fun shouldReturn500WhenWeGetARuntimeException() {
-        webTestClient
-            .get()
-            .uri("/bob")
-            .exchange()
-            .expectStatus()
-            .is5xxServerError()
+        mockMvc.get("/bob").andExpect { status { is5xxServerError() } }
 
         verify(consumerErrorPublisher).publish(anyNonNull())
     }
@@ -99,6 +85,6 @@ class GlobalExceptionHandlerTest {
     @RestController
     class ErrorController {
         @GetMapping("/bob")
-        fun triggerError(): Mono<String> = Mono.error(RuntimeException("Something went wrong!"))
+        fun triggerError(): String = throw RuntimeException("Something went wrong!")
     }
 }

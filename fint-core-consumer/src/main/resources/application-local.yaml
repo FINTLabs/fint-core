@@ -42,4 +42,4 @@ logging:
     org.apache.kafka: OFF
     no.novari.kafka: OFF
     no.fintlabs.cache: DEBUG
-    no.fintlabs.resource.server: DEBUG
+    no.fintlabs.consumer.security: DEBUG
