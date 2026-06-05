@@ -34,6 +34,7 @@ class MongoTestcontainerInitializer : BeforeAllCallback {
             MongoDBContainer(DockerImageName.parse(IMAGE)).apply {
                 start()
                 System.setProperty("spring.data.mongodb.uri", getReplicaSetUrl(DB_NAME))
+                System.setProperty("spring.data.mongodb.database", DB_NAME)
             }
         }
 

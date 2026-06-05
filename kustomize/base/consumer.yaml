@@ -27,8 +27,6 @@ spec:
       value: "1"
     - name: spring.kafka.consumer.fetch-max-wait
       value: "500ms"
-    - name: spring.data.mongodb.database
-      value: fintcache
     - name: fint.consumer.kafka.startup-jitter
       value: 0ms
     - name: JAVA_TOOL_OPTIONS

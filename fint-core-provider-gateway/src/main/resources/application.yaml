@@ -17,7 +17,8 @@ novari:
 spring:
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/fint-provider}
+      uri: ${MONGODB_URI:mongodb://localhost:27017}
+      database: fint
   jpa:
     properties:
       jdbc:

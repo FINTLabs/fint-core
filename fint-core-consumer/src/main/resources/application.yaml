@@ -35,7 +35,8 @@ spring:
 
   data:
     mongodb:
-      uri: mongodb://localhost:27017/fintcache
+      uri: mongodb://localhost:27017
+      database: fint
       auto-index-creation: false
 
 management:
