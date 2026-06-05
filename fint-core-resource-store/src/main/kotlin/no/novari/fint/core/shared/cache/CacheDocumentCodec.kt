@@ -100,7 +100,7 @@ class CacheDocumentCodec(
         val cls = Class.forName(type).asSubclass(FintResource::class.java)
         val resource = objectMapper.readValue(data, cls)
         val seen = HashSet<String>()
-        (linkEntries(doc, FIELD_FORWARD_LINKS) + linkEntries(doc, FIELD_BACK_LINKS)).forEach { entry ->
+        linkEntries(doc, FIELD_FORWARD_LINKS).forEach { entry ->
             val key = entry.getString(FIELD_RELATION_KEY) ?: return@forEach
             val ref = entry.getString(FIELD_RELATION_REF) ?: return@forEach
             if (!seen.add("${key.lowercase()}|$ref")) return@forEach
@@ -108,6 +108,29 @@ class CacheDocumentCodec(
             resource.addLink(key, link)
         }
         return resource
+    }
+
+    /**
+     * Merge externally-stored back-link rows (from the `backlinks` collection) into [resource]'s
+     * `_links`, de-duplicated against the links already present (the forward links) by `(key, ref)`.
+     * Replaces the old embedded-`backLinks` merge now that back-links live in their own collection.
+     */
+    fun mergeBackLinks(
+        resource: FintResource,
+        rows: List<Document>,
+    ) {
+        if (rows.isEmpty()) return
+        val seen = HashSet<String>()
+        resource.links.forEach { (key, links) ->
+            links.forEach { link -> relationRef(link.href)?.let { seen.add("${key.lowercase()}|$it") } }
+        }
+        rows.forEach { row ->
+            val key = row.getString(FIELD_RELATION_KEY) ?: return@forEach
+            val ref = row.getString(FIELD_RELATION_REF) ?: return@forEach
+            if (!seen.add("${key.lowercase()}|$ref")) return@forEach
+            val link = objectMapper.convertValue(row[FIELD_RELATION_LINK], Link::class.java) ?: return@forEach
+            resource.addLink(key, link)
+        }
     }
 
     @Suppress("UNCHECKED_CAST")

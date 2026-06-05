@@ -12,12 +12,13 @@ import com.mongodb.client.model.Sorts
 import com.mongodb.client.model.UpdateOneModel
 import com.mongodb.client.model.UpdateOptions
 import no.fint.antlr.odata.ODataFilterService
-import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_BACK_LINKS
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_HAS_DATA
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_ID
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_IDENTIFIERS
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_IDENTIFIER_KEY
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_IDENTIFIER_VALUE
+import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_RELATION_KEY
+import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_RELATION_LINK
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_RELATION_NAME
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_RELATION_REF
 import no.novari.fint.core.shared.cache.CacheDocumentCodec.Companion.FIELD_TIMESTAMP
@@ -27,6 +28,7 @@ import org.bson.Document
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
+import java.util.IdentityHashMap
 import java.util.Spliterator
 import java.util.Spliterators
 import java.util.concurrent.atomic.AtomicReference
@@ -57,6 +59,65 @@ class MongoDBFintCache(
     }
 
     private fun collection(): MongoCollection<Document> = mongoTemplate.getCollection(collectionName)
+
+    private fun backLinks(): MongoCollection<Document> = mongoTemplate.getCollection(BACKLINKS_COLLECTION)
+
+    private fun backLinkFilter(
+        targetId: String,
+        relation: String,
+        ref: String,
+    ): Document =
+        Document(FIELD_BL_COLL, collectionName)
+            .append(FIELD_BL_TARGET, targetId)
+            .append(FIELD_RELATION_NAME, relation)
+            .append(FIELD_RELATION_REF, ref)
+
+    /** All back-link rows owned by [targetIds] in this collection, grouped by target id. */
+    private fun backLinkRowsFor(targetIds: Collection<String>): Map<String, List<Document>> {
+        if (targetIds.isEmpty()) return emptyMap()
+        val rows = HashMap<String, MutableList<Document>>()
+        backLinks()
+            .find(Document(FIELD_BL_COLL, collectionName).append(FIELD_BL_TARGET, Document("\$in", targetIds.toList())))
+            .iterator()
+            .use { cursor ->
+                while (cursor.hasNext()) {
+                    val row = cursor.next()
+                    rows.getOrPut(row.getString(FIELD_BL_TARGET)) { mutableListOf() }.add(row)
+                }
+            }
+        return rows
+    }
+
+    /** Merge each resource's back-link rows (one batched query) into its `_links`. */
+    private fun withBackLinks(byId: Map<String, FintResource>): List<FintResource> {
+        if (byId.isNotEmpty()) {
+            val rows = backLinkRowsFor(byId.keys)
+            byId.forEach { (id, resource) -> codec.mergeBackLinks(resource, rows[id] ?: emptyList()) }
+        }
+        return byId.values.toList()
+    }
+
+    /** Delete every back-link row owned by [targetIds] in this collection (target removed/evicted). */
+    private fun deleteBackLinkRowsFor(targetIds: Collection<String>) {
+        if (targetIds.isEmpty()) return
+        backLinks().deleteMany(
+            Document(FIELD_BL_COLL, collectionName).append(FIELD_BL_TARGET, Document("\$in", targetIds.toList())),
+        )
+    }
+
+    /**
+     * Raise the target document's timestamp so a back-link change is visible to incremental readers.
+     * No-op when the target is not yet cached — the back-link row waits until a [put] creates it.
+     */
+    private fun bumpTargetTimestamp(
+        targetId: String,
+        timestamp: Long,
+    ) {
+        collection().updateOne(
+            Document(FIELD_ID, targetId).append(FIELD_HAS_DATA, true),
+            Document("\$max", Document(FIELD_TIMESTAMP, timestamp)),
+        )
+    }
 
     /**
      * Updates the shared `cache_meta` document for this collection on every accepted mutation:
@@ -102,12 +163,23 @@ class MongoDBFintCache(
             ),
             IndexOptions().name("identifiers_idx"),
         )
-        coll.createIndex(
+        val bl = backLinks()
+        bl.createIndex(
             Indexes.compoundIndex(
-                Indexes.ascending("$FIELD_BACK_LINKS.$FIELD_RELATION_NAME"),
-                Indexes.ascending("$FIELD_BACK_LINKS.$FIELD_RELATION_REF"),
+                Indexes.ascending(FIELD_BL_COLL),
+                Indexes.ascending(FIELD_BL_TARGET),
+                Indexes.ascending(FIELD_RELATION_NAME),
+                Indexes.ascending(FIELD_RELATION_REF),
             ),
-            IndexOptions().name("back_links_idx"),
+            IndexOptions().name("backlinks_owner_idx").unique(true),
+        )
+        bl.createIndex(
+            Indexes.compoundIndex(
+                Indexes.ascending(FIELD_BL_COLL),
+                Indexes.ascending(FIELD_RELATION_NAME),
+                Indexes.ascending(FIELD_RELATION_REF),
+            ),
+            IndexOptions().name("backlinks_ref_idx"),
         )
     }
 
@@ -138,8 +210,7 @@ class MongoDBFintCache(
                             Document(FIELD_HAS_DATA, Document("\$ne", true)),
                         ),
                     ),
-                Document("\$set", codec.toSetDocument(resource, timestamp))
-                    .append("\$setOnInsert", Document(FIELD_BACK_LINKS, emptyList<Document>())),
+                Document("\$set", codec.toSetDocument(resource, timestamp)),
                 UpdateOptions().upsert(true),
             )
             bumpMeta(timestamp)
@@ -169,8 +240,7 @@ class MongoDBFintCache(
                                 Document(FIELD_HAS_DATA, Document("\$ne", true)),
                             ),
                         ),
-                    Document("\$set", codec.toSetDocument(resource, timestamp))
-                        .append("\$setOnInsert", Document(FIELD_BACK_LINKS, emptyList<Document>())),
+                    Document("\$set", codec.toSetDocument(resource, timestamp)),
                     UpdateOptions().upsert(true),
                 )
             }
@@ -187,7 +257,9 @@ class MongoDBFintCache(
             collection()
                 .find(Document(FIELD_ID, resourceId).append(FIELD_HAS_DATA, true))
                 .first() ?: return null
-        return codec.fromDocument(doc)
+        val resource = codec.fromDocument(doc)
+        codec.mergeBackLinks(resource, backLinkRowsFor(listOf(resourceId))[resourceId] ?: emptyList())
+        return resource
     }
 
     override fun lastUpdatedByResourceId(resourceId: String): Long? = lookupTimestamp(resourceId)
@@ -214,7 +286,10 @@ class MongoDBFintCache(
                     ),
                 )
         val doc = collection().find(criteria).first() ?: return null
-        return codec.fromDocument(doc)
+        val id = doc.getString(FIELD_ID)
+        val resource = codec.fromDocument(doc)
+        codec.mergeBackLinks(resource, backLinkRowsFor(listOf(id))[id] ?: emptyList())
+        return resource
     }
 
     /**
@@ -229,99 +304,54 @@ class MongoDBFintCache(
         relation: String,
         ref: String,
     ): Set<String> {
-        val criteria =
-            Document(
-                FIELD_BACK_LINKS,
-                Document(
-                    "\$elemMatch",
-                    Document(FIELD_RELATION_NAME, relation.lowercase())
-                        .append(FIELD_RELATION_REF, ref),
-                ),
-            )
         val ids = mutableSetOf<String>()
-        collection()
-            .find(criteria)
-            .projection(Document(FIELD_ID, 1))
+        backLinks()
+            .find(
+                Document(FIELD_BL_COLL, collectionName)
+                    .append(FIELD_RELATION_NAME, relation.lowercase())
+                    .append(FIELD_RELATION_REF, ref),
+            ).projection(Document(FIELD_BL_TARGET, 1))
             .iterator()
             .use { cursor ->
                 while (cursor.hasNext()) {
-                    ids.add(cursor.next().getString(FIELD_ID))
+                    ids.add(cursor.next().getString(FIELD_BL_TARGET))
                 }
             }
         return ids
     }
 
     /**
-     * Batched [findIdsByBackLink] for whole-page relation reconciliation: one aggregation matches
-     * every target holding a back-link under [relation] to any of [refs] and projects which of those
-     * refs each holds, so P×R per-ref round-trips collapse to one query per (collection, relation).
-     * The back-link arrays stay server-side; only the matched refs and ids cross the wire.
+     * Batched [findIdsByBackLink] for whole-page relation reconciliation: one indexed query over the
+     * `backlinks` collection returns the `(ref, target)` rows for every ref in [refs], collapsing the
+     * page's per-ref round-trips to one. No array scan — back-links are individually indexed rows.
      */
     override fun findIdsByBackLinks(
         relation: String,
         refs: Set<String>,
     ): Map<String, Set<String>> {
         if (refs.isEmpty()) return emptyMap()
-        val relationName = relation.lowercase()
-        val refList = refs.toList()
-        val matchedRefs =
-            Document(
-                "\$map",
-                Document(
-                    "input",
-                    Document(
-                        "\$filter",
-                        Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
-                            .append("as", "b")
-                            .append(
-                                "cond",
-                                Document(
-                                    "\$and",
-                                    listOf(
-                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relationName)),
-                                        Document("\$in", listOf("\$\$b.$FIELD_RELATION_REF", refList)),
-                                    ),
-                                ),
-                            ),
-                    ),
-                ).append("as", "b").append("in", "\$\$b.$FIELD_RELATION_REF"),
-            )
-        val pipeline =
-            listOf(
-                Document(
-                    "\$match",
-                    Document(
-                        FIELD_BACK_LINKS,
-                        Document(
-                            "\$elemMatch",
-                            Document(FIELD_RELATION_NAME, relationName)
-                                .append(FIELD_RELATION_REF, Document("\$in", refList)),
-                        ),
-                    ),
-                ),
-                Document("\$project", Document(FIELD_MATCHED_REFS, matchedRefs)),
-            )
         val result = HashMap<String, MutableSet<String>>()
-        collection().aggregate(pipeline).iterator().use { cursor ->
-            while (cursor.hasNext()) {
-                val doc = cursor.next()
-                val id = doc.getString(FIELD_ID)
-
-                @Suppress("UNCHECKED_CAST")
-                val matched = doc.get(FIELD_MATCHED_REFS) as? List<String> ?: emptyList()
-                matched.forEach { ref -> result.getOrPut(ref) { mutableSetOf() }.add(id) }
+        backLinks()
+            .find(
+                Document(FIELD_BL_COLL, collectionName)
+                    .append(FIELD_RELATION_NAME, relation.lowercase())
+                    .append(FIELD_RELATION_REF, Document("\$in", refs.toList())),
+            ).projection(Document(FIELD_BL_TARGET, 1).append(FIELD_RELATION_REF, 1))
+            .iterator()
+            .use { cursor ->
+                while (cursor.hasNext()) {
+                    val row = cursor.next()
+                    result.getOrPut(row.getString(FIELD_RELATION_REF)) { mutableSetOf() }.add(row.getString(FIELD_BL_TARGET))
+                }
             }
-        }
         return result
     }
 
     /**
-     * Atomic back-link add via an aggregation-pipeline update: existing entries for the same
-     * `(relation, ref)` are filtered out and the new entry appended, so the write is idempotent and
-     * needs no read-modify-write. Upserts a data-less stub (`hasData=false`, no `timestamp`) when the
-     * target is absent; on a stub the timestamp is left unset so a later [put] still recognises it.
-     * On a resource that already holds data the timestamp is raised to [timestamp] so the change is
-     * visible to incremental readers.
+     * Add (or replace) a back-link as a single upserted row in the `backlinks` collection, keyed by
+     * `(collection, target, relation, ref)` so it is idempotent. The target document is not required
+     * — a row to a not-yet-cached target simply waits for a later [put]. Raises the target's timestamp
+     * when it exists so the change is visible to incremental readers.
      */
     override fun addBackLink(
         resourceId: String,
@@ -330,44 +360,22 @@ class MongoDBFintCache(
         timestamp: Long,
     ) {
         val entry = codec.linkEntry(relation, link) ?: return
-        val ref = entry.getString(FIELD_RELATION_REF)
-        val relationName = entry.getString(FIELD_RELATION_NAME)
-        val filtered =
-            Document(
-                "\$filter",
-                Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
-                    .append("as", "b")
-                    .append(
-                        "cond",
-                        Document(
-                            "\$not",
-                            listOf(
-                                Document(
-                                    "\$and",
-                                    listOf(
-                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relationName)),
-                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_REF", ref)),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-            )
-        val stage =
+        backLinks().updateOne(
+            backLinkFilter(resourceId, entry.getString(FIELD_RELATION_NAME), entry.getString(FIELD_RELATION_REF)),
             Document(
                 "\$set",
-                Document(FIELD_BACK_LINKS, Document("\$concatArrays", listOf(filtered, listOf(entry))))
-                    .append(FIELD_HAS_DATA, Document("\$ifNull", listOf("\$$FIELD_HAS_DATA", false)))
-                    .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
-            )
-        collection().updateOne(Document(FIELD_ID, resourceId), listOf(stage), UpdateOptions().upsert(true))
+                Document(FIELD_RELATION_KEY, entry.getString(FIELD_RELATION_KEY))
+                    .append(FIELD_RELATION_LINK, entry[FIELD_RELATION_LINK]),
+            ),
+            UpdateOptions().upsert(true),
+        )
+        bumpTargetTimestamp(resourceId, timestamp)
         bumpMeta(timestamp)
     }
 
     /**
-     * Atomic back-link removal via an aggregation-pipeline update that filters the entry out by
-     * `(relation, ref)`. No upsert, so it never creates a stub. Raises the timestamp only when the
-     * resource already holds data, mirroring [addBackLink].
+     * Remove a back-link by deleting its row. No-op if absent. Raises the target's timestamp when
+     * something was removed, mirroring [addBackLink].
      */
     override fun removeBackLink(
         resourceId: String,
@@ -375,41 +383,17 @@ class MongoDBFintCache(
         ref: String,
         timestamp: Long,
     ) {
-        val filtered =
-            Document(
-                "\$filter",
-                Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
-                    .append("as", "b")
-                    .append(
-                        "cond",
-                        Document(
-                            "\$not",
-                            listOf(
-                                Document(
-                                    "\$and",
-                                    listOf(
-                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relation.lowercase())),
-                                        Document("\$eq", listOf("\$\$b.$FIELD_RELATION_REF", ref)),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-            )
-        val stage =
-            Document(
-                "\$set",
-                Document(FIELD_BACK_LINKS, filtered)
-                    .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
-            )
-        val result = collection().updateOne(Document(FIELD_ID, resourceId), listOf(stage))
-        if (result.matchedCount > 0) bumpMeta(timestamp)
+        val result = backLinks().deleteOne(backLinkFilter(resourceId, relation.lowercase(), ref))
+        if (result.deletedCount > 0) {
+            bumpTargetTimestamp(resourceId, timestamp)
+            bumpMeta(timestamp)
+        }
     }
 
     /**
-     * Bulk back-link reconciliation: applies all [ops] across this collection in one `bulkWrite`,
-     * reusing the same aggregation-pipeline stages as the single-op [addBackLink]/[removeBackLink].
-     * Adds upsert a stub for an absent target; removes never create one.
+     * Bulk back-link reconciliation for a whole page: one `bulkWrite` of row upserts (adds) and row
+     * deletes (removes) against the `backlinks` collection, then a single `updateMany` raising the
+     * affected targets' timestamps. No per-target array rewrite — each back-link is its own row.
      */
     override fun applyBackLinkOps(
         ops: List<BackLinkOp>,
@@ -420,102 +404,32 @@ class MongoDBFintCache(
             ops.mapNotNull { op ->
                 when (op) {
                     is BackLinkOp.Add -> {
-                        addBackLinkStage(op.relation, op.link, timestamp)?.let { stage ->
+                        codec.linkEntry(op.relation, op.link)?.let { entry ->
                             UpdateOneModel<Document>(
-                                Document(FIELD_ID, op.resourceId),
-                                listOf(stage),
+                                backLinkFilter(op.resourceId, entry.getString(FIELD_RELATION_NAME), entry.getString(FIELD_RELATION_REF)),
+                                Document(
+                                    "\$set",
+                                    Document(FIELD_RELATION_KEY, entry.getString(FIELD_RELATION_KEY))
+                                        .append(FIELD_RELATION_LINK, entry[FIELD_RELATION_LINK]),
+                                ),
                                 UpdateOptions().upsert(true),
                             )
                         }
                     }
 
                     is BackLinkOp.Remove -> {
-                        UpdateOneModel<Document>(
-                            Document(FIELD_ID, op.resourceId),
-                            listOf(removeBackLinkStage(op.relation, op.ref, timestamp)),
-                        )
+                        DeleteOneModel<Document>(backLinkFilter(op.resourceId, op.relation.lowercase(), op.ref))
                     }
                 }
             }
         if (models.isEmpty()) return
-        collection().bulkWrite(models, BulkWriteOptions().ordered(false))
+        backLinks().bulkWrite(models, BulkWriteOptions().ordered(false))
+        collection().updateMany(
+            Document(FIELD_ID, Document("\$in", ops.map { it.resourceId }.distinct())).append(FIELD_HAS_DATA, true),
+            Document("\$max", Document(FIELD_TIMESTAMP, timestamp)),
+        )
         bumpMeta(timestamp)
     }
-
-    /** `$set` stage appending [link]'s back-link entry, de-duplicated by `(relation, ref)`. */
-    private fun addBackLinkStage(
-        relation: String,
-        link: Link,
-        timestamp: Long,
-    ): Document? {
-        val entry = codec.linkEntry(relation, link) ?: return null
-        return Document(
-            "\$set",
-            Document(
-                FIELD_BACK_LINKS,
-                Document(
-                    "\$concatArrays",
-                    listOf(
-                        filterOutBackLink(entry.getString(FIELD_RELATION_NAME), entry.getString(FIELD_RELATION_REF)),
-                        listOf(entry),
-                    ),
-                ),
-            ).append(FIELD_HAS_DATA, Document("\$ifNull", listOf("\$$FIELD_HAS_DATA", false)))
-                .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
-        )
-    }
-
-    /** `$set` stage dropping the back-link matching `(relation, ref)`. */
-    private fun removeBackLinkStage(
-        relation: String,
-        ref: String,
-        timestamp: Long,
-    ): Document =
-        Document(
-            "\$set",
-            Document(FIELD_BACK_LINKS, filterOutBackLink(relation.lowercase(), ref))
-                .append(FIELD_TIMESTAMP, bumpTimestampIfHasData(timestamp)),
-        )
-
-    /** `$filter` expression removing back-link entries matching `(relationName, ref)`. */
-    private fun filterOutBackLink(
-        relationName: String,
-        ref: String,
-    ): Document =
-        Document(
-            "\$filter",
-            Document("input", Document("\$ifNull", listOf("\$$FIELD_BACK_LINKS", emptyList<Document>())))
-                .append("as", "b")
-                .append(
-                    "cond",
-                    Document(
-                        "\$not",
-                        listOf(
-                            Document(
-                                "\$and",
-                                listOf(
-                                    Document("\$eq", listOf("\$\$b.$FIELD_RELATION_NAME", relationName)),
-                                    Document("\$eq", listOf("\$\$b.$FIELD_RELATION_REF", ref)),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-        )
-
-    /**
-     * Pipeline expression raising the stored timestamp to [timestamp] only when the document already
-     * holds data; stubs keep their (absent) timestamp so [put] can still detect and fill them.
-     */
-    private fun bumpTimestampIfHasData(timestamp: Long): Document =
-        Document(
-            "\$cond",
-            listOf(
-                Document("\$eq", listOf("\$$FIELD_HAS_DATA", true)),
-                Document("\$max", listOf("\$$FIELD_TIMESTAMP", timestamp)),
-                "\$$FIELD_TIMESTAMP",
-            ),
-        )
 
     /**
      * Get a paged, `(timestamp, _id)`-sorted list of cached resources, optionally filtered.
@@ -545,29 +459,39 @@ class MongoDBFintCache(
                 if (offset > 0) find.skip(offset.toInt())
                 find.limit(size.toInt())
             }
-            return find.iterator().use { c ->
-                val resources = ArrayList<FintResource>()
+            val byId = LinkedHashMap<String, FintResource>()
+            find.iterator().use { c ->
                 while (c.hasNext()) {
-                    resources.add(codec.fromDocument(c.next()))
+                    val doc = c.next()
+                    byId[doc.getString(FIELD_ID)] = codec.fromDocument(doc)
                 }
-                resources
             }
+            return withBackLinks(byId)
         }
 
         return find.iterator().use { c ->
+            val idByResource = IdentityHashMap<FintResource, String>()
             val baseStream =
                 StreamSupport.stream(
                     Spliterators.spliteratorUnknownSize(c, Spliterator.ORDERED or Spliterator.NONNULL),
                     false,
                 )
-            var resources: Stream<FintResource> = applyODataFilter(baseStream.map { codec.fromDocument(it) }, filter)
+            var resources: Stream<FintResource> =
+                applyODataFilter(
+                    baseStream.map { doc -> codec.fromDocument(doc).also { idByResource[it] = doc.getString(FIELD_ID) } },
+                    filter,
+                )
             if (size > 0) {
                 if (offset > 0) {
                     resources = resources.skip(offset)
                 }
                 resources = resources.limit(size)
             }
-            resources.toList()
+            val page = resources.toList()
+            val byId = LinkedHashMap<String, FintResource>()
+            page.forEach { resource -> idByResource[resource]?.let { byId[it] = resource } }
+            withBackLinks(byId)
+            page
         }
     }
 
@@ -652,7 +576,10 @@ class MongoDBFintCache(
                 )
             }
         val result = collection().bulkWrite(models, BulkWriteOptions().ordered(false))
-        if (result.deletedCount > 0) bumpMeta(timestamp)
+        if (result.deletedCount > 0) {
+            deleteBackLinkRowsFor(resourceIds)
+            bumpMeta(timestamp)
+        }
         return existing
     }
 
@@ -684,6 +611,7 @@ class MongoDBFintCache(
         }
         if (expired.isNotEmpty()) {
             coll.deleteMany(criteria)
+            deleteBackLinkRowsFor(expired.map { it.first })
             bumpVersion()
         }
         return expired
@@ -691,8 +619,10 @@ class MongoDBFintCache(
 
     companion object {
         const val META_COLLECTION = "cache_meta"
+        const val BACKLINKS_COLLECTION = "backlinks"
         const val FIELD_LAST_UPDATED = "lastUpdated"
         const val FIELD_VERSION = "version"
-        private const val FIELD_MATCHED_REFS = "matchedRefs"
+        private const val FIELD_BL_COLL = "coll"
+        private const val FIELD_BL_TARGET = "target"
     }
 }
