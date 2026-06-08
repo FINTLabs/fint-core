@@ -98,6 +98,13 @@ class EventIT {
     }
 
     @Test
+    fun `status returns 202 while no adapter response has arrived yet`() {
+        val corrId = post("pending-202")
+
+        getStatus(corrId).andExpect { status { isAccepted() } }
+    }
+
+    @Test
     fun `validate returns 200`() {
         val id = "validate-200"
         val corrId = post(id)
