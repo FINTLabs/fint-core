@@ -8,4 +8,4 @@ dependencyResolutionManagement {
     }
 }
 
-include("fint-core-consumer", "fint-core-provider-gateway", "fint-core-resource-store")
+include("fint-core-consumer", "fint-core-provider-gateway", "fint-core-resource-store", "fint-core-dynamic-adapter")
