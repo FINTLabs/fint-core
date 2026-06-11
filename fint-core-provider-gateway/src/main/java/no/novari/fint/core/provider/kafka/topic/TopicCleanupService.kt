@@ -11,6 +11,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import no.novari.fint.core.provider.config.CleanupTopicsProperties
 import no.novari.fint.core.provider.config.ProviderProperties
+import no.novari.fint.core.provider.datasync.ingest.SyncIngestTopics
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME
@@ -45,6 +46,7 @@ class TopicCleanupService(
     private val cleanupTopicsProperties: CleanupTopicsProperties,
     private val topicNameService: TopicNameService,
     private val kafkaAdmin: KafkaAdmin,
+    private val syncIngestTopics: SyncIngestTopics,
 ) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -181,10 +183,19 @@ class TopicCleanupService(
      *
      * It also contains the eight global event topics under the application-default orgId:
      * `adapter-health`, `adapter-register`, `adapter-full-sync`, `adapter-delta-sync`,
-     * `adapter-delete-sync`, `consumer-error`, `provider-error`, `sync-status`.
+     * `adapter-delete-sync`, `consumer-error`, `provider-error`, `sync-status` — plus the
+     * sync ingest buffer topic and its DLT (`<orgId>.fint-core.entity.adapter-sync[.DLT]`)
+     * for the application-default orgId and every orgId in `components.yaml`.
      */
     fun computeExpectedTopicNames(): Set<String> {
         val expected = mutableSetOf<String>()
+
+        expected += syncIngestTopics.topic
+        expected += syncIngestTopics.dlt
+        providerProperties.components.flatMap { it.orgIds }.toSet().forEach { orgId ->
+            expected += syncIngestTopics.forOrg(orgId)
+            expected += syncIngestTopics.dltForOrg(orgId)
+        }
 
         providerProperties.components.forEach { component ->
             val componentName = "${component.domainName}-${component.packageName}"

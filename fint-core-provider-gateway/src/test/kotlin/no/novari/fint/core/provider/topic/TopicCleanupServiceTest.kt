@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import no.novari.fint.core.provider.config.CleanupTopicsProperties
 import no.novari.fint.core.provider.config.ComponentConfig
 import no.novari.fint.core.provider.config.ProviderProperties
+import no.novari.fint.core.provider.datasync.ingest.SyncIngestTopics
 import no.novari.fint.core.provider.kafka.topic.TopicCleanupService
 import no.novari.kafka.topic.name.EntityTopicNameParameters
 import no.novari.kafka.topic.name.EventTopicNameParameters
@@ -61,6 +62,7 @@ class TopicCleanupServiceTest {
         ),
         topicNameService,
         kafkaAdmin,
+        SyncIngestTopics(defaultOrgId, defaultDomainContext),
     )
 
     private fun stubListTopics(topics: Set<String>) {
