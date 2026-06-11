@@ -3,10 +3,8 @@ package no.novari.fint.core.provider;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.context.annotation.ComponentScan;
 
-@ComponentScan(basePackages = "no.novari")
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "no.novari")
 @ConfigurationPropertiesScan
 public class Application {
 
