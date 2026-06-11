@@ -68,7 +68,26 @@ jar {
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'benchmark'
+    }
+}
+
+tasks.register('ingestBenchmark', Test) {
+    group = 'verification'
+    description = 'Measure sync ingest throughput into a CPU-limited Mongo container (manual, never CI)'
+    useJUnitPlatform {
+        includeTags 'benchmark'
+    }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    outputs.upToDateWhen { false }
+    systemProperties System.properties.findAll { entry ->
+        entry.key.toString().startsWith('benchmark.')
+    }
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
 tasks.register('benchmarkKafkaProducer', JavaExec) {

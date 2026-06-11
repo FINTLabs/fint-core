@@ -1,6 +1,9 @@
 package no.novari.fint.core.provider.datasync.ingest
 
 import com.mongodb.MongoException
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncType
 import no.novari.fint.core.provider.datasync.ResourceCacheWriter
@@ -12,6 +15,7 @@ import org.springframework.dao.DataAccessException
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
+import java.util.concurrent.TimeUnit
 
 @Component
 class SyncIngestListener(
@@ -19,8 +23,28 @@ class SyncIngestListener(
     private val syncCompletionTracker: SyncCompletionTracker,
     @Qualifier("syncIngestKafkaTemplate") private val kafkaTemplate: KafkaTemplate<String, SyncIngestRecord>,
     private val topics: SyncIngestTopics,
+    meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    private val batchTimer: Timer =
+        Timer
+            .builder("fint.provider.sync.ingest.batch")
+            .description("Time spent writing one consumed batch into Mongo, including autorelation")
+            .publishPercentiles(0.5, 0.95)
+            .register(meterRegistry)
+
+    private val recordCounter: Counter =
+        Counter
+            .builder("fint.provider.sync.ingest.records")
+            .description("Sync records written into Mongo")
+            .register(meterRegistry)
+
+    private val deadLetterCounter: Counter =
+        Counter
+            .builder("fint.provider.sync.ingest.dead.letters")
+            .description("Sync records published to the DLT")
+            .register(meterRegistry)
 
     @KafkaListener(
         topics = ["#{@syncIngestTopics.topic}"],
@@ -41,8 +65,20 @@ class SyncIngestListener(
                 }
             }
         if (valid.isEmpty()) return
+        val started = System.nanoTime()
         write(valid)
         track(valid)
+        val elapsedNanos = System.nanoTime() - started
+        batchTimer.record(elapsedNanos, TimeUnit.NANOSECONDS)
+        recordCounter.increment(valid.size.toDouble())
+        val elapsedMs = TimeUnit.NANOSECONDS.toMillis(elapsedNanos)
+        log.info(
+            "Ingested batch: records={}, resourceKeys={}, duration={}ms, rate={}/s",
+            valid.size,
+            valid.asSequence().map { it.resourceKey }.distinct().count(),
+            elapsedMs,
+            if (elapsedMs > 0) valid.size * 1000L / elapsedMs else valid.size * 1000L,
+        )
     }
 
     private fun write(records: List<SyncIngestRecord>) {
@@ -77,6 +113,7 @@ class SyncIngestListener(
         record: SyncIngestRecord,
         cause: Exception,
     ) {
+        deadLetterCounter.increment()
         log.error(
             "Dead-lettering sync record: resourceKey={}, identifier={}, corrId={}",
             record.resourceKey,
