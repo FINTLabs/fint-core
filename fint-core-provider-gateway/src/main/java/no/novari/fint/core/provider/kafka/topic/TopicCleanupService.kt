@@ -181,7 +181,7 @@ class TopicCleanupService(
      * It also contains the eight global event topics under the application-default orgId:
      * `adapter-health`, `adapter-register`, `adapter-full-sync`, `adapter-delta-sync`,
      * `adapter-delete-sync`, `consumer-error`, `provider-error`, `sync-status` — plus the
-     * sync ingest buffer topic and its DLT (`<orgId>.fint-core.entity.adapter-sync[.DLT]`)
+     * sync ingest buffer topic and its DLT (`<orgId>.fint-core.entity.adapter-sync[-dlt]`)
      * for the application-default orgId and every orgId in `components.yaml`.
      */
     fun computeExpectedTopicNames(): Set<String> {

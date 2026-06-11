@@ -73,7 +73,7 @@ their `no.fintlabs.adapter` / `no.fintlabs.status` / `no.fint.antlr` names — n
    `SyncIngestListener` batch-consumes (`max.poll.records`/`idleBetweenPolls` bound Mongo throughput)
    → `ResourceCacheWriter.writeBatch` converts + link-maps each resource, bulk-upserts into the Mongo
    cache, applies autorelation back-links, and (on FULL sync) feeds `SyncCompletionTracker` so
-   `ProviderEvictionService` can evict stale entries; unconvertible records go to the `.DLT` topic.
+   `ProviderEvictionService` can evict stale entries; unconvertible records go to the `-dlt` topic.
    The **consumer reads this same Mongo** via
    `ResourceService` → `CacheService` and serves it. The consumer no longer consumes resource/entity
    Kafka topics.

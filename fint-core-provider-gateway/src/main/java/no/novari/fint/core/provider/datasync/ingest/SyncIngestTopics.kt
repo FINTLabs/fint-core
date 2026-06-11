@@ -14,7 +14,7 @@ class SyncIngestTopics(
 
     fun forOrg(orgId: String) = "$orgId.$domainContext.$NAME"
 
-    fun dltForOrg(orgId: String) = "${forOrg(orgId)}.DLT"
+    fun dltForOrg(orgId: String) = "${forOrg(orgId)}-dlt"
 
     companion object {
         const val NAME = "entity.adapter-sync"
