@@ -140,9 +140,16 @@ module(s) **and** retag with the matching imodel suffix. The provider also reads
 - **`jar { enabled = false }`** in both services — they produce `bootJar`s.
 - **Per-org config flows from `fint.org-id`** into `novari.kafka.topic.org-id` and the Mongo URI. The
   Mongo connection string is injected by the FLAIS operator from 1Password, not held in config.
-- **Kafka** goes through `no.novari:kafka` (`ParameterizedListenerContainerFactoryService`,
-  topic-name patterns), not raw `@KafkaListener`. The consumer staggers listener startup
-  (`KafkaListenerStartupJitter`) to avoid a thundering herd when many consumers restart at once.
+- **Kafka is plain spring-kafka everywhere** — the `no.novari:kafka` (fint-kafka) dependency is gone.
+  Topic names are built as plain `<org>.<context>.<event|entity>.<name>` strings (`EventTopicNames` in
+  the provider, `SyncIngestTopics` for ingestion); shared helpers (`OriginHeaderProducerInterceptor`
+  with the `origin.application.id` header, `KafkaTopics` topic configs, `kafkaSecurityProperties` SSL
+  block) live in `no.novari.fint.core.shared.kafka`. Wire format is byte-compatible with the old lib
+  (JSON + type headers + origin header); consumer group ids were preserved exactly so offsets carried
+  over (`<application-id>-event` on the consumer; the provider's request listener moved from a
+  random-group full replay to the stable committed-offset group `<org-id>.provider-event` — its
+  in-memory `RequestCache` is no longer rebuilt by replay on restart). The consumer staggers listener
+  startup (`KafkaListenerStartupJitter`) to avoid a thundering herd when many consumers restart at once.
 - **Auth:** both services are **servlet** OAuth2 resource servers with their own `SecurityConfiguration`
   built on `no.novari:fint-core-principal` (JWT → `CorePrincipal`). Provider requires the adapter scope
   + per-component authorization on sync paths. Consumer (own OPA layer in

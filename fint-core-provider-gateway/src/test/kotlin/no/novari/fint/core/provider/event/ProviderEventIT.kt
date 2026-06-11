@@ -20,8 +20,8 @@ import java.util.UUID
  * Integration coverage for the provider's auto-fail-on-expiry path: when a request reaches the
  * RequestCache already past its time-to-live, Caffeine's expiry callback must publish a failed
  * "Event expired" ResponseFintEvent so the waiting client is not left hanging. The request is fed
- * straight to RequestEventService (the inbound RequestFintEventConsumer/ResponseFintEventConsumer
- * subscribe off the metamodel service, which is not populated in the test harness).
+ * straight to RequestEventService (the inbound RequestFintEventConsumer subscribes off the
+ * metamodel service, which is not populated in the test harness).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @EmbeddedKafka(partitions = 1, topics = [ProviderEventIT.RESPONSE_TOPIC])

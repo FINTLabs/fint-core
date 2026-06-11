@@ -1,7 +1,6 @@
 package no.novari.fint.core.consumer.kafka
 
 import io.mockk.mockk
-import no.novari.kafka.consuming.ErrorHandlerFactory
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.MockConsumer
 import org.apache.kafka.clients.consumer.OffsetResetStrategy
@@ -22,12 +21,10 @@ class KafkaConsumerErrorHandlingTest {
         val container = mockk<MessageListenerContainer>()
 
         val handled =
-            ErrorHandlerFactory()
-                .createErrorHandler(
-                    KafkaConsumerErrorHandling.createLoggingErrorHandlerConfiguration<String>(
-                        LoggerFactory.getLogger(KafkaConsumerErrorHandlingTest::class.java),
-                        "test-consumer",
-                    ),
+            KafkaConsumerErrorHandling
+                .loggingErrorHandler(
+                    LoggerFactory.getLogger(KafkaConsumerErrorHandlingTest::class.java),
+                    "test-consumer",
                 ).handleOne(
                     IllegalStateException("boom"),
                     record,

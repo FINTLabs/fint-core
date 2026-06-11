@@ -9,31 +9,33 @@ import io.mockk.verify
 import no.novari.fint.core.provider.config.ComponentConfig
 import no.novari.fint.core.provider.config.ProducerProperties
 import no.novari.fint.core.provider.config.ProviderProperties
+import no.novari.fint.core.provider.kafka.EventTopicNames
 import no.novari.fint.core.provider.kafka.topic.ResponseEventTopicEnsurer
-import no.novari.kafka.topic.EventTopicService
-import no.novari.kafka.topic.configuration.EventTopicConfiguration
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import org.apache.kafka.clients.admin.NewTopic
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.kafka.core.KafkaAdmin
 
 class ResponseEventTopicEnsurerTest {
 
-    private lateinit var eventTopicService: EventTopicService
+    private lateinit var kafkaAdmin: KafkaAdmin
     private val responseProducerProperties = ProducerProperties()
+    private val eventTopicNames = EventTopicNames("fintlabs-no", "fint-core")
 
     @BeforeEach
     fun setup() {
-        eventTopicService = mockk()
-        every { eventTopicService.createOrModifyTopic(any(), any()) } just Runs
+        kafkaAdmin = mockk()
+        every { kafkaAdmin.createOrModifyTopics(any<NewTopic>()) } just Runs
     }
 
     private fun sut(components: List<ComponentConfig> = emptyList()) =
         ResponseEventTopicEnsurer(
-            eventTopicService,
             responseProducerProperties,
-            ProviderProperties(components = components)
+            ProviderProperties(components = components),
+            eventTopicNames,
+            kafkaAdmin,
+            1
         )
 
     @Test
@@ -45,7 +47,7 @@ class ResponseEventTopicEnsurerTest {
 
         sut(components).ensureResponseEventTopics()
 
-        verify(exactly = 3) { eventTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 3) { kafkaAdmin.createOrModifyTopics(any<NewTopic>()) }
     }
 
     @Test
@@ -56,24 +58,18 @@ class ResponseEventTopicEnsurerTest {
 
         sut(components).ensureResponseEventTopics()
 
-        val expected = EventTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
+        verify(exactly = 1) {
+            kafkaAdmin.createOrModifyTopics(
+                match<NewTopic> { it.name() == "fintlabs-no.fint-core.event.utdanning-elev-response" }
             )
-            .eventName("utdanning-elev-response")
-            .build()
-
-        verify(exactly = 1) { eventTopicService.createOrModifyTopic(expected, any()) }
+        }
     }
 
     @Test
     fun `ensureResponseEventTopics does nothing when components list is empty`() {
         sut(emptyList()).ensureResponseEventTopics()
 
-        verify(exactly = 0) { eventTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 0) { kafkaAdmin.createOrModifyTopics(any<NewTopic>()) }
     }
 
     @Test
@@ -81,12 +77,12 @@ class ResponseEventTopicEnsurerTest {
         val components = listOf(
             ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"), responsePartitions = 3)
         )
-        val configSlot = slot<EventTopicConfiguration>()
-        every { eventTopicService.createOrModifyTopic(any(), capture(configSlot)) } just Runs
+        val topicSlot = slot<NewTopic>()
+        every { kafkaAdmin.createOrModifyTopics(capture(topicSlot)) } just Runs
 
         sut(components).ensureResponseEventTopics()
 
-        assertEquals(3, configSlot.captured.partitions)
+        assertEquals(3, topicSlot.captured.numPartitions())
     }
 
     @Test
@@ -94,11 +90,11 @@ class ResponseEventTopicEnsurerTest {
         val components = listOf(
             ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"))
         )
-        val configSlot = slot<EventTopicConfiguration>()
-        every { eventTopicService.createOrModifyTopic(any(), capture(configSlot)) } just Runs
+        val topicSlot = slot<NewTopic>()
+        every { kafkaAdmin.createOrModifyTopics(capture(topicSlot)) } just Runs
 
         sut(components).ensureResponseEventTopics()
 
-        assertEquals(responseProducerProperties.partitions, configSlot.captured.partitions)
+        assertEquals(responseProducerProperties.partitions, topicSlot.captured.numPartitions())
     }
 }

@@ -2,50 +2,36 @@ package no.novari.fint.core.consumer.kafka.event
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.novari.fint.core.consumer.config.ConsumerConfiguration
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 import org.springframework.stereotype.Service
 import java.util.concurrent.CompletableFuture
 
 @Service
 class RequestFintEventProducer(
-    parameterizedTemplateFactory: ParameterizedTemplateFactory,
+    private val eventKafkaTemplate: KafkaTemplate<String, Any>,
     private val consumerConfig: ConsumerConfiguration,
+    @Value("\${novari.kafka.topic.domain-context}") private val domainContext: String,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val producer = parameterizedTemplateFactory.createTemplate(RequestFintEvent::class.java)
 
     fun publish(
         requestFintEvent: RequestFintEvent,
         domainName: String,
         packageName: String,
-    ): CompletableFuture<SendResult<String, RequestFintEvent>> {
+    ): CompletableFuture<SendResult<String, Any>> {
         logger.info("Publishing RequestFintEvent: {}", requestFintEvent.corrId)
-        return producer.send(
-            ParameterizedProducerRecord
-                .builder<RequestFintEvent>()
-                .key(requestFintEvent.corrId)
-                .topicNameParameters(topicNameParameters(domainName, packageName))
-                .value(requestFintEvent)
-                .build(),
+        return eventKafkaTemplate.send(
+            topicName(domainName, packageName),
+            requestFintEvent.corrId,
+            requestFintEvent,
         )
     }
 
-    private fun topicNameParameters(
+    private fun topicName(
         domainName: String,
         packageName: String,
-    ) = EventTopicNameParameters
-        .builder()
-        .topicNamePrefixParameters(
-            TopicNamePrefixParameters
-                .stepBuilder()
-                .orgId(consumerConfig.orgId.asTopicSegment)
-                .domainContextApplicationDefault()
-                .build(),
-        ).eventName("$domainName-$packageName-request")
-        .build()
+    ) = "${consumerConfig.orgId.asTopicSegment}.$domainContext.event.$domainName-$packageName-request"
 }

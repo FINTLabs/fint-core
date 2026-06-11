@@ -8,11 +8,8 @@ import no.novari.fint.core.provider.config.CleanupTopicsProperties
 import no.novari.fint.core.provider.config.ComponentConfig
 import no.novari.fint.core.provider.config.ProviderProperties
 import no.novari.fint.core.provider.datasync.ingest.SyncIngestTopics
+import no.novari.fint.core.provider.kafka.EventTopicNames
 import no.novari.fint.core.provider.kafka.topic.TopicCleanupService
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNameParameters
-import no.novari.kafka.topic.name.TopicNameService
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.DeleteTopicsResult
 import org.apache.kafka.clients.admin.ListTopicsResult
@@ -25,7 +22,6 @@ import java.time.Duration
 
 class TopicCleanupServiceTest {
 
-    private lateinit var topicNameService: TopicNameService
     private lateinit var kafkaAdmin: KafkaAdmin
     private lateinit var adminClient: AdminClient
 
@@ -34,19 +30,8 @@ class TopicCleanupServiceTest {
 
     @BeforeEach
     fun setup() {
-        topicNameService = mockk()
         kafkaAdmin = mockk(relaxed = true)
         adminClient = mockk(relaxed = true)
-
-        every { topicNameService.validateAndMapToTopicName(any()) } answers {
-            val params = firstArg<TopicNameParameters>()
-            val orgId = params.topicNamePrefixParameters.orgId ?: defaultOrgId
-            val domainContext = params.topicNamePrefixParameters.domainContext ?: defaultDomainContext
-            val suffix = params.topicNameSuffixParameters
-                .mapNotNull { it.value }
-                .joinToString(".")
-            "$orgId.$domainContext.${params.messageType.topicNameParameter}.$suffix"
-        }
     }
 
     private fun topicCleanupService(
@@ -60,7 +45,7 @@ class TopicCleanupServiceTest {
             batchSize = batchSize,
             batchDelay = batchDelay,
         ),
-        topicNameService,
+        EventTopicNames(defaultOrgId, defaultDomainContext),
         kafkaAdmin,
         SyncIngestTopics(defaultOrgId, defaultDomainContext),
     )
@@ -126,31 +111,19 @@ class TopicCleanupServiceTest {
     }
 
     @Test
-    fun `computeExpectedTopicNames uses correct parameters for entity and event builders`() {
+    fun `computeExpectedTopicNames builds entity and event names for component orgs`() {
         val components = listOf(
             ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = true)
         )
 
-        topicCleanupService(components).computeExpectedTopicNames()
+        val expected = topicCleanupService(components).computeExpectedTopicNames()
 
-        verify {
-            topicNameService.validateAndMapToTopicName(match<EntityTopicNameParameters> {
-                it.resourceName == "utdanning-elev" &&
-                        it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EntityTopicNameParameters> {
-                it.resourceName == "utdanning-elev-relation-update" &&
-                        it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EventTopicNameParameters> {
-                it.eventName == "utdanning-elev-request" &&
-                        it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EventTopicNameParameters> {
-                it.eventName == "utdanning-elev-response" &&
-                        it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-        }
+        assertThat(expected).contains(
+            "afk-no.fint-core.entity.utdanning-elev",
+            "afk-no.fint-core.entity.utdanning-elev-relation-update",
+            "afk-no.fint-core.event.utdanning-elev-request",
+            "afk-no.fint-core.event.utdanning-elev-response",
+        )
     }
 
     @Test

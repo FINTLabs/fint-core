@@ -1,23 +1,24 @@
 package no.novari.fint.core.consumer.kafka
 
 import no.novari.fint.core.consumer.Application
-import no.novari.fint.core.consumer.config.ConsumerConfiguration
-import no.novari.kafka.consuming.ErrorHandlerFactory
-import no.novari.kafka.consuming.ListenerConfiguration
-import no.novari.kafka.consuming.ParameterizedListenerContainerFactoryService
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.serialization.StringDeserializer
+import org.apache.kafka.common.serialization.StringSerializer
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory
+import org.springframework.kafka.core.DefaultKafkaProducerFactory
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer
+import org.springframework.kafka.listener.ContainerProperties
+import org.springframework.kafka.listener.MessageListener
 import org.springframework.kafka.test.context.EmbeddedKafka
 import org.springframework.kafka.test.utils.ContainerTestUtils
 import org.springframework.test.annotation.DirtiesContext
@@ -48,16 +49,13 @@ import kotlin.test.assertTrue
 @DirtiesContext
 class IdleBetweenPollsIT {
     @Autowired
-    private lateinit var timingContainer: ConcurrentMessageListenerContainer<String, Any>
+    private lateinit var timingContainer: ConcurrentMessageListenerContainer<String, String>
 
     @Autowired
     private lateinit var timingProbe: TimingProbe
 
     @Autowired
-    private lateinit var parameterizedTemplateFactory: ParameterizedTemplateFactory
-
-    @Autowired
-    private lateinit var consumerConfiguration: ConsumerConfiguration
+    private lateinit var kafkaProperties: KafkaProperties
 
     @AfterEach
     fun tearDown() {
@@ -71,17 +69,16 @@ class IdleBetweenPollsIT {
         timingContainer.start()
         ContainerTestUtils.waitForAssignment(timingContainer, 1)
 
-        val producer = parameterizedTemplateFactory.createTemplate(Any::class.java)
+        val producer =
+            KafkaTemplate(
+                DefaultKafkaProducerFactory(
+                    HashMap<String, Any>(kafkaProperties.buildProducerProperties(null)),
+                    StringSerializer(),
+                    StringSerializer(),
+                ),
+            )
         repeat(4) { index ->
-            producer
-                .send(
-                    ParameterizedProducerRecord
-                        .builder<Any>()
-                        .key("debug-${UUID.randomUUID()}")
-                        .topicNameParameters(debugTopic())
-                        .value(mapOf("index" to index))
-                        .build(),
-                ).get()
+            producer.send(TOPIC, "debug-${UUID.randomUUID()}", "message-$index").get()
         }
 
         await.atMost(Duration.ofSeconds(20)).untilAsserted {
@@ -100,18 +97,6 @@ class IdleBetweenPollsIT {
             "Expected all poll gaps to be at least ~1250ms with idleBetweenPolls=1350ms, but was $gapsMs",
         )
     }
-
-    private fun debugTopic() =
-        EntityTopicNameParameters
-            .builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId(consumerConfiguration.orgId.asTopicSegment)
-                    .domainContextApplicationDefault()
-                    .build(),
-            ).resourceName("debug-idle-between-polls")
-            .build()
 
     class TimingProbe {
         val timestamps = CopyOnWriteArrayList<Long>()
@@ -132,50 +117,26 @@ class IdleBetweenPollsIT {
 
         @Bean
         fun timingContainer(
-            parameterizedListenerContainerFactoryService: ParameterizedListenerContainerFactoryService,
-            errorHandlerFactory: ErrorHandlerFactory,
-            consumerConfiguration: ConsumerConfiguration,
+            kafkaProperties: KafkaProperties,
             timingProbe: TimingProbe,
-        ): ConcurrentMessageListenerContainer<String, Any> {
-            val container =
-                parameterizedListenerContainerFactoryService
-                    .createRecordListenerContainerFactory(
-                        Any::class.java,
-                        { timingProbe.recordNow() },
-                        ListenerConfiguration
-                            .stepBuilder()
-                            .groupIdApplicationDefaultWithSuffix("-idle-between-polls-it")
-                            .maxPollRecords(1)
-                            .maxPollIntervalKafkaDefault()
-                            .continueFromPreviousOffsetOnAssignment()
-                            .build(),
-                        errorHandlerFactory.createErrorHandler(
-                            KafkaConsumerErrorHandling.createLoggingErrorHandlerConfiguration<Any>(
-                                org.slf4j.LoggerFactory.getLogger(IdleBetweenPollsIT::class.java),
-                                "idle-between-polls-it",
-                            ),
-                        ),
-                        { listenerContainer ->
-                            listenerContainer.concurrency = 1
-                            listenerContainer.containerProperties.idleBetweenPolls = 1350L
-                            listenerContainer.isAutoStartup = false
-                            listenerContainer.applyConsumerFetchSettings(consumerConfiguration.kafka)
-                        },
-                    ).createContainer(
-                        EntityTopicNameParameters
-                            .builder()
-                            .topicNamePrefixParameters(
-                                TopicNamePrefixParameters
-                                    .stepBuilder()
-                                    .orgId(consumerConfiguration.orgId.asTopicSegment)
-                                    .domainContextApplicationDefault()
-                                    .build(),
-                            ).resourceName("debug-idle-between-polls")
-                            .build(),
-                    )
+        ): ConcurrentMessageListenerContainer<String, String> {
+            val config = HashMap<String, Any>(kafkaProperties.buildConsumerProperties(null))
+            config[ConsumerConfig.MAX_POLL_RECORDS_CONFIG] = 1
+            val consumerFactory = DefaultKafkaConsumerFactory(config, StringDeserializer(), StringDeserializer())
 
+            val containerProperties = ContainerProperties(TOPIC)
+            containerProperties.groupId = "idle-between-polls-it-timing"
+            containerProperties.idleBetweenPolls = 1350L
+            containerProperties.messageListener = MessageListener<String, String> { timingProbe.recordNow() }
+
+            val container = ConcurrentMessageListenerContainer(consumerFactory, containerProperties)
+            container.concurrency = 1
             container.isAutoStartup = false
             return container
         }
+    }
+
+    companion object {
+        private const val TOPIC = "foo-org.fint-core.entity.debug-idle-between-polls"
     }
 }

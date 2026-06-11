@@ -2,36 +2,20 @@ package no.novari.fint.core.provider.event.response
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.novari.fint.core.provider.kafka.EventTopicNames
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 
 @Service
 class ResponseFintEventProducer(
-    eventProducerFactory: ParameterizedTemplateFactory
+    private val eventKafkaTemplate: KafkaTemplate<String, Any>,
+    private val eventTopicNames: EventTopicNames,
 ) {
 
-    private val eventProducer = eventProducerFactory.createTemplate(ResponseFintEvent::class.java)
-
     fun sendEvent(responseFintEvent: ResponseFintEvent, requestFintEvent: RequestFintEvent) {
-        eventProducer.send(
-            ParameterizedProducerRecord.builder<ResponseFintEvent>()
-                .topicNameParameters(requestFintEvent.toTopicNameParameters())
-                .value(responseFintEvent)
-                .build()
-        )
+        eventKafkaTemplate.send(requestFintEvent.toTopicName(), responseFintEvent)
     }
 
-    private fun RequestFintEvent.toTopicNameParameters() =
-        EventTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
-                    .orgId(orgId.replace(".", "-"))
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .eventName("${domainName}-${packageName}-response")
-            .build()
+    private fun RequestFintEvent.toTopicName() =
+        eventTopicNames.event("$domainName-$packageName-response", orgId.replace(".", "-"))
 }

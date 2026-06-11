@@ -2,64 +2,35 @@ package no.novari.fint.core.consumer.exception.kafka
 
 import no.fintlabs.status.models.error.ConsumerError
 import no.novari.fint.core.consumer.config.OrgId
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplate
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.EventTopicService
-import no.novari.kafka.topic.configuration.EventCleanupFrequency
-import no.novari.kafka.topic.configuration.EventTopicConfiguration
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.novari.fint.core.shared.kafka.KafkaTopics
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.kafka.core.KafkaAdmin
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.util.UUID
 
 @Service
 class ConsumerErrorPublisher(
-    parameterizedTemplateFactory: ParameterizedTemplateFactory,
-    eventTopicService: EventTopicService,
+    private val eventKafkaTemplate: KafkaTemplate<String, Any>,
+    coreKafkaAdmin: KafkaAdmin,
+    @Value("\${novari.kafka.topic.domain-context}") domainContext: String,
+    @Value("\${novari.kafka.default-replicas:2}") defaultReplicas: Int,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val eventProducer: ParameterizedTemplate<ConsumerError> =
-        parameterizedTemplateFactory.createTemplate(ConsumerError::class.java)
-    private val eventName: EventTopicNameParameters = createEventName()
+    private val topic = "${FINTLABS_ORG_ID.asTopicSegment}.$domainContext.event.consumer-error"
 
     init {
-        eventTopicService.createOrModifyTopic(
-            eventName,
-            EventTopicConfiguration
-                .stepBuilder()
-                .partitions(PARTITIONS)
-                .retentionTime(RETENTION_TIME)
-                .cleanupFrequency(EventCleanupFrequency.NORMAL)
-                .build(),
+        coreKafkaAdmin.createOrModifyTopics(
+            KafkaTopics.eventTopic(topic, PARTITIONS, defaultReplicas, RETENTION_TIME),
         )
     }
 
     fun publish(consumerError: ConsumerError) {
         logger.info("Publishing consumer-error to Kafka!")
-        eventProducer.send(
-            ParameterizedProducerRecord
-                .builder<ConsumerError>()
-                .key(UUID.randomUUID().toString())
-                .topicNameParameters(eventName)
-                .value(consumerError)
-                .build(),
-        )
+        eventKafkaTemplate.send(topic, UUID.randomUUID().toString(), consumerError)
     }
-
-    private fun createEventName(): EventTopicNameParameters =
-        EventTopicNameParameters
-            .builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId(FINTLABS_ORG_ID.asTopicSegment)
-                    .domainContextApplicationDefault()
-                    .build(),
-            ).eventName("consumer-error")
-            .build()
 
     companion object {
         private val FINTLABS_ORG_ID = OrgId.from("fintlabs.no")

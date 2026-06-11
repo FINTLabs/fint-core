@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import no.novari.fint.core.provider.config.CleanupTopicsProperties
 import no.novari.fint.core.provider.config.ProviderProperties
 import no.novari.fint.core.provider.datasync.ingest.SyncIngestTopics
+import no.novari.fint.core.provider.kafka.EventTopicNames
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME
@@ -21,10 +22,6 @@ import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.FINT_CORE
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.HEARTBEAT_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.PROVIDER_ERROR_EVENT_NAME
 import no.novari.fint.core.provider.kafka.topic.TopicNamesConstants.SYNC_STATUS_EVENT_NAME
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
-import no.novari.kafka.topic.name.TopicNameService
 import org.apache.kafka.clients.admin.AdminClient
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -44,7 +41,7 @@ import java.time.Duration
 class TopicCleanupService(
     private val providerProperties: ProviderProperties,
     private val cleanupTopicsProperties: CleanupTopicsProperties,
-    private val topicNameService: TopicNameService,
+    private val eventTopicNames: EventTopicNames,
     private val kafkaAdmin: KafkaAdmin,
     private val syncIngestTopics: SyncIngestTopics,
 ) {
@@ -219,45 +216,15 @@ class TopicCleanupService(
             PROVIDER_ERROR_EVENT_NAME,
             SYNC_STATUS_EVENT_NAME,
         ).forEach { eventName ->
-            expected += topicNameService.validateAndMapToTopicName(
-                EventTopicNameParameters.builder()
-                    .topicNamePrefixParameters(
-                        TopicNamePrefixParameters.stepBuilder()
-                            .orgIdApplicationDefault()
-                            .domainContextApplicationDefault()
-                            .build()
-                    )
-                    .eventName(eventName)
-                    .build()
-            )
+            expected += eventTopicNames.event(eventName)
         }
 
         return expected
     }
 
     private fun entityTopicName(orgId: String, resourceName: String): String =
-        topicNameService.validateAndMapToTopicName(
-            EntityTopicNameParameters.builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters.stepBuilder()
-                        .orgId(orgId)
-                        .domainContextApplicationDefault()
-                        .build()
-                )
-                .resourceName(resourceName)
-                .build()
-        )
+        eventTopicNames.entity(resourceName, orgId)
 
     private fun eventTopicName(orgId: String, eventName: String): String =
-        topicNameService.validateAndMapToTopicName(
-            EventTopicNameParameters.builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters.stepBuilder()
-                        .orgId(orgId)
-                        .domainContextApplicationDefault()
-                        .build()
-                )
-                .eventName(eventName)
-                .build()
-        )
+        eventTopicNames.event(eventName, orgId)
 }

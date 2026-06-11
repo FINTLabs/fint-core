@@ -2,7 +2,6 @@ package no.novari.fint.core.provider.security
 
 import no.novari.fint.core.provider.TestcontainersConfiguration
 import no.novari.fint.core.provider.kafka.ProviderErrorPublisher
-import no.novari.kafka.KafkaConfiguration
 import no.novari.resource.server.authentication.CorePrincipal
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -209,7 +208,7 @@ class SecurityConfigurationTest {
 
     @Configuration
     @Profile(PROFILE)
-    @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class, KafkaConfiguration::class])
+    @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
     @Import(SecurityConfiguration::class, SecurityProblemDetailHandler::class, Endpoints::class)
     class TestApp
 

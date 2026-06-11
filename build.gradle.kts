@@ -16,7 +16,6 @@ subprojects {
             "implementation"("org.springframework.kafka:spring-kafka")
             "implementation"("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
             "implementation"("com.github.ben-manes.caffeine:caffeine:3.2.3")
-            "implementation"("no.novari:kafka:6.0.0")
             "implementation"("no.novari:fint-core-metamodel:3.0.0")
 
             "compileOnly"("org.projectlombok:lombok")
