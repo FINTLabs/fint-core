@@ -4,9 +4,9 @@ import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.fint.core.consumer.Application
-import no.novari.fint.core.consumer.resource.event.EventStatusStore
 import no.novari.fint.core.consumer.utils.ResponseEventProducer
 import no.novari.fint.core.shared.cache.CacheService
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.model.resource.Link
 import no.novari.fint.model.resource.utdanning.elev.ElevResource

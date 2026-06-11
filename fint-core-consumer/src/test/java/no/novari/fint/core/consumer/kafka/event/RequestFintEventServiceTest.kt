@@ -10,7 +10,7 @@ import no.novari.fint.core.consumer.config.ConsumerConfiguration
 import no.novari.fint.core.consumer.config.EventCacheProperties
 import no.novari.fint.core.consumer.config.EventCacheProperties.LifeCycle
 import no.novari.fint.core.consumer.config.OrgId
-import no.novari.fint.core.consumer.resource.event.EventStatusStore
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.fint.core.shared.resource.ResourceConverter
 import no.novari.fint.model.resource.FintResource
 import org.junit.jupiter.api.BeforeEach

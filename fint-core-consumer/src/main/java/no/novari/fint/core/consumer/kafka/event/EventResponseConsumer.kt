@@ -5,7 +5,7 @@ import no.novari.fint.core.consumer.config.ConsumerConfiguration
 import no.novari.fint.core.consumer.kafka.KafkaConsumerErrorHandling
 import no.novari.fint.core.consumer.kafka.applyConsumerFetchSettings
 import no.novari.fint.core.consumer.kafka.applyStartupJitter
-import no.novari.fint.core.consumer.resource.event.EventStatusStore
+import no.novari.fint.core.shared.event.EventStatusStore
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value

@@ -78,11 +78,19 @@ their `no.fintlabs.adapter` / `no.fintlabs.status` / `no.fint.antlr` names — n
    `ResourceService` → `CacheService` and serves it. The consumer no longer consumes resource/entity
    Kafka topics.
 
-2. **Client write-back (client → adapter).** Client `POST/PUT`s to the consumer `ResourceController`
-   → `RequestFintEventService` publishes a `RequestFintEvent` to Kafka and returns `202` with a
-   `…/status/{corrId}` location. The provider's `RequestFintEventConsumer` relays to the adapter; the
-   adapter's `ResponseFintEvent` is consumed back (`EventResponseConsumer`) into an `EventStatusStore`
-   the client polls. **No client write touches the Mongo cache directly.**
+2. **Client write-back (client → adapter), Mongo-mediated.** Client `POST/PUT`s to the consumer
+   `ResourceController` → `RequestFintEventService` stores the full request in the shared
+   **`event_status`** collection (engine class `EventStatusStore` in `shared.event`) and returns
+   `202` with a `…/status/{corrId}` location. The provider serves pending requests to polling
+   adapters **straight from that collection** (`findPendingRequests`: no response attached, request
+   TTL not passed) — no request Kafka consumption, no in-memory cache, so the provider is stateless.
+   The adapter's HTTP response is attached to the doc synchronously (never re-served) and also
+   published as a `ResponseFintEvent`, which the consumer's `EventResponseConsumer` attaches
+   idempotently. The status endpoint derives "Event expired" from the request's own `timeToLive`
+   (the provider no longer auto-fails expired requests). A `RequestFintEvent` is still *produced* to
+   the `-request` topic for compatibility, but nothing in this repo consumes it — candidate for
+   removal along with the `-response` topic/listener once external readers are ruled out. **No
+   client write touches the Mongo cache directly.**
 
 **The shared engine (`fint-core-resource-store`):**
 
@@ -145,11 +153,11 @@ module(s) **and** retag with the matching imodel suffix. The provider also reads
   the provider, `SyncIngestTopics` for ingestion); shared helpers (`OriginHeaderProducerInterceptor`
   with the `origin.application.id` header, `KafkaTopics` topic configs, `kafkaSecurityProperties` SSL
   block) live in `no.novari.fint.core.shared.kafka`. Wire format is byte-compatible with the old lib
-  (JSON + type headers + origin header); consumer group ids were preserved exactly so offsets carried
-  over (`<application-id>-event` on the consumer; the provider's request listener moved from a
-  random-group full replay to the stable committed-offset group `<org-id>.provider-event` — its
-  in-memory `RequestCache` is no longer rebuilt by replay on restart). The consumer staggers listener
-  startup (`KafkaListenerStartupJitter`) to avoid a thundering herd when many consumers restart at once.
+  (JSON + type headers + origin header); the consumer's event listener kept its exact derived group id
+  (`<application-id>-event`) so offsets carried over. The provider consumes **no event topics at all**
+  (only its own `entity.adapter-sync` buffer) — client write requests reach adapters via the shared
+  `event_status` Mongo collection, not Kafka. The consumer staggers listener startup
+  (`KafkaListenerStartupJitter`) to avoid a thundering herd when many consumers restart at once.
 - **Auth:** both services are **servlet** OAuth2 resource servers with their own `SecurityConfiguration`
   built on `no.novari:fint-core-principal` (JWT → `CorePrincipal`). Provider requires the adapter scope
   + per-component authorization on sync paths. Consumer (own OPA layer in

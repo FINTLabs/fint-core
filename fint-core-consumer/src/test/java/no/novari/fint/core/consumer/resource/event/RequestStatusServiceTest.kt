@@ -6,12 +6,14 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.adapter.models.event.EventBodyResponse
+import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.fint.core.consumer.resource.event.RequestFailed.FailureType
 import no.novari.fint.core.shared.cache.CacheService
 import no.novari.fint.core.shared.cache.FintCache
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.fint.core.shared.link.LinkService
 import no.novari.fint.core.shared.resource.ResourceConverter
 import no.novari.fint.model.resource.FintResource
@@ -142,6 +144,7 @@ class RequestStatusServiceTest {
 
         every { eventStatusStore.getResponse(corrId) } returns event
         every { eventStatusStore.requestExists(corrId) } returns true
+        every { eventStatusStore.getRequest(corrId) } returns liveRequest()
 
         // CACHE SCENARIO: The cache only has data from time 900 (stale).
         every { resourceCache.lastUpdatedByResourceId(resourceIdentifier) } returns 900L
@@ -154,7 +157,7 @@ class RequestStatusServiceTest {
     @Test
     fun `should return ACCEPTED when event is still running`() {
         every { eventStatusStore.getResponse(corrId) } returns null
-        every { eventStatusStore.requestExists(corrId) } returns true
+        every { eventStatusStore.getRequest(corrId) } returns liveRequest()
 
         val result = service.getStatusResponse(resourceName, corrId)
 
@@ -162,9 +165,23 @@ class RequestStatusServiceTest {
     }
 
     @Test
+    fun `should return FAILED with event expired when the request ttl passed without a response`() {
+        every { eventStatusStore.getResponse(corrId) } returns null
+        every { eventStatusStore.getRequest(corrId) } returns
+            liveRequest().apply { timeToLive = System.currentTimeMillis() - 1_000 }
+
+        val result = service.getStatusResponse(resourceName, corrId)
+
+        assertInstanceOf(RequestFailed::class.java, result)
+        val failed = result as RequestFailed
+        assertEquals(RequestFailed.FailureType.ERROR, failed.failureType)
+        assertEquals("ERROR", (failed.body as EventBodyResponse).statusCode)
+    }
+
+    @Test
     fun `should return GONE when event does not exist`() {
         every { eventStatusStore.getResponse(corrId) } returns null
-        every { eventStatusStore.requestExists(corrId) } returns false
+        every { eventStatusStore.getRequest(corrId) } returns null
 
         val result = service.getStatusResponse(resourceName, corrId)
 
@@ -187,11 +204,19 @@ class RequestStatusServiceTest {
         val event = createResponse(opType = OperationType.DELETE)
         every { eventStatusStore.getResponse(corrId) } returns event
         every { eventStatusStore.requestExists(corrId) } returns false
+        every { eventStatusStore.getRequest(corrId) } returns null
 
         val result = service.getStatusResponse(resourceName, corrId)
 
         assertEquals(RequestGone, result)
     }
+
+    private fun liveRequest(): RequestFintEvent =
+        RequestFintEvent().apply {
+            corrId = this@RequestStatusServiceTest.corrId
+            orgId = "fintlabs.no"
+            timeToLive = System.currentTimeMillis() + 60_000
+        }
 
     private fun createResponse(
         opType: OperationType,

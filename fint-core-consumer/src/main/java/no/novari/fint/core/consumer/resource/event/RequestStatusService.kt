@@ -1,10 +1,12 @@
 package no.novari.fint.core.consumer.resource.event
 
 import no.fintlabs.adapter.models.event.EventBodyResponse
+import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.fint.core.consumer.resource.event.RequestFailed.FailureType
 import no.novari.fint.core.shared.cache.CacheService
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.fint.core.shared.link.LinkService
 import no.novari.fint.core.shared.resource.ResourceConverter
 import no.novari.fint.model.resource.FintResource
@@ -67,8 +69,28 @@ class RequestStatusService(
             ?.let { ResourceCreated(it, it.createSelfLinkUri()) }
             ?: handleUnknownOrRunningEvent(response.corrId)
 
-    private fun handleUnknownOrRunningEvent(corrId: String): RequestStatus =
-        if (eventStatusStore.requestExists(corrId)) RequestAccepted else RequestGone
+    /**
+     * No response yet: the request is still running, expired (its own time-to-live passed without
+     * an adapter answer — previously the provider's in-memory cache auto-failed these; the client-
+     * facing body is kept identical), or gone (past the status-retention window).
+     */
+    private fun handleUnknownOrRunningEvent(corrId: String): RequestStatus {
+        val request = eventStatusStore.getRequest(corrId) ?: return RequestGone
+        return if (request.timeToLive < System.currentTimeMillis()) {
+            RequestFailed(EventBodyResponse.ofResponseEvent(request.toExpiredResponse()), FailureType.ERROR)
+        } else {
+            RequestAccepted
+        }
+    }
+
+    private fun RequestFintEvent.toExpiredResponse(): ResponseFintEvent =
+        ResponseFintEvent().apply {
+            corrId = this@toExpiredResponse.corrId
+            orgId = this@toExpiredResponse.orgId
+            handledAt = System.currentTimeMillis()
+            isFailed = true
+            errorMessage = "Event expired."
+        }
 
     /**
      * Retrieves the cached resource only if its timestamp matches this event's [ResponseFintEvent.handledAt].

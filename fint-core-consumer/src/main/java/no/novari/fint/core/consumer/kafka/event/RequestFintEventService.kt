@@ -5,7 +5,7 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.fint.core.consumer.config.ConsumerConfiguration
 import no.novari.fint.core.consumer.config.EventCacheProperties
-import no.novari.fint.core.consumer.resource.event.EventStatusStore
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.fint.core.shared.resource.ResourceConverter
 import no.novari.fint.core.shared.resource.ResourceRef
 import no.novari.fint.model.resource.FintResource
@@ -37,7 +37,7 @@ class RequestFintEventService(
                     requestFintEventProducer
                         .publish(event, ref.domain, ref.packageName)
                         .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                    eventStatusStore.storeRequest(event)
+                    eventStatusStore.storeRequest(event, statusRetentionDeadline(ref.name))
                 }
         }
 
@@ -51,6 +51,9 @@ class RequestFintEventService(
             .let { operationType -> createAndPublish(resourceKey, resourceData, operationType) }
 
     private fun Boolean.toOperationType() = if (this) OperationType.VALIDATE else OperationType.CREATE
+
+    private fun statusRetentionDeadline(resourceName: String): Long =
+        System.currentTimeMillis() + props.getLifeCycleConfig(resourceName).eviction.toMillis()
 
     private fun FintResource?.toRequestFintEvent(
         ref: ResourceRef,

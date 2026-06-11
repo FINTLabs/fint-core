@@ -6,6 +6,7 @@ import no.fintlabs.adapter.models.event.RequestFintEvent;
 import no.fintlabs.adapter.models.event.ResponseFintEvent;
 import no.fintlabs.adapter.models.sync.SyncPageEntry;
 import no.fintlabs.adapter.operation.OperationType;
+import no.novari.fint.core.shared.event.EventStatusStore;
 import no.novari.fint.core.shared.resource.ResourceRef;
 import no.novari.resource.server.authentication.CorePrincipal;
 import no.novari.fint.core.provider.datasync.ResourceCacheWriter;
@@ -25,6 +26,7 @@ public class ResponseEventService {
 
     private final ResponseFintEventProducer responseFintEventProducer;
     private final RequestEventService requestEventService;
+    private final EventStatusStore eventStatusStore;
     private final ResourceCacheWriter resourceCacheWriter;
 
     public void handleEvent(ResponseFintEvent responseFintEvent, CorePrincipal corePrincipal) throws NoRequestFoundException, InvalidOrgIdException {
@@ -33,8 +35,8 @@ public class ResponseEventService {
 
         validateEvent(requestEvent, responseFintEvent, corePrincipal);
 
+        eventStatusStore.attachResponse(responseFintEvent.getCorrId(), responseFintEvent);
         responseFintEventProducer.sendEvent(responseFintEvent, requestEvent);
-        requestEventService.removeEvent(responseFintEvent.getCorrId());
 
         if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
             writeToCache(requestEvent, responseFintEvent);

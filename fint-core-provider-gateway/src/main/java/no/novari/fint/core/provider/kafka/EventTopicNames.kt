@@ -2,7 +2,6 @@ package no.novari.fint.core.provider.kafka
 
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import java.util.regex.Pattern
 
 @Component
 class EventTopicNames(
@@ -20,14 +19,4 @@ class EventTopicNames(
         resourceName: String,
         orgId: String = defaultOrgId,
     ) = "$orgId.$domainContext.entity.$resourceName"
-
-    fun eventPattern(
-        orgIds: Collection<String>,
-        eventNames: Collection<String>,
-    ): Pattern =
-        Pattern.compile(
-            "^${anyOf(orgIds)}\\.${Pattern.quote(domainContext)}\\.event\\.${anyOf(eventNames)}$",
-        )
-
-    private fun anyOf(values: Collection<String>) = "(?:${values.joinToString("|") { Pattern.quote(it) }})"
 }

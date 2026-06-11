@@ -9,6 +9,7 @@ import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.fint.core.provider.datasync.ResourceCacheWriter
 import no.novari.fint.core.provider.event.request.RequestEventService
+import no.novari.fint.core.shared.event.EventStatusStore
 import no.novari.resource.server.authentication.CorePrincipal
 import org.junit.jupiter.api.Test
 import java.util.Optional
@@ -16,6 +17,7 @@ import java.util.Optional
 class ResponseEventServiceTest {
     private val responseFintEventProducer = mockk<ResponseFintEventProducer>(relaxed = true)
     private val requestEventService = mockk<RequestEventService>(relaxed = true)
+    private val eventStatusStore = mockk<EventStatusStore>(relaxed = true)
     private val resourceCacheWriter = mockk<ResourceCacheWriter>(relaxed = true)
     private val corePrincipal = mockk<CorePrincipal>(relaxed = true)
 
@@ -23,6 +25,7 @@ class ResponseEventServiceTest {
         ResponseEventService(
             responseFintEventProducer,
             requestEventService,
+            eventStatusStore,
             resourceCacheWriter,
         )
 
@@ -60,6 +63,7 @@ class ResponseEventServiceTest {
         verify(exactly = 1) {
             resourceCacheWriter.write("utdanning_vurdering_elevfravar", "systemid/1", syncEntry.resource, 123L)
         }
+        verify(exactly = 1) { eventStatusStore.attachResponse(corrId, response) }
     }
 
     @Test
