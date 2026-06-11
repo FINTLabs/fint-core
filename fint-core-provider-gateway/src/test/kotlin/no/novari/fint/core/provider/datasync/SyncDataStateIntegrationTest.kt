@@ -37,6 +37,7 @@ class SyncDataStateIntegrationTest
             awaitUntil { cache.get("da") != null && cache.get("db") != null && cache.get("dc") != null }
 
             doDelta(entry("da", gjest = true), entry("dd", gjest = false))
+            awaitUntil { cache.get("dd") != null && (cache.get("da") as? ElevResource)?.gjest == true }
 
             assertEquals(true, (cache.get("da") as ElevResource).gjest, "delta must update the targeted resource")
             assertNotNull(cache.get("dd"), "delta must add the new resource")
@@ -53,6 +54,7 @@ class SyncDataStateIntegrationTest
             awaitUntil { cache.get("xa") != null && cache.get("xb") != null && cache.get("xc") != null }
 
             doDelete("xb")
+            awaitUntil { cache.get("xb") == null }
 
             assertNull(cache.get("xb"), "delete must remove the targeted resource")
             assertNotNull(cache.get("xa"), "delete must not touch other resources")

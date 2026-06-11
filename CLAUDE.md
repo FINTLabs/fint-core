@@ -67,9 +67,14 @@ their `no.fintlabs.adapter` / `no.fintlabs.status` / `no.fint.antlr` names — n
 
 1. **Resource ingestion (adapter → store).** Adapter `POST/PATCH/DELETE`s sync pages to the provider
    `ProviderController` (`{domain}/{package}/{entity}`, FULL/DELTA/DELETE). `SyncPageService.doSync`
+   flattens the page onto a per-org Kafka buffer topic (`<org>.<context>.provider-sync`, one record
+   per resource entry, plain spring-kafka) and acks the adapter once the broker confirms — **no Mongo
+   I/O on the request thread**, so the ack no longer means "persisted". The provider's own
+   `SyncIngestListener` batch-consumes (`max.poll.records`/`idleBetweenPolls` bound Mongo throughput)
    → `ResourceCacheWriter.writeBatch` converts + link-maps each resource, bulk-upserts into the Mongo
-   cache, applies autorelation back-links, and (on FULL sync) tracks completion so
-   `ProviderEvictionService` can evict stale entries. The **consumer reads this same Mongo** via
+   cache, applies autorelation back-links, and (on FULL sync) feeds `SyncCompletionTracker` so
+   `ProviderEvictionService` can evict stale entries; unconvertible records go to the `.DLT` topic.
+   The **consumer reads this same Mongo** via
    `ResourceService` → `CacheService` and serves it. The consumer no longer consumes resource/entity
    Kafka topics.
 

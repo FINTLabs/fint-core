@@ -79,6 +79,7 @@ class SyncAutoRelationIntegrationTest
             awaitUntil { elevCache.findIdsByBackLink(backRelation, "systemid/ef3").isNotEmpty() }
 
             deleteElevforhold("ef3")
+            awaitUntil { elevCache.findIdsByBackLink(backRelation, "systemid/ef3").isEmpty() }
 
             assertTrue(
                 elevCache.findIdsByBackLink(backRelation, "systemid/ef3").isEmpty(),
