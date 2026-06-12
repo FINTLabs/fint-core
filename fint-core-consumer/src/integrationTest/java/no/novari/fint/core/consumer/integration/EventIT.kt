@@ -1,5 +1,6 @@
 package no.novari.fint.core.consumer.integration
 
+import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
@@ -167,6 +168,25 @@ class EventIT {
             )
 
         getStatus(corrId).andExpect { status { isEqualTo(410) } }
+    }
+
+    @Test
+    fun `request whose time-to-live passed without an adapter response returns 500`() {
+        val corrId = "ttl-expired-${System.nanoTime()}"
+        eventStatusStore.storeRequest(
+            RequestFintEvent().apply {
+                this.corrId = corrId
+                orgId = "foo.org"
+                domainName = "utdanning"
+                packageName = "elev"
+                resourceName = "elev"
+                created = System.currentTimeMillis() - 10_000
+                timeToLive = System.currentTimeMillis() - 1_000
+            },
+            System.currentTimeMillis() + 300_000,
+        )
+
+        getStatus(corrId).andExpect { status { isInternalServerError() } }
     }
 
     private fun post(resourceId: String): String =
