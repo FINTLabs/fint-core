@@ -11,6 +11,7 @@ jobs:
     outputs:
       consumer: ${{ steps.filter.outputs.consumer }}
       provider: ${{ steps.filter.outputs.provider }}
+      dynamic-adapter: ${{ steps.filter.outputs.dynamic-adapter }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
@@ -31,6 +32,9 @@ jobs:
             provider:
               - *shared
               - 'fint-core-provider-gateway/**'
+            dynamic-adapter:
+              - *shared
+              - 'fint-core-dynamic-adapter/**'
 
   consumer:
     needs: changes
@@ -58,14 +62,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :fint-core-provider-gateway:check
 
+  dynamic-adapter:
+    needs: changes
+    if: ${{ needs.changes.outputs.dynamic-adapter == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :fint-core-dynamic-adapter:check
+
   # Single gate for branch protection: green when nothing failed (skipped == ok).
   ci-ok:
-    needs: [consumer, provider]
+    needs: [consumer, provider, dynamic-adapter]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ]; then
+          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ] || [ "${{ needs.dynamic-adapter.result }}" = "failure" ]; then
             echo "a module check failed"
             exit 1
           fi
