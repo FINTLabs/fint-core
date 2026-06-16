@@ -3,26 +3,30 @@ fint:
     opa:
       enabled: false
     exposed-endpoints:
+      - /actuator/prometheus
       - /actuator/health
   relation:
     base-url: https://api.felleskomponent.no
   consumer:
-    pod-url: http://fint-core-consumer:8080
+    pod-url: http://fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}:8080
     base-url: ${fint.relation.base-url}
+    domain: utdanning
+    package: vurdering
+    packageName: ${fint.consumer.package}
     org-id: ${fint.org-id}
     coreVersionHeader: 2
     kafka:
       entity-concurrency: 6
       relation-concurrency: 6
-      fetchMinBytes: 1
-      fetchMaxWaitMs: 500
+      fetchMinBytes: 65536
+      fetchMaxWaitMs: 10000
 
 novari:
   kafka:
     topic:
       org-id: ${fint.org-id}
       domain-context: fint-core
-    application-id: fint-core-consumer-${fint.org-id}-mongodb
+    application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
 
 spring:
   threads:
@@ -31,19 +35,15 @@ spring:
   kafka:
     consumer:
       group-id: ${novari.kafka.application-id}
-      auto-offset-reset: earliest
 
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017
-      database: fint
-      auto-index-creation: false
+  webflux:
+    base-path: ${fint.consumer.domain}/${fint.consumer.package}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: prometheus,health
 
 logging:
   level:

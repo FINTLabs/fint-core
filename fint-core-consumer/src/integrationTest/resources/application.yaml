@@ -3,6 +3,7 @@ fint:
     opa:
       enabled: false
     exposed-endpoints:
+      - /actuator/prometheus
       - /actuator/health
   relation:
     base-url: https://api.felleskomponent.no
@@ -34,12 +35,14 @@ spring:
   kafka:
     consumer:
       group-id: ${novari.kafka.application-id}
+  webflux:
+    base-path: ${fint.consumer.domain}/${fint.consumer.package}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: prometheus,health
 
 logging:
   level:

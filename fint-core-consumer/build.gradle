@@ -1,22 +1,18 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot'
-    id 'io.spring.dependency-management'
-    id 'org.jetbrains.kotlin.jvm'
-    id 'org.jetbrains.kotlin.plugin.lombok'
-    id 'org.jetbrains.kotlin.plugin.spring'
-    id 'org.jlleitschuh.gradle.ktlint'
+    id 'org.springframework.boot' version '3.5.10'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.jetbrains.kotlin.jvm' version '2.3.10'
+    id 'org.jetbrains.kotlin.plugin.lombok' version '2.3.10'
+    id 'org.jetbrains.kotlin.plugin.spring' version '2.3.10'
+    id 'org.jlleitschuh.gradle.ktlint' version '13.1.0'
 }
 
-group = 'no.novari'
+group = 'no.fintlabs'
 version = '0.0.1-SNAPSHOT'
 
-def fintVersion = '4.0.30'
-
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
+    sourceCompatibility = '25'
 }
 
 configurations {
@@ -25,13 +21,17 @@ configurations {
     }
 }
 
-dependencies {
-    implementation project(':fint-core-resource-store')
+repositories {
+    maven {
+        url = uri("https://repo.fintlabs.no/releases")
+    }
+    mavenCentral()
+}
 
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
-    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-configuration-processor'
 
     implementation "no.novari:fint-utdanning-resource-model-java:${fintVersion}"
@@ -41,28 +41,36 @@ dependencies {
     implementation "no.novari:fint-ressurs-resource-model-java:${fintVersion}"
     implementation "no.novari:fint-arkiv-resource-model-java:${fintVersion}"
 
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'no.novari:kafka:6.0.0'
+
     implementation 'no.fintlabs:fint-antlr:1.1.1'
     implementation 'no.novari:fint-core-relations:1.0.0-rc.1'
     implementation 'no.fintlabs:fint-core-infra-models:2.1.0'
     implementation 'no.fintlabs:fint-core-status-models:1.0.0'
-    implementation 'no.novari:fint-core-principal:4.1.0'
+    implementation 'no.fintlabs:core-resource-server:3.0.0-rc-8'
+    implementation 'no.novari:fint-core-metamodel:3.0.0'
 
     implementation 'com.google.guava:guava:33.5.0-jre'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.3'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
     implementation 'org.reflections:reflections:0.10.2'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'io.mockk:mockk:1.13.13'
     testImplementation 'org.awaitility:awaitility-kotlin:4.3.0'
     testImplementation 'org.jetbrains.kotlin:kotlin-test'
-    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:kafka'
-    testImplementation 'org.testcontainers:mongodb'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
 kotlin { jvmToolchain(25) }
-
-jar {
-    enabled = false
-}
 
 testing {
     suites {
@@ -90,13 +98,6 @@ testing {
                 }
             }
         }
-    }
-}
-
-sourceSets {
-    integrationTest {
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
     }
 }
 

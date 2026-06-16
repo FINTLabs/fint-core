@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-utdanning-utdanningsprogram
+  namespace: ffk-no
+spec:
+  url:
+    hostname: api.felleskomponent.no
+  ingress:
+    basePaths:
+      - /utdanning/utdanningsprogram
+    headers:
+      x-org-id: ffk.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'ffk-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

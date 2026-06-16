@@ -15,9 +15,6 @@ novari:
     default-replicas: 1
 
 spring:
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/fint-provider
   jpa:
     properties:
       jdbc:
@@ -44,7 +41,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
 
 logging:
   level:

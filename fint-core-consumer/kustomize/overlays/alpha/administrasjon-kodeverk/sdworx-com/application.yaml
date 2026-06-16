@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-administrasjon-kodeverk
+  namespace: sdworx-com
+spec:
+  url:
+    hostname: alpha.felleskomponent.no
+  ingress:
+    basePaths:
+      - /administrasjon/kodeverk
+    headers:
+      x-org-id: sdworx.com
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'sdworx-com.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

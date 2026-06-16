@@ -37,13 +37,6 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
 
-  mongodb:
-    image: mongo:7.0
-    networks:
-      - broker-kafka
-    ports:
-      - 27017:27017
-
 networks:
   broker-kafka:
     driver: bridge

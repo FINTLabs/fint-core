@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-administrasjon-fullmakt
+  namespace: bfk-no
+spec:
+  url:
+    hostname: alpha.felleskomponent.no
+  ingress:
+    basePaths:
+      - /administrasjon/fullmakt
+    headers:
+      x-org-id: bfk.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'bfk-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
