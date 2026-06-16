@@ -18,7 +18,7 @@ jobs:
         with:
           filters: |
             shared: &shared
-              - 'fint-core-resource-store/**'
+              - 'fint-core-shared/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - 'gradle.properties'

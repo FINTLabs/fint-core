@@ -1,0 +1,110 @@
+plugins {
+    id ("java")
+    id ("io.spring.dependency-management")
+    id ("org.springframework.boot")
+    id ("org.jetbrains.kotlin.jvm")
+    id ("org.jetbrains.kotlin.plugin.spring")
+    id ("org.jlleitschuh.gradle.ktlint")
+}
+
+group = "no.novari"
+version = "0.0.1-SNAPSHOT"
+val fintVersion = "4.0.30"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+
+dependencies {
+    implementation project(":fint-core-shared")
+
+    implementation ("org.springframework.boot:spring-boot-starter-web")
+    implementation ("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation ("org.springframework.boot:spring-boot-starter-aop")
+    implementation ("org.springframework.boot:spring-boot-starter-data-mongodb")
+    implementation ("org.springframework.boot:spring-boot-configuration-processor")
+
+    implementation ("no.novari:fint-utdanning-resource-model-java:${fintVersion}")
+    implementation ("no.novari:fint-administrasjon-resource-model-java:${fintVersion}")
+    implementation ("no.novari:fint-personvern-resource-model-java:${fintVersion}")
+    implementation ("no.novari:fint-okonomi-resource-model-java:${fintVersion}")
+    implementation ("no.novari:fint-ressurs-resource-model-java:${fintVersion}")
+    implementation ("no.novari:fint-arkiv-resource-model-java:${fintVersion}")
+
+    implementation ("no.fintlabs:fint-antlr:1.1.1")
+    implementation ("no.novari:fint-core-relations:1.0.0-rc.1")
+    implementation ("no.fintlabs:fint-core-infra-models:2.1.0")
+    implementation ("no.fintlabs:fint-core-status-models:1.0.0")
+    implementation ("no.novari:fint-core-principal:4.1.0")
+
+    implementation ("com.google.guava:guava:33.5.0-jre")
+    implementation ("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation ("org.reflections:reflections:0.10.2")
+
+    testImplementation ("org.awaitility:awaitility-kotlin:4.3.0")
+    testImplementation ("org.jetbrains.kotlin:kotlin-test")
+    testImplementation ("org.springframework.security:spring-security-test")
+    testImplementation ("org.testcontainers:kafka")
+    testImplementation ("org.testcontainers:mongodb")
+}
+
+kotlin { jvmToolchain(25) }
+
+jar {
+    enabled = false
+}
+
+testing {
+    suites {
+        integrationTest(JvmTestSuite) {
+            dependencies {
+                implementation project()
+
+                // Copy each dependency from testImplementation
+                configurations.testImplementation.allDependencies.each {
+                    implementation(it)
+                }
+
+                configurations.testRuntimeOnly.allDependencies.each {
+                    runtimeOnly(it)
+                }
+
+            }
+
+            targets {
+                configureEach {
+                    testTask.configure {
+                        shouldRunAfter(test) // Run after unit tests
+                        useJUnitPlatform()
+                    }
+                }
+            }
+        }
+    }
+}
+
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+tasks.named("check") {
+    dependsOn testing.suites.integrationTest
+    dependsOn "ktlintCheck"
+}
+
+ktlint {
+    version = "1.8.0"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    maxParallelForks = 1
+    systemProperty "junit.jupiter.execution.parallel.enabled", "false"
+    jvmArgs "-XX:+EnableDynamicAgentLoading"
+}
