@@ -1,0 +1,57 @@
+fint:
+  security:
+    opa:
+      enabled: false
+    exposed-endpoints:
+      - /actuator/prometheus
+      - /actuator/health
+  relation:
+    base-url: https://api.felleskomponent.no
+  consumer:
+    pod-url: http://fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}:8080
+    base-url: ${fint.relation.base-url}
+    domain: utdanning
+    package: vurdering
+    packageName: ${fint.consumer.package}
+    org-id: ${fint.org-id}
+    coreVersionHeader: 2
+    kafka:
+      entity-concurrency: 6
+      relation-concurrency: 6
+      fetchMinBytes: 65536
+      fetchMaxWaitMs: 10000
+
+novari:
+  kafka:
+    topic:
+      org-id: ${fint.org-id}
+      domain-context: fint-core
+    application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    consumer:
+      group-id: ${novari.kafka.application-id}
+
+  webflux:
+    base-path: ${fint.consumer.domain}/${fint.consumer.package}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health
+
+logging:
+  level:
+      org.apache.kafka: WARN
+      no.novari.kafka: WARN
+#      org.apache.kafka.clients.NetworkClient: INFO
+#      org.apache.kafka.clients.consumer.internals.AbstractCoordinator: DEBUG
+#      org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: DEBUG
+#      org.apache.kafka.clients.consumer.internals.Fetcher: DEBUG
+#      org.springframework.kafka.listener: DEBUG
+#      no.fintlabs.kafka: DEBUG

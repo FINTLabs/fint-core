@@ -1,0 +1,50 @@
+fint:
+  security:
+    opa:
+      enabled: false
+    exposed-endpoints:
+      - /actuator/prometheus
+      - /actuator/health
+  relation:
+    base-url: https://api.felleskomponent.no
+  consumer:
+    pod-url: http://fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}:8080
+    base-url: ${fint.relation.base-url}
+    domain: utdanning
+    package: vurdering
+    packageName: ${fint.consumer.package}
+    org-id: ${fint.org-id}
+    coreVersionHeader: 2
+    kafka:
+      fetchMinBytes: 1
+      fetchMaxWaitMs: 50
+      idleBetweenPolls: 0
+      startup-jitter: 0s
+
+novari:
+  kafka:
+    topic:
+      org-id: ${fint.org-id}
+      domain-context: fint-core
+    application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
+
+spring:
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    consumer:
+      group-id: ${novari.kafka.application-id}
+  webflux:
+    base-path: ${fint.consumer.domain}/${fint.consumer.package}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health
+
+logging:
+  level:
+    org.apache.kafka: WARN
+    no.novari.kafka: WARN

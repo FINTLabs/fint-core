@@ -41,4 +41,4 @@ spring:
 logging:
   level:
     root: INFO
-    no.novari.fint.core.provider: DEBUG # Helpful to see your datasync logs during testing
+    no.fintlabs: DEBUG # Helpful to see your datasync logs during testing
