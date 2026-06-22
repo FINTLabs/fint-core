@@ -29,6 +29,7 @@ data class ResourceCoordinate(
     /**
      * Renders this coordinate as its physical collection name,
      * `<assetId>_<domainName>_<packageName>_<resourceName>`.
+     * `fintlabs.no_utdanning_vurdering_elevfravar`
      */
     fun toCollectionName(): CollectionName = CollectionName("${assetId}_${domainName}_${packageName}_$resourceName")
 }
