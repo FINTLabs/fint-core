@@ -12,7 +12,7 @@ data class IdentifierRef(
 
 data class ResourceEntry(
     @Id val id: String,
-    val data: FintResource,
+    val data: Any,
     val identifiers: List<IdentifierRef>,
     val createdAt: Instant,
     val lastModified: Instant,
