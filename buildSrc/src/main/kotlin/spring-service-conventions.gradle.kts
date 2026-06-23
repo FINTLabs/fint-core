@@ -27,6 +27,7 @@ val fintVersion = "4.0.30"
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
+    implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")

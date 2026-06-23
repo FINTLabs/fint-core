@@ -29,6 +29,9 @@ novari:
     application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
 
 spring:
+  config:
+    import:
+      - classpath:shared-mongodb.yaml
   threads:
     virtual:
       enabled: true
@@ -47,8 +50,8 @@ management:
 
 logging:
   level:
-      org.apache.kafka: WARN
-      no.novari.kafka: WARN
+    org.apache.kafka: WARN
+    no.novari.kafka: WARN
 #      org.apache.kafka.clients.NetworkClient: INFO
 #      org.apache.kafka.clients.consumer.internals.AbstractCoordinator: DEBUG
 #      org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: DEBUG

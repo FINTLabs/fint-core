@@ -34,6 +34,7 @@ spring:
     import:
       - classpath:components.yaml
       - classpath:cleanup-topics.yaml
+      - classpath:shared-mongodb.yaml
   threads:
     virtual:
       enabled: true
