@@ -30,7 +30,7 @@ class RelationUpdateTopicEnsurerTest {
         RelationUpdateTopicEnsurer(
             entityTopicService,
             relationUpdateKafkaProperties,
-            ProviderProperties(components = components),
+            ProviderProperties(orgIdValue = "fintlabs.no", components = components),
         )
 
     @Test

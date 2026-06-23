@@ -1,5 +1,6 @@
 fint:
   provider:
+    org-id: fintlabs.no
     components:
       - domain-name: utdanning
         package-name: vurdering

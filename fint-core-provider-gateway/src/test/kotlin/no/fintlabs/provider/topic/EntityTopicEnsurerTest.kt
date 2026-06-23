@@ -29,7 +29,7 @@ class EntityTopicEnsurerTest {
         EntityTopicEnsurer(
             entityTopicService,
             entityKafkaProperties,
-            ProviderProperties(components = components),
+            ProviderProperties(orgIdValue = "fintlabs.no", components = components),
         )
 
     @Test

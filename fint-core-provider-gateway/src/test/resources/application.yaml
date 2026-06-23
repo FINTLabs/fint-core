@@ -4,6 +4,8 @@ server:
     context-path: /provider
 
 fint:
+  provider:
+    org-id: fintlabs.no
   metamodel:
     base-url: http://localhost:8082 # You can mock this using WireMock later if your service actually calls it
   kafka:
@@ -34,6 +36,8 @@ spring:
       group-id: provider-test-group
       auto-offset-reset: earliest
     producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       # Ensure Kafka producer doesn't block forever if embedded Kafka acts up
       properties:
         max.block.ms: 5000

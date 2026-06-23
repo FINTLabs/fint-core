@@ -32,7 +32,7 @@ class ResponseEventTopicEnsurerTest {
         ResponseEventTopicEnsurer(
             eventTopicService,
             responseProducerProperties,
-            ProviderProperties(components = components),
+            ProviderProperties(orgIdValue = "fintlabs.no", components = components),
         )
 
     @Test
