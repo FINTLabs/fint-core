@@ -6,10 +6,10 @@ import io.mockk.slot
 import io.mockk.verify
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.KafkaConfiguration
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.resource.ResourceConverter
 import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.model.OrgId
 import no.novari.kafka.consuming.ErrorHandlerFactory
 import no.novari.kafka.consuming.ListenerConfiguration
 import no.novari.kafka.consuming.ParameterizedListenerContainerFactory

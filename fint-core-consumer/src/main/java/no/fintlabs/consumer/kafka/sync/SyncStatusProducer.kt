@@ -1,7 +1,7 @@
 package no.fintlabs.consumer.kafka.sync
 
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.kafka.sync.model.SyncStatus
+import no.novari.core.shared.model.OrgId
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplateFactory
 import no.novari.kafka.topic.name.EventTopicNameParameters

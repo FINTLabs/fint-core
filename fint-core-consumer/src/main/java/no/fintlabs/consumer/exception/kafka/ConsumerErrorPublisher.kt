@@ -1,7 +1,7 @@
 package no.fintlabs.consumer.exception.kafka
 
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.status.models.error.ConsumerError
+import no.novari.core.shared.model.OrgId
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplate
 import no.novari.kafka.producing.ParameterizedTemplateFactory

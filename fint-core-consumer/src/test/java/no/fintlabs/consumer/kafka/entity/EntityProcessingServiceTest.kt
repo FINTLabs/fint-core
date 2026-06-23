@@ -11,11 +11,11 @@ import no.fintlabs.cache.CacheService
 import no.fintlabs.cache.FintCache
 import no.fintlabs.consumer.config.AutorelationConfig
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.kafka.sync.SyncTrackerService
 import no.fintlabs.consumer.links.LinkService
 import no.fintlabs.consumer.resource.ResourceLockService
 import no.novari.core.shared.kafka.EntityHeaders
+import no.novari.core.shared.model.OrgId
 import no.novari.fint.model.resource.FintResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.internals.RecordHeaders

@@ -8,8 +8,8 @@ import no.fintlabs.autorelation.model.RelationBinding
 import no.fintlabs.autorelation.model.RelationOperation
 import no.fintlabs.autorelation.model.RelationUpdate
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.kafka.KafkaThroughputMetrics
+import no.novari.core.shared.model.OrgId
 import no.novari.fint.model.resource.Link
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplate

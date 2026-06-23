@@ -1,6 +1,6 @@
 package no.fintlabs.autorelation.model
 
-import no.fintlabs.consumer.config.OrgId
+import no.novari.core.shared.model.OrgId
 
 data class RelationEvent(
     val orgId: OrgId,

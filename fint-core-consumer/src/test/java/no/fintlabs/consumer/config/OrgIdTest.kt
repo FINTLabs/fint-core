@@ -1,5 +1,6 @@
 package no.fintlabs.consumer.config
 
+import no.novari.core.shared.model.OrgId
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals

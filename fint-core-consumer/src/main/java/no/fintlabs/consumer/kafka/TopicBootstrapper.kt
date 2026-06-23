@@ -2,7 +2,7 @@ package no.fintlabs.consumer.kafka
 
 import jakarta.annotation.PostConstruct
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.config.OrgId
+import no.novari.core.shared.model.OrgId
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.NewTopic

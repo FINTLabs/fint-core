@@ -1,4 +1,4 @@
-package no.fintlabs.consumer.config
+package no.novari.core.shared.model
 
 @JvmInline
 value class OrgId(

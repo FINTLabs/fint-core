@@ -1,5 +1,6 @@
 package no.fintlabs.consumer.config
 
+import no.novari.core.shared.model.OrgId
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.Name
 import java.time.Duration

@@ -7,8 +7,8 @@ import io.mockk.verify
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.KafkaConfiguration
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.resource.event.EventStatusCache
+import no.novari.core.shared.model.OrgId
 import no.novari.kafka.consuming.ErrorHandlerFactory
 import no.novari.kafka.consuming.ListenerConfiguration
 import no.novari.kafka.consuming.ParameterizedListenerContainerFactory
@@ -18,10 +18,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertDoesNotThrow
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer
 import org.springframework.kafka.listener.ConsumerSeekAware
-import java.util.UUID
 import java.util.function.Consumer
 import kotlin.test.assertTrue
 

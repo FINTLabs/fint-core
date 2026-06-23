@@ -9,8 +9,8 @@ import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EventCacheProperties
 import no.fintlabs.consumer.config.EventCacheProperties.LifeCycle
-import no.fintlabs.consumer.config.OrgId
 import no.fintlabs.consumer.resource.ResourceConverter
+import no.novari.core.shared.model.OrgId
 import no.novari.fint.model.resource.FintResource
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

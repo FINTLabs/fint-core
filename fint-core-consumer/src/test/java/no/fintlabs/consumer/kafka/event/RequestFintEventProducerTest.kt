@@ -5,7 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.config.OrgId
+import no.novari.core.shared.model.OrgId
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplate
 import no.novari.kafka.producing.ParameterizedTemplateFactory
