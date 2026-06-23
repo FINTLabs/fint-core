@@ -1,13 +1,13 @@
 package no.fintlabs.consumer.kafka.entity
 
 import no.fintlabs.adapter.models.sync.SyncType
-import no.fintlabs.consumer.kafka.KafkaConstants.LAST_MODIFIED
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_CORRELATION_ID
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TOTAL_SIZE
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TYPE
-import no.fintlabs.consumer.kafka.byteValue
-import no.fintlabs.consumer.kafka.longValue
-import no.fintlabs.consumer.kafka.stringValue
+import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
+import no.novari.core.shared.kafka.byteValue
+import no.novari.core.shared.kafka.longValue
+import no.novari.core.shared.kafka.stringValue
 import no.novari.fint.model.resource.FintResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 

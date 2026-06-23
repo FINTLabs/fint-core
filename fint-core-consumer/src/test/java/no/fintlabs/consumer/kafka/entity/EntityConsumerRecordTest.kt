@@ -1,10 +1,10 @@
 package no.fintlabs.consumer.kafka.entity
 
 import no.fintlabs.adapter.models.sync.SyncType
-import no.fintlabs.consumer.kafka.KafkaConstants.LAST_MODIFIED
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_CORRELATION_ID
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TOTAL_SIZE
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TYPE
+import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.fint.model.resource.utdanning.vurdering.ElevfravarResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerRecord.NULL_SIZE

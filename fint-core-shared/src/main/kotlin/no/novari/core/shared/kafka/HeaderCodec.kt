@@ -1,10 +1,16 @@
-package no.fintlabs.consumer.kafka
+package no.novari.core.shared.kafka
 
 import org.apache.kafka.common.header.Headers
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-internal fun Headers.byteValue(name: String): Byte? {
+fun Long.toHeaderBytes(): ByteArray =
+    ByteBuffer
+        .allocate(Long.SIZE_BYTES)
+        .putLong(this)
+        .array()
+
+fun Headers.byteValue(name: String): Byte? {
     val value = lastHeader(name)?.value() ?: return null
 
     if (value.size == 1) {
@@ -17,9 +23,9 @@ internal fun Headers.byteValue(name: String): Byte? {
     throw IllegalArgumentException("Header '$name' contains ${value.size} bytes, but expected 1 or 4")
 }
 
-internal fun Headers.stringValue(name: String): String? = lastHeader(name)?.value()?.toString(StandardCharsets.UTF_8)
+fun Headers.stringValue(name: String): String? = lastHeader(name)?.value()?.toString(StandardCharsets.UTF_8)
 
-internal fun Headers.longValue(name: String): Long? =
+fun Headers.longValue(name: String): Long? =
     lastHeader(name)?.value()?.let {
         if (it.size >= 8) ByteBuffer.wrap(it).long else null
     }

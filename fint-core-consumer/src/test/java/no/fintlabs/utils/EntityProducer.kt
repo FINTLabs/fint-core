@@ -2,12 +2,12 @@ package no.fintlabs.utils
 
 import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.kafka.KafkaConstants.LAST_MODIFIED
-import no.fintlabs.consumer.kafka.KafkaConstants.RESOURCE_NAME
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_CORRELATION_ID
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TOTAL_SIZE
-import no.fintlabs.consumer.kafka.KafkaConstants.SYNC_TYPE
 import no.fintlabs.consumer.kafka.entity.ENTITY_KEY_DELIMITER
+import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
+import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplateFactory
 import no.novari.kafka.topic.name.EntityTopicNameParameters

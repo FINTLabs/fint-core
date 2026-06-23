@@ -12,10 +12,10 @@ import no.fintlabs.cache.FintCache
 import no.fintlabs.consumer.config.AutorelationConfig
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.OrgId
-import no.fintlabs.consumer.kafka.KafkaConstants
 import no.fintlabs.consumer.kafka.sync.SyncTrackerService
 import no.fintlabs.consumer.links.LinkService
 import no.fintlabs.consumer.resource.ResourceLockService
+import no.novari.core.shared.kafka.EntityHeaders
 import no.novari.fint.model.resource.FintResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.internals.RecordHeaders
@@ -183,9 +183,9 @@ class EntityProcessingServiceTest {
             every { key() } returns "test-key"
             every { headers() } returns
                 RecordHeaders().apply {
-                    add(KafkaConstants.LAST_MODIFIED, ByteBuffer.allocate(8).putLong(1000L).array())
+                    add(EntityHeaders.LAST_MODIFIED, ByteBuffer.allocate(8).putLong(1000L).array())
                     if (syncType != null) {
-                        add(KafkaConstants.SYNC_TYPE, byteArrayOf(syncType.toByte()))
+                        add(EntityHeaders.SYNC_TYPE, byteArrayOf(syncType.toByte()))
                     }
                 }
         }

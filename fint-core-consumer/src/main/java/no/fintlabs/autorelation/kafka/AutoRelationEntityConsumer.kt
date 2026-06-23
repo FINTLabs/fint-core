@@ -2,12 +2,12 @@ package no.fintlabs.autorelation.kafka
 
 import no.fintlabs.autorelation.RelationEventService
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.fintlabs.consumer.kafka.KafkaConstants.RESOURCE_NAME
 import no.fintlabs.consumer.kafka.KafkaConsumerErrorHandling
 import no.fintlabs.consumer.kafka.applyConsumerFetchSettings
 import no.fintlabs.consumer.kafka.applyStartupJitter
 import no.fintlabs.consumer.kafka.entity.extractIdentifier
-import no.fintlabs.consumer.kafka.stringValue
+import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.kafka.stringValue
 import no.novari.kafka.consuming.ErrorHandlerFactory
 import no.novari.kafka.consuming.ListenerConfiguration
 import no.novari.kafka.consuming.ParameterizedListenerContainerFactoryService

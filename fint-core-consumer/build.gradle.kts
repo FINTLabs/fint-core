@@ -3,6 +3,8 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":fint-core-shared"))
+
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-aop")
 

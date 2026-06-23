@@ -1,4 +1,4 @@
-package no.fintlabs.consumer.kafka
+package no.novari.core.shared.kafka
 
 import io.mockk.every
 import io.mockk.mockk
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.assertThrows
 import java.nio.ByteBuffer
 
-class HeadersExtensionTest {
+class HeaderCodecTest {
     private val headerKey = "key"
 
     @Test
@@ -109,6 +109,19 @@ class HeadersExtensionTest {
 
         // Then
         assertNull(headerLongValue)
+    }
+
+    @Test
+    fun `toHeaderBytes round-trips through longValue`() {
+        // Given
+        val original = 987654321L
+        val record = mockHeaders(original.toHeaderBytes())
+
+        // When
+        val decoded = record.longValue(headerKey)
+
+        // Then
+        assertEquals(original, decoded)
     }
 
     private fun mockHeaders(value: ByteArray) =

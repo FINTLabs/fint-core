@@ -4,11 +4,12 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
-import no.fintlabs.provider.kafka.topic.TopicNamesConstants.LAST_UPDATED
-import no.fintlabs.provider.kafka.topic.TopicNamesConstants.RESOURCE_NAME
-import no.fintlabs.provider.kafka.topic.TopicNamesConstants.SYNC_CORRELATION_ID
-import no.fintlabs.provider.kafka.topic.TopicNamesConstants.SYNC_TOTAL_SIZE
-import no.fintlabs.provider.kafka.topic.TopicNamesConstants.SYNC_TYPE
+import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
+import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
+import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.kafka.producing.ParameterizedProducerRecord
 import no.novari.kafka.producing.ParameterizedTemplateFactory
 import no.novari.kafka.topic.name.EntityTopicNameParameters
@@ -16,7 +17,6 @@ import no.novari.kafka.topic.name.TopicNamePrefixParameters
 import org.apache.kafka.common.header.internals.RecordHeaders
 import org.springframework.kafka.support.SendResult
 import org.springframework.stereotype.Component
-import java.nio.ByteBuffer
 import java.time.Clock
 import java.util.concurrent.CompletableFuture
 
@@ -101,21 +101,15 @@ class EntityProducer(
         lastUpdated: Long = clock.millis(),
     ) = RecordHeaders().apply {
         add(RESOURCE_NAME, resourceName.toByteArray())
-        add(LAST_UPDATED, lastUpdated.toByteArray())
+        add(LAST_MODIFIED, lastUpdated.toHeaderBytes())
     }
 
     private fun attachSyncHeaders(syncPage: SyncPage) =
         attachDefaultHeaders(syncPage.getResourceName()).apply {
             add(SYNC_TYPE, byteArrayOf(syncPage.syncType.ordinal.toByte()))
             add(SYNC_CORRELATION_ID, syncPage.metadata.corrId.toByteArray())
-            add(SYNC_TOTAL_SIZE, syncPage.metadata.totalSize.toByteArray())
+            add(SYNC_TOTAL_SIZE, syncPage.metadata.totalSize.toHeaderBytes())
         }
 
     private fun SyncPage.getResourceName() = metadata.uriRef.split("/").last()
-
-    private fun Long.toByteArray(): ByteArray =
-        ByteBuffer
-            .allocate(Long.SIZE_BYTES)
-            .putLong(this)
-            .array()
 }
