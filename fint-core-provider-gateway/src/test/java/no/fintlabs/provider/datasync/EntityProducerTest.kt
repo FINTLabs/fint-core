@@ -9,22 +9,20 @@ import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
+import no.fintlabs.provider.config.ProviderProperties
 import no.fintlabs.provider.datasync.EntityProducer.Companion.KEY_DELIMITER
 import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplate
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -33,23 +31,21 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 class EntityProducerTest {
-    private lateinit var factory: ParameterizedTemplateFactory
-    private lateinit var kafkaProducer: ParameterizedTemplate<Any>
+    private val orgId = "fintlabs.no"
+    private val expectedTopic = "fintlabs-no.fint-felleskomponent-resource"
+
+    private lateinit var kafkaTemplate: KafkaTemplate<String, Any>
     private lateinit var clock: Clock
     private lateinit var sut: EntityProducer
 
     @BeforeEach
     fun setup() {
-        factory = mockk()
-        kafkaProducer = mockk()
+        kafkaTemplate = mockk()
         clock = mockk()
 
-        every { factory.createTemplate(Any::class.java) } returns kafkaProducer
-        every { kafkaProducer.send(any<ParameterizedProducerRecord<Any>>()) } answers {
-            CompletableFuture.completedFuture(mockk<SendResult<String, Any>>(relaxed = true))
-        }
+        val providerProperties = ProviderProperties(orgIdValue = orgId)
 
-        sut = EntityProducer(factory, clock)
+        sut = EntityProducer(kafkaTemplate, providerProperties, clock)
     }
 
     @AfterEach
@@ -83,26 +79,14 @@ class EntityProducerTest {
 
         val record = sendAndCapture { sut.sendSyncEntity(syncPage, entry) }
 
-        val expected =
-            EntityTopicNameParameters
-                .builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters
-                        .stepBuilder()
-                        .orgId("fintlabs-no")
-                        .domainContextApplicationDefault()
-                        .build(),
-                ).resourceName("utdanning-elev")
-                .build()
-
-        assertEquals(expected, record.topicNameParameters)
-        assertEquals(expectedLastModified, record.getHeaderValue(LAST_MODIFIED).long())
-        assertEquals(expectedSyncType.ordinal.toByte(), record.getHeaderValue(SYNC_TYPE).first())
-        assertEquals(expectedSyncCorrId, record.getHeaderValue(SYNC_CORRELATION_ID).toString(Charset.defaultCharset()))
-        assertEquals(expectedResourceName, record.getHeaderValue(RESOURCE_NAME).toString(Charset.defaultCharset()))
-        assertEquals(expectedSyncTotalSize, record.getHeaderValue(SYNC_TOTAL_SIZE).long())
-        assertEquals("${expectedResourceName}$KEY_DELIMITER${entry.identifier}", record.key)
-        assertEquals(entry.resource, record.value)
+        assertEquals(expectedTopic, record.topic())
+        assertEquals(expectedLastModified, record.headerValue(LAST_MODIFIED).long())
+        assertEquals(expectedSyncType.ordinal.toByte(), record.headerValue(SYNC_TYPE).first())
+        assertEquals(expectedSyncCorrId, record.headerValue(SYNC_CORRELATION_ID).toString(Charset.defaultCharset()))
+        assertEquals(expectedResourceName, record.headerValue(RESOURCE_NAME).toString(Charset.defaultCharset()))
+        assertEquals(expectedSyncTotalSize, record.headerValue(SYNC_TOTAL_SIZE).long())
+        assertEquals("$expectedResourceName$KEY_DELIMITER${entry.identifier}", record.key())
+        assertEquals(entry.resource, record.value())
     }
 
     @Test
@@ -122,42 +106,26 @@ class EntityProducerTest {
                 resource = mapOf("id" to 42)
             }
 
-        every { clock.millis() } returns expectedLastModified
-
         val record = sendAndCapture { sut.sendEventEntity(request, entry, expectedLastModified) }
 
-        val expected =
-            EntityTopicNameParameters
-                .builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters
-                        .stepBuilder()
-                        .orgId("fintlabs-no")
-                        .domainContextApplicationDefault()
-                        .build(),
-                ).resourceName("utdanning-vurdering")
-                .build()
-
-        assertEquals(expected, record.topicNameParameters)
-        assertEquals(expectedLastModified, record.getHeaderValue(LAST_MODIFIED).long())
-        assertEquals(expectedResourceName, record.getHeaderValue(RESOURCE_NAME).toString(Charset.defaultCharset()))
-        assertNull(record.getHeader(SYNC_TYPE))
-        assertNull(record.getHeader(SYNC_CORRELATION_ID))
-        assertNull(record.getHeader(SYNC_TOTAL_SIZE))
-        assertEquals("${expectedResourceName}$KEY_DELIMITER${entry.identifier}", record.key)
-        assertEquals(entry.resource, record.value)
+        assertEquals(expectedTopic, record.topic())
+        assertEquals(expectedLastModified, record.headerValue(LAST_MODIFIED).long())
+        assertEquals(expectedResourceName, record.headerValue(RESOURCE_NAME).toString(Charset.defaultCharset()))
+        assertNull(record.headers().lastHeader(SYNC_TYPE))
+        assertNull(record.headers().lastHeader(SYNC_CORRELATION_ID))
+        assertNull(record.headers().lastHeader(SYNC_TOTAL_SIZE))
+        assertEquals("$expectedResourceName$KEY_DELIMITER${entry.identifier}", record.key())
+        assertEquals(entry.resource, record.value())
     }
 
     private fun ByteArray.long(): Long = ByteBuffer.wrap(this).long
 
-    private fun ParameterizedProducerRecord<Any>.getHeaderValue(key: String) = this.headers.lastHeader(key).value()
+    private fun ProducerRecord<String, Any>.headerValue(key: String) = this.headers().lastHeader(key).value()
 
-    private fun ParameterizedProducerRecord<Any>.getHeader(key: String) = this.headers.lastHeader(key)
-
-    private fun sendAndCapture(block: () -> Unit): ParameterizedProducerRecord<Any> {
-        val slot = slot<ParameterizedProducerRecord<Any>>()
-        every { kafkaProducer.send(capture(slot)) } answers {
-            CompletableFuture.completedFuture(mockk(relaxed = true))
+    private fun sendAndCapture(block: () -> Unit): ProducerRecord<String, Any> {
+        val slot = slot<ProducerRecord<String, Any>>()
+        every { kafkaTemplate.send(capture(slot)) } answers {
+            CompletableFuture.completedFuture(mockk<SendResult<String, Any>>(relaxed = true))
         }
         block()
         return slot.captured
