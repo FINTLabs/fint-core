@@ -15,34 +15,36 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(prefix = "fint.provider", name = ["ensure-topics"], havingValue = "true", matchIfMissing = true)
 class EventTopicEnsurer(
     private val adapterKafkaProperties: AdapterKafkaProperties,
-    private val eventTopicService: EventTopicService
+    private val eventTopicService: EventTopicService,
 ) {
     @EventListener(ApplicationReadyEvent::class)
-    fun ensureEventTopics() = with(adapterKafkaProperties) {
-        listOf(
-            TopicNamesConstants.HEARTBEAT_EVENT_NAME to heartbeatRetentionTime,
-            TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME to registerRetentionTime,
-            TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME to fullSyncRetentionTime,
-            TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME to deltaSyncRetentionTime,
-            TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME to deleteSyncRetentionTime
-        ).forEach { (eventName, retentionTime) ->
-            eventTopicService.createOrModifyTopic(
-                EventTopicNameParameters.builder()
-                    .topicNamePrefixParameters(
-                        TopicNamePrefixParameters.stepBuilder()
-                            .orgIdApplicationDefault()
-                            .domainContextApplicationDefault()
-                            .build()
-                    )
-                    .eventName(eventName)
-                    .build(),
-                EventTopicConfiguration
-                    .stepBuilder()
-                    .partitions(partitions)
-                    .retentionTime(retentionTime)
-                    .cleanupFrequency(EventCleanupFrequency.NORMAL)
-                    .build()
-            )
+    fun ensureEventTopics() =
+        with(adapterKafkaProperties) {
+            listOf(
+                TopicNamesConstants.HEARTBEAT_EVENT_NAME to heartbeatRetentionTime,
+                TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME to registerRetentionTime,
+                TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME to fullSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME to deltaSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME to deleteSyncRetentionTime,
+            ).forEach { (eventName, retentionTime) ->
+                eventTopicService.createOrModifyTopic(
+                    EventTopicNameParameters
+                        .builder()
+                        .topicNamePrefixParameters(
+                            TopicNamePrefixParameters
+                                .stepBuilder()
+                                .orgIdApplicationDefault()
+                                .domainContextApplicationDefault()
+                                .build(),
+                        ).eventName(eventName)
+                        .build(),
+                    EventTopicConfiguration
+                        .stepBuilder()
+                        .partitions(partitions)
+                        .retentionTime(retentionTime)
+                        .cleanupFrequency(EventCleanupFrequency.NORMAL)
+                        .build(),
+                )
+            }
         }
-    }
 }

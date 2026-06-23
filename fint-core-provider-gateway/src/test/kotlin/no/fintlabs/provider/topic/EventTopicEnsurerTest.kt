@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class EventTopicEnsurerTest {
-
     private lateinit var eventTopicService: EventTopicService
     private val adapterKafkaProperties = AdapterKafkaProperties()
     private lateinit var sut: EventTopicEnsurer
@@ -43,17 +42,19 @@ class EventTopicEnsurerTest {
             TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME,
             TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME,
             TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME,
-            TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME
+            TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME,
         ).forEach { eventName ->
-            val expected = EventTopicNameParameters.builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters.stepBuilder()
-                        .orgIdApplicationDefault()
-                        .domainContextApplicationDefault()
-                        .build()
-                )
-                .eventName(eventName)
-                .build()
+            val expected =
+                EventTopicNameParameters
+                    .builder()
+                    .topicNamePrefixParameters(
+                        TopicNamePrefixParameters
+                            .stepBuilder()
+                            .orgIdApplicationDefault()
+                            .domainContextApplicationDefault()
+                            .build(),
+                    ).eventName(eventName)
+                    .build()
 
             verify(exactly = 1) { eventTopicService.createOrModifyTopic(expected, any()) }
         }

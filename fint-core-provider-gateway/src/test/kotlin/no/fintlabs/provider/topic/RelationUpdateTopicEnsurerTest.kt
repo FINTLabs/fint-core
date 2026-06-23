@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class RelationUpdateTopicEnsurerTest {
-
     private lateinit var entityTopicService: EntityTopicService
     private val relationUpdateKafkaProperties = RelationUpdateKafkaProperties()
 
@@ -31,18 +30,19 @@ class RelationUpdateTopicEnsurerTest {
         RelationUpdateTopicEnsurer(
             entityTopicService,
             relationUpdateKafkaProperties,
-            ProviderProperties(components = components)
+            ProviderProperties(components = components),
         )
 
     @Test
     fun `ensureRelationUpdateTopics creates topics only for components with relationUpdate enabled`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no"), relationUpdate = true),
-            ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no"), relationUpdate = true),
-            ComponentConfig(domainName = "utdanning", "ot", listOf("fintlabs-no"), relationUpdate = false),
-            ComponentConfig(domainName = "utdanning", "larling", listOf("fintlabs-no"), relationUpdate = false),
-            ComponentConfig(domainName = "administrasjon", "personal", listOf("fintlabs-no"), relationUpdate = false)
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no"), relationUpdate = true),
+                ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no"), relationUpdate = true),
+                ComponentConfig(domainName = "utdanning", "ot", listOf("fintlabs-no"), relationUpdate = false),
+                ComponentConfig(domainName = "utdanning", "larling", listOf("fintlabs-no"), relationUpdate = false),
+                ComponentConfig(domainName = "administrasjon", "personal", listOf("fintlabs-no"), relationUpdate = false),
+            )
 
         sut(components).ensureRelationUpdateTopics()
 
@@ -51,31 +51,35 @@ class RelationUpdateTopicEnsurerTest {
 
     @Test
     fun `ensureRelationUpdateTopics uses resourceName with relation-update suffix`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"), relationUpdate = true)
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"), relationUpdate = true),
+            )
 
         sut(components).ensureRelationUpdateTopics()
 
-        val expected = EntityTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName("utdanning-elev-relation-update")
-            .build()
+        val expected =
+            EntityTopicNameParameters
+                .builder()
+                .topicNamePrefixParameters(
+                    TopicNamePrefixParameters
+                        .stepBuilder()
+                        .orgId("fintlabs-no")
+                        .domainContextApplicationDefault()
+                        .build(),
+                ).resourceName("utdanning-elev-relation-update")
+                .build()
 
         verify(exactly = 1) { entityTopicService.createOrModifyTopic(expected, any()) }
     }
 
     @Test
     fun `ensureRelationUpdateTopics skips components with relationUpdate disabled`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "ot", listOf("fintlabs-no"), relationUpdate = false),
-            ComponentConfig(domainName = "administrasjon", "personal", listOf("fintlabs-no"), relationUpdate = false)
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "ot", listOf("fintlabs-no"), relationUpdate = false),
+                ComponentConfig(domainName = "administrasjon", "personal", listOf("fintlabs-no"), relationUpdate = false),
+            )
 
         sut(components).ensureRelationUpdateTopics()
 

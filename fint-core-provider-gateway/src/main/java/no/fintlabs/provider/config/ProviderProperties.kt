@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "fint.provider")
 data class ProviderProperties(
-    val components: List<ComponentConfig> = emptyList()
+    val components: List<ComponentConfig> = emptyList(),
 )
 
 data class ComponentConfig(
@@ -13,5 +13,5 @@ data class ComponentConfig(
     val orgIds: List<String> = emptyList(),
     val relationUpdate: Boolean = false,
     val requestPartitions: Int? = null,
-    val responsePartitions: Int? = null
+    val responsePartitions: Int? = null,
 )

@@ -23,9 +23,8 @@ import java.util.concurrent.CompletableFuture
 @Component
 class EntityProducer(
     parameterizedTemplateFactory: ParameterizedTemplateFactory,
-    private val clock: Clock
+    private val clock: Clock,
 ) {
-
     private val producer = parameterizedTemplateFactory.createTemplate(Any::class.java)
 
     companion object {
@@ -34,71 +33,76 @@ class EntityProducer(
 
     fun sendSyncEntity(
         syncPage: SyncPage,
-        syncEntry: SyncPageEntry
+        syncEntry: SyncPageEntry,
     ): CompletableFuture<SendResult<String, Any>> =
         syncPage.metadata.toTopic().let { topic ->
             producer.send(
-                ParameterizedProducerRecord.builder<Any>()
+                ParameterizedProducerRecord
+                    .builder<Any>()
                     .key("${syncPage.getResourceName()}$KEY_DELIMITER${syncEntry.identifier}")
                     .topicNameParameters(topic)
                     .headers(attachSyncHeaders(syncPage))
                     .value(syncEntry.resource)
-                    .build()
+                    .build(),
             )
         }
 
     fun sendEventEntity(
         request: RequestFintEvent,
         syncEntry: SyncPageEntry,
-        lastUpdated: Long
+        lastUpdated: Long,
     ): CompletableFuture<SendResult<String, Any>> =
         request.toTopic().let { topic ->
             producer.send(
-                ParameterizedProducerRecord.builder<Any>()
+                ParameterizedProducerRecord
+                    .builder<Any>()
                     .key("${request.resourceName}$KEY_DELIMITER${syncEntry.identifier}")
                     .topicNameParameters(topic)
                     .headers(attachDefaultHeaders(request.resourceName, lastUpdated)) // not sync
                     .value(syncEntry.resource)
-                    .build()
+                    .build(),
             )
         }
 
     private fun SyncPageMetadata.toTopic() =
-        EntityTopicNameParameters.builder()
+        EntityTopicNameParameters
+            .builder()
             .topicNamePrefixParameters(
                 TopicNamePrefixParameters
                     .stepBuilder()
                     .orgId(this.orgId.topicFormat())
                     .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName(uriRef.toComponentPattern())
+                    .build(),
+            ).resourceName(uriRef.toComponentPattern())
             .build()
 
     private fun RequestFintEvent.toTopic(): EntityTopicNameParameters =
-        EntityTopicNameParameters.builder()
+        EntityTopicNameParameters
+            .builder()
             .topicNamePrefixParameters(
                 TopicNamePrefixParameters
                     .stepBuilder()
                     .orgId(orgId.topicFormat())
                     .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName("$domainName-$packageName")
+                    .build(),
+            ).resourceName("$domainName-$packageName")
             .build()
 
     private fun String.toComponentPattern() =
-        this.split("/")
+        this
+            .split("/")
             .take(2)
             .joinToString("-")
 
     private fun String.topicFormat() = this.replace(".", "-")
 
-    private fun attachDefaultHeaders(resourceName: String, lastUpdated: Long = clock.millis()) =
-        RecordHeaders().apply {
-            add(RESOURCE_NAME, resourceName.toByteArray())
-            add(LAST_UPDATED, lastUpdated.toByteArray())
-        }
+    private fun attachDefaultHeaders(
+        resourceName: String,
+        lastUpdated: Long = clock.millis(),
+    ) = RecordHeaders().apply {
+        add(RESOURCE_NAME, resourceName.toByteArray())
+        add(LAST_UPDATED, lastUpdated.toByteArray())
+    }
 
     private fun attachSyncHeaders(syncPage: SyncPage) =
         attachDefaultHeaders(syncPage.getResourceName()).apply {
@@ -110,8 +114,8 @@ class EntityProducer(
     private fun SyncPage.getResourceName() = metadata.uriRef.split("/").last()
 
     private fun Long.toByteArray(): ByteArray =
-        ByteBuffer.allocate(Long.SIZE_BYTES)
+        ByteBuffer
+            .allocate(Long.SIZE_BYTES)
             .putLong(this)
             .array()
-
 }

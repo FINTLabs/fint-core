@@ -45,14 +45,19 @@ class SyncPageService(
     }
 
     private fun sendEntities(page: SyncPage) {
-        val futures = page.resources.map { syncPageEntry ->
-            entityProducer.sendSyncEntity(page, syncPageEntry)
-                .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
-        }
+        val futures =
+            page.resources.map { syncPageEntry ->
+                entityProducer
+                    .sendSyncEntity(page, syncPageEntry)
+                    .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
+            }
         CompletableFuture.allOf(*futures.toTypedArray()).join()
     }
 
-    private fun logSendOutcome(page: SyncPage, throwable: Throwable?) {
+    private fun logSendOutcome(
+        page: SyncPage,
+        throwable: Throwable?,
+    ) {
         if (throwable == null) {
             log.debug(
                 "Successfully sent entity [orgId={}, uriRef={}]",

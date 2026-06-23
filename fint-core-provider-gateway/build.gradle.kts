@@ -21,9 +21,10 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.security:spring-security-test")
-
-    "integrationTestImplementation"("org.springframework.boot:spring-boot-testcontainers")
-    "integrationTestImplementation"("org.testcontainers:postgresql")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:junit-jupiter")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -38,9 +39,11 @@ tasks.register<JavaExec>("benchmarkKafkaProducer") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "no.fintlabs.provider.performance.KafkaProducerBenchmark"
 
-    val benchmarkProperties = System.getProperties()
-        .entries
-        .filter { it.key.toString().startsWith("benchmark.") }
+    val benchmarkProperties =
+        System
+            .getProperties()
+            .entries
+            .filter { it.key.toString().startsWith("benchmark.") }
     benchmarkProperties.forEach { systemProperty(it.key.toString(), it.value.toString()) }
 
     project.properties

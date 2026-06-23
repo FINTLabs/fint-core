@@ -7,10 +7,8 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 
 class ContractEntityTest {
-
     @Nested
     inner class MappingFromAdapterContract {
-
         @Test
         fun `should map contract fields correctly`() {
             val contract = createContract()
@@ -25,12 +23,14 @@ class ContractEntityTest {
 
         @Test
         fun `should map capabilities correctly`() {
-            val contract = createContract(
-                capabilities = setOf(
-                    createCapability("utdanning", "elev", "elev"),
-                    createCapability("utdanning", "elev", "skoleressurs")
+            val contract =
+                createContract(
+                    capabilities =
+                        setOf(
+                            createCapability("utdanning", "elev", "elev"),
+                            createCapability("utdanning", "elev", "skoleressurs"),
+                        ),
                 )
-            )
 
             val entity = ContractEntity(contract)
 
@@ -52,9 +52,10 @@ class ContractEntityTest {
 
         @Test
         fun `should map capability fields correctly`() {
-            val contract = createContract(
-                capabilities = setOf(createCapability("utdanning", "elev", "elev"))
-            )
+            val contract =
+                createContract(
+                    capabilities = setOf(createCapability("utdanning", "elev", "elev")),
+                )
 
             val entity = ContractEntity(contract)
             val capability = entity.capabilityEntityset.first()
@@ -78,18 +79,20 @@ class ContractEntityTest {
 
     @Nested
     inner class UpdatingContract {
-
         @Test
         fun `should produce new capability set when contract is recreated with different capabilities`() {
-            val original = createContract(
-                capabilities = setOf(createCapability("utdanning", "elev", "elev"))
-            )
-            val updated = createContract(
-                capabilities = setOf(
-                    createCapability("utdanning", "elev", "skoleressurs"),
-                    createCapability("administrasjon", "personal", "person")
+            val original =
+                createContract(
+                    capabilities = setOf(createCapability("utdanning", "elev", "elev")),
                 )
-            )
+            val updated =
+                createContract(
+                    capabilities =
+                        setOf(
+                            createCapability("utdanning", "elev", "skoleressurs"),
+                            createCapability("administrasjon", "personal", "person"),
+                        ),
+                )
 
             val originalEntity = ContractEntity(original)
             val updatedEntity = ContractEntity(updated)
@@ -117,16 +120,21 @@ class ContractEntityTest {
     private fun createContract(
         adapterId: String = "adapter-1",
         username: String = "test@adapter.test.org.no",
-        capabilities: Set<AdapterCapability> = setOf(createCapability("utdanning", "elev", "elev"))
-    ): AdapterContract = AdapterContract().apply {
-        this.adapterId = adapterId
-        this.orgId = "test.org.no"
-        this.username = username
-        this.heartbeatIntervalInMinutes = 5
-        this.capabilities = capabilities
-    }
+        capabilities: Set<AdapterCapability> = setOf(createCapability("utdanning", "elev", "elev")),
+    ): AdapterContract =
+        AdapterContract().apply {
+            this.adapterId = adapterId
+            this.orgId = "test.org.no"
+            this.username = username
+            this.heartbeatIntervalInMinutes = 5
+            this.capabilities = capabilities
+        }
 
-    private fun createCapability(domain: String, pkg: String, resource: String): AdapterCapability =
+    private fun createCapability(
+        domain: String,
+        pkg: String,
+        resource: String,
+    ): AdapterCapability =
         AdapterCapability().apply {
             this.domainName = domain
             this.packageName = pkg

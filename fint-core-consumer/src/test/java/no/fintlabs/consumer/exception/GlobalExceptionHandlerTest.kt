@@ -89,7 +89,7 @@ class GlobalExceptionHandlerTest {
     private fun <T> anyNonNull(): T = Mockito.any<T?>() as T
 
     @RestController
-    class NotFoundController {
+    inner class NotFoundController {
         @GetMapping("/{resource}/{idField}/{idValue}")
         fun getById(
             @PathVariable resource: String,
@@ -99,7 +99,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @RestController
-    class ErrorController {
+    inner class ErrorController {
         @GetMapping("/bob")
         fun triggerError(): Mono<String> = Mono.error(RuntimeException("Something went wrong!"))
     }

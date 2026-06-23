@@ -23,7 +23,6 @@ import org.springframework.kafka.core.KafkaAdmin
 import java.time.Duration
 
 class TopicCleanupServiceTest {
-
     private lateinit var topicNameService: TopicNameService
     private lateinit var kafkaAdmin: KafkaAdmin
     private lateinit var adminClient: AdminClient
@@ -41,9 +40,10 @@ class TopicCleanupServiceTest {
             val params = firstArg<TopicNameParameters>()
             val orgId = params.topicNamePrefixParameters.orgId ?: defaultOrgId
             val domainContext = params.topicNamePrefixParameters.domainContext ?: defaultDomainContext
-            val suffix = params.topicNameSuffixParameters
-                .mapNotNull { it.value }
-                .joinToString(".")
+            val suffix =
+                params.topicNameSuffixParameters
+                    .mapNotNull { it.value }
+                    .joinToString(".")
             "$orgId.$domainContext.${params.messageType.topicNameParameter}.$suffix"
         }
     }
@@ -78,9 +78,10 @@ class TopicCleanupServiceTest {
 
     @Test
     fun `computeExpectedTopicNames produces entity, request and response topics per component-org pair`() {
-        val components = listOf(
-            ComponentConfig("utdanning", "elev", listOf("afk-no", "bfk-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig("utdanning", "elev", listOf("afk-no", "bfk-no")),
+            )
 
         val expected = topicCleanupService(components).computeExpectedTopicNames()
 
@@ -96,10 +97,11 @@ class TopicCleanupServiceTest {
 
     @Test
     fun `computeExpectedTopicNames includes relation-update topic only when component has the flag set`() {
-        val components = listOf(
-            ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = true),
-            ComponentConfig("utdanning", "ot", listOf("afk-no"), relationUpdate = false),
-        )
+        val components =
+            listOf(
+                ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = true),
+                ComponentConfig("utdanning", "ot", listOf("afk-no"), relationUpdate = false),
+            )
 
         val expected = topicCleanupService(components).computeExpectedTopicNames()
 
@@ -125,29 +127,38 @@ class TopicCleanupServiceTest {
 
     @Test
     fun `computeExpectedTopicNames uses correct parameters for entity and event builders`() {
-        val components = listOf(
-            ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = true)
-        )
+        val components =
+            listOf(
+                ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = true),
+            )
 
         topicCleanupService(components).computeExpectedTopicNames()
 
         verify {
-            topicNameService.validateAndMapToTopicName(match<EntityTopicNameParameters> {
-                it.resourceName == "utdanning-elev" &&
+            topicNameService.validateAndMapToTopicName(
+                match<EntityTopicNameParameters> {
+                    it.resourceName == "utdanning-elev" &&
                         it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EntityTopicNameParameters> {
-                it.resourceName == "utdanning-elev-relation-update" &&
+                },
+            )
+            topicNameService.validateAndMapToTopicName(
+                match<EntityTopicNameParameters> {
+                    it.resourceName == "utdanning-elev-relation-update" &&
                         it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EventTopicNameParameters> {
-                it.eventName == "utdanning-elev-request" &&
+                },
+            )
+            topicNameService.validateAndMapToTopicName(
+                match<EventTopicNameParameters> {
+                    it.eventName == "utdanning-elev-request" &&
                         it.topicNamePrefixParameters.orgId == "afk-no"
-            })
-            topicNameService.validateAndMapToTopicName(match<EventTopicNameParameters> {
-                it.eventName == "utdanning-elev-response" &&
+                },
+            )
+            topicNameService.validateAndMapToTopicName(
+                match<EventTopicNameParameters> {
+                    it.eventName == "utdanning-elev-response" &&
                         it.topicNamePrefixParameters.orgId == "afk-no"
-            })
+                },
+            )
         }
     }
 
@@ -171,7 +182,7 @@ class TopicCleanupServiceTest {
                 afkOrphan,
                 bfkOrphan,
                 "afk-no.fint-core.entity.utdanning-elev",
-            )
+            ),
         )
         stubDeleteTopics()
 
@@ -220,7 +231,7 @@ class TopicCleanupServiceTest {
                 "afk-no.fint-core.event.utdanning-elev-request",
                 "afk-no.fint-core.event.utdanning-elev-response",
                 "__consumer_offsets",
-            )
+            ),
         )
 
         val deleted = runBlocking { topicCleanupService(components).cleanup(adminClient) }
@@ -231,9 +242,10 @@ class TopicCleanupServiceTest {
 
     @Test
     fun `cleanup aggregates orphans across multiple orgs into a single delete call`() {
-        val components = listOf(
-            ComponentConfig("utdanning", "elev", listOf("afk-no", "bfk-no"), relationUpdate = true)
-        )
+        val components =
+            listOf(
+                ComponentConfig("utdanning", "elev", listOf("afk-no", "bfk-no"), relationUpdate = true),
+            )
         val afkOrphan = "afk-no.fint-core.entity.utdanning-removed"
         val bfkOrphan = "bfk-no.fint-core.event.utdanning-elev-legacy-response"
         val nonFintCore = "afk-no.something-else.entity.stuff"
@@ -247,9 +259,11 @@ class TopicCleanupServiceTest {
 
         assertThat(deleted).containsExactlyInAnyOrder(afkOrphan, bfkOrphan)
         verify {
-            adminClient.deleteTopics(match<Collection<String>> {
-                it.toSet() == setOf(afkOrphan, bfkOrphan)
-            })
+            adminClient.deleteTopics(
+                match<Collection<String>> {
+                    it.toSet() == setOf(afkOrphan, bfkOrphan)
+                },
+            )
         }
     }
 
@@ -266,9 +280,10 @@ class TopicCleanupServiceTest {
 
     @Test
     fun `cleanup deletes an existing relation-update topic when the component flag is false`() {
-        val components = listOf(
-            ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = false)
-        )
+        val components =
+            listOf(
+                ComponentConfig("utdanning", "elev", listOf("afk-no"), relationUpdate = false),
+            )
         val staleRelationUpdate = "afk-no.fint-core.entity.utdanning-elev-relation-update"
         val keptEntity = "afk-no.fint-core.entity.utdanning-elev"
 
@@ -313,10 +328,11 @@ class TopicCleanupServiceTest {
     @Test
     fun `cleanup makes a single delete call when orphans fit within one batch`() {
         val components = listOf(ComponentConfig("utdanning", "elev", listOf("afk-no")))
-        val orphans = setOf(
-            "afk-no.fint-core.entity.utdanning-old-1",
-            "afk-no.fint-core.entity.utdanning-old-2",
-        )
+        val orphans =
+            setOf(
+                "afk-no.fint-core.entity.utdanning-old-1",
+                "afk-no.fint-core.entity.utdanning-old-2",
+            )
         stubListTopics(orphans + "afk-no.fint-core.entity.utdanning-elev")
         stubDeleteTopics()
 

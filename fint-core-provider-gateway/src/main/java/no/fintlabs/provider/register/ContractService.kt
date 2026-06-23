@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class ContractService(
-    private val contractJpaRepository: ContractJpaRepository
+    private val contractJpaRepository: ContractJpaRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -24,20 +24,28 @@ class ContractService(
         username: String,
         domainName: String,
         packageName: String,
-        entityName: String
+        entityName: String,
     ): Boolean? =
-        contractJpaRepository.findByUserNameWithCapabilities(username)
+        contractJpaRepository
+            .findByUserNameWithCapabilities(username)
             .map { contract -> contract.capabilityEntityset.any { it.matches(domainName, packageName, entityName) } }
             .orElse(null)
 
     /**
      * @return `true` if username matches, `false` if not, `null` if contract not found.
      */
-    fun userCanAccessAdapter(username: String, adapterId: String): Boolean? =
-        contractJpaRepository.findById(username)
+    fun userCanAccessAdapter(
+        username: String,
+        adapterId: String,
+    ): Boolean? =
+        contractJpaRepository
+            .findById(username)
             .map { it.adapterId == adapterId }
             .orElse(null)
 
-    private fun CapabilityEntity.matches(domainName: String, packageName: String, resourceName: String): Boolean =
-        this.domainName == domainName && this.pkgName == packageName && this.resourceName == resourceName
+    private fun CapabilityEntity.matches(
+        domainName: String,
+        packageName: String,
+        resourceName: String,
+    ): Boolean = this.domainName == domainName && this.pkgName == packageName && this.resourceName == resourceName
 }

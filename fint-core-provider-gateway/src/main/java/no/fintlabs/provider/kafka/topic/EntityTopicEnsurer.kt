@@ -17,29 +17,30 @@ import org.springframework.stereotype.Component
 class EntityTopicEnsurer(
     private val entityTopicService: EntityTopicService,
     private val entityKafkaProperties: EntityKafkaProperties,
-    private val providerProperties: ProviderProperties
+    private val providerProperties: ProviderProperties,
 ) {
-
     @EventListener(ApplicationReadyEvent::class)
     fun ensureEntityTopics() {
         providerProperties.components.forEach { component ->
             component.orgIds.forEach { orgId ->
                 entityTopicService.createOrModifyTopic(
-                    EntityTopicNameParameters.builder()
+                    EntityTopicNameParameters
+                        .builder()
                         .topicNamePrefixParameters(
-                            TopicNamePrefixParameters.stepBuilder()
+                            TopicNamePrefixParameters
+                                .stepBuilder()
                                 .orgId(orgId)
                                 .domainContextApplicationDefault()
-                                .build()
-                        )
-                        .resourceName("${component.domainName}-${component.packageName}")
+                                .build(),
+                        ).resourceName("${component.domainName}-${component.packageName}")
                         .build(),
-                    EntityTopicConfiguration.stepBuilder()
+                    EntityTopicConfiguration
+                        .stepBuilder()
                         .partitions(entityKafkaProperties.partitions)
                         .lastValueRetentionTime(entityKafkaProperties.retentionTime)
                         .nullValueRetentionTime(entityKafkaProperties.retentionTime)
                         .cleanupFrequency(EntityCleanupFrequency.NORMAL)
-                        .build()
+                        .build(),
                 )
             }
         }

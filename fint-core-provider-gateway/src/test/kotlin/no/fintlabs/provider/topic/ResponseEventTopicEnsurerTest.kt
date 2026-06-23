@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ResponseEventTopicEnsurerTest {
-
     private lateinit var eventTopicService: EventTopicService
     private val responseProducerProperties = ProducerProperties()
 
@@ -33,15 +32,16 @@ class ResponseEventTopicEnsurerTest {
         ResponseEventTopicEnsurer(
             eventTopicService,
             responseProducerProperties,
-            ProviderProperties(components = components)
+            ProviderProperties(components = components),
         )
 
     @Test
     fun `ensureResponseEventTopics creates a topic for each org-id and component combination`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no")),
-            ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no")),
+                ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no")),
+            )
 
         sut(components).ensureResponseEventTopics()
 
@@ -50,21 +50,24 @@ class ResponseEventTopicEnsurerTest {
 
     @Test
     fun `ensureResponseEventTopics uses correct event name with response suffix`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no")),
+            )
 
         sut(components).ensureResponseEventTopics()
 
-        val expected = EventTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .eventName("utdanning-elev-response")
-            .build()
+        val expected =
+            EventTopicNameParameters
+                .builder()
+                .topicNamePrefixParameters(
+                    TopicNamePrefixParameters
+                        .stepBuilder()
+                        .orgId("fintlabs-no")
+                        .domainContextApplicationDefault()
+                        .build(),
+                ).eventName("utdanning-elev-response")
+                .build()
 
         verify(exactly = 1) { eventTopicService.createOrModifyTopic(expected, any()) }
     }
@@ -78,9 +81,10 @@ class ResponseEventTopicEnsurerTest {
 
     @Test
     fun `ensureResponseEventTopics uses component responsePartitions override when set`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"), responsePartitions = 3)
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"), responsePartitions = 3),
+            )
         val configSlot = slot<EventTopicConfiguration>()
         every { eventTopicService.createOrModifyTopic(any(), capture(configSlot)) } just Runs
 
@@ -91,9 +95,10 @@ class ResponseEventTopicEnsurerTest {
 
     @Test
     fun `ensureResponseEventTopics falls back to global default when responsePartitions is unset`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no")),
+            )
         val configSlot = slot<EventTopicConfiguration>()
         every { eventTopicService.createOrModifyTopic(any(), capture(configSlot)) } just Runs
 

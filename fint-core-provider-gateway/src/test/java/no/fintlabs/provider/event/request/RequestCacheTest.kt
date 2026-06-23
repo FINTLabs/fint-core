@@ -13,7 +13,6 @@ import java.util.function.Consumer
 import kotlin.time.Duration.Companion.minutes
 
 class RequestCacheTest {
-
     private lateinit var clock: Clock
     private lateinit var requestCache: RequestCache
     private lateinit var onExpiredMock: Consumer<RequestFintEvent>
@@ -115,7 +114,7 @@ class RequestCacheTest {
     private fun createEvent(
         corrId: String,
         ttl: Long = 2.minutes.inWholeMilliseconds,
-        created: Long = clock.millis()
+        created: Long = clock.millis(),
     ): RequestFintEvent =
         RequestFintEvent().apply {
             this.corrId = corrId
@@ -123,7 +122,4 @@ class RequestCacheTest {
             this.created = created
             timeToLive = created + ttl
         }
-
-
-
 }

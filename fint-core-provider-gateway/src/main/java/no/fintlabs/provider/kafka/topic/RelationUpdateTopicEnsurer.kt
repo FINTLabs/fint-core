@@ -17,29 +17,30 @@ import org.springframework.stereotype.Component
 class RelationUpdateTopicEnsurer(
     private val entityTopicService: EntityTopicService,
     private val relationUpdateKafkaProperties: RelationUpdateKafkaProperties,
-    private val providerProperties: ProviderProperties
+    private val providerProperties: ProviderProperties,
 ) {
-
     @EventListener(ApplicationReadyEvent::class)
     fun ensureRelationUpdateTopics() {
         providerProperties.components.filter { it.relationUpdate }.forEach { component ->
             component.orgIds.forEach { orgId ->
                 entityTopicService.createOrModifyTopic(
-                    EntityTopicNameParameters.builder()
+                    EntityTopicNameParameters
+                        .builder()
                         .topicNamePrefixParameters(
-                            TopicNamePrefixParameters.stepBuilder()
+                            TopicNamePrefixParameters
+                                .stepBuilder()
                                 .orgId(orgId)
                                 .domainContextApplicationDefault()
-                                .build()
-                        )
-                        .resourceName("${component.domainName}-${component.packageName}-relation-update")
+                                .build(),
+                        ).resourceName("${component.domainName}-${component.packageName}-relation-update")
                         .build(),
-                    EntityTopicConfiguration.stepBuilder()
+                    EntityTopicConfiguration
+                        .stepBuilder()
                         .partitions(relationUpdateKafkaProperties.partitions)
                         .lastValueRetentionTime(relationUpdateKafkaProperties.retentionTime)
                         .nullValueRetentionTime(relationUpdateKafkaProperties.retentionTime)
                         .cleanupFrequency(EntityCleanupFrequency.NORMAL)
-                        .build()
+                        .build(),
                 )
             }
         }

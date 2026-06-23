@@ -17,7 +17,6 @@ class AdapterRegistrationTopicService(
     private val entityTopicService: EntityTopicService,
     private val entityKafkaProperties: EntityKafkaProperties,
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
     private val ensuredTopics = ConcurrentHashMap.newKeySet<String>()
 
@@ -34,7 +33,10 @@ class AdapterRegistrationTopicService(
             .forEach { ensureTopicExists(adapterContract.orgId, it) }
     }
 
-    private fun ensureTopicExists(orgId: String, capability: AdapterCapability) {
+    private fun ensureTopicExists(
+        orgId: String,
+        capability: AdapterCapability,
+    ) {
         val topicKey = "$orgId:${capability.component}"
         if (!ensuredTopics.add(topicKey)) return
 
@@ -42,7 +44,7 @@ class AdapterRegistrationTopicService(
             "Ensuring entity-topic for org: {} component: {} with partitions: {}",
             orgId,
             capability.component,
-            entityKafkaProperties.partitions
+            entityKafkaProperties.partitions,
         )
 
         entityTopicService.createOrModifyTopic(
@@ -53,19 +55,21 @@ class AdapterRegistrationTopicService(
                 .lastValueRetentionTime(entityKafkaProperties.retentionTime)
                 .nullValueRetentionTime(entityKafkaProperties.retentionTime)
                 .cleanupFrequency(EntityCleanupFrequency.NORMAL)
-                .build()
+                .build(),
         )
     }
 
-    private fun createTopicNameParameters(orgId: String, capability: AdapterCapability) =
-        EntityTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId(orgId.replace(".", "-"))
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName(capability.component)
-            .build()
+    private fun createTopicNameParameters(
+        orgId: String,
+        capability: AdapterCapability,
+    ) = EntityTopicNameParameters
+        .builder()
+        .topicNamePrefixParameters(
+            TopicNamePrefixParameters
+                .stepBuilder()
+                .orgId(orgId.replace(".", "-"))
+                .domainContextApplicationDefault()
+                .build(),
+        ).resourceName(capability.component)
+        .build()
 }

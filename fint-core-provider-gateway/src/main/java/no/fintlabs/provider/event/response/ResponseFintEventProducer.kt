@@ -10,28 +10,32 @@ import org.springframework.stereotype.Service
 
 @Service
 class ResponseFintEventProducer(
-    eventProducerFactory: ParameterizedTemplateFactory
+    eventProducerFactory: ParameterizedTemplateFactory,
 ) {
-
     private val eventProducer = eventProducerFactory.createTemplate(ResponseFintEvent::class.java)
 
-    fun sendEvent(responseFintEvent: ResponseFintEvent, requestFintEvent: RequestFintEvent) {
+    fun sendEvent(
+        responseFintEvent: ResponseFintEvent,
+        requestFintEvent: RequestFintEvent,
+    ) {
         eventProducer.send(
-            ParameterizedProducerRecord.builder<ResponseFintEvent>()
+            ParameterizedProducerRecord
+                .builder<ResponseFintEvent>()
                 .topicNameParameters(requestFintEvent.toTopicNameParameters())
                 .value(responseFintEvent)
-                .build()
+                .build(),
         )
     }
 
     private fun RequestFintEvent.toTopicNameParameters() =
-        EventTopicNameParameters.builder()
+        EventTopicNameParameters
+            .builder()
             .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
+                TopicNamePrefixParameters
+                    .stepBuilder()
                     .orgId(orgId.replace(".", "-"))
                     .domainContextApplicationDefault()
-                    .build()
-            )
-            .eventName("${domainName}-${packageName}-response")
+                    .build(),
+            ).eventName("$domainName-$packageName-response")
             .build()
 }

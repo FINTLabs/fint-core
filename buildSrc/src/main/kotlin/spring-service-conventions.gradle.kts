@@ -56,21 +56,9 @@ testing {
             dependencies {
                 implementation("io.mockk:mockk:1.13.13")
                 implementation("org.springframework.boot:spring-boot-starter-test")
-            }
-        }
-
-        register<JvmTestSuite>("integrationTest") {
-            dependencies {
-                implementation(project())
+                implementation("org.jetbrains.kotlin:kotlin-test")
                 implementation("org.springframework.kafka:spring-kafka-test")
                 implementation("org.testcontainers:junit-jupiter")
-            }
-            targets {
-                all {
-                    testTask.configure {
-                        shouldRunAfter("test")
-                    }
-                }
             }
         }
     }
@@ -81,6 +69,5 @@ ktlint {
 }
 
 tasks.named("check") {
-    dependsOn(testing.suites.named("integrationTest"))
     dependsOn("ktlintCheck")
 }

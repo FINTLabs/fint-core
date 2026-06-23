@@ -16,15 +16,14 @@ import org.springframework.kafka.test.EmbeddedKafkaBroker
 import org.springframework.kafka.test.context.EmbeddedKafka
 import org.springframework.kafka.test.utils.KafkaTestUtils
 import java.time.Duration
-import java.util.*
+import java.util.UUID
 
 private const val TOPIC = "fintlabs-no.fint-core.entity.utdanning-vurdering"
 
 @SpringBootTest
 @EmbeddedKafka(partitions = 1, topics = [TOPIC])
 @Import(TestcontainersConfiguration::class)
-class KeyDelimiterIntegrationTest {
-
+class KeyDelimiterIT {
     @Autowired
     private lateinit var entityProducer: EntityProducer
 
@@ -36,17 +35,19 @@ class KeyDelimiterIntegrationTest {
         val expectedResourceName = "elevfravar"
         val expectedIdentifier = UUID.randomUUID().toString()
 
-        val request = RequestFintEvent().apply {
-            orgId = "fintlabs.no"
-            domainName = "utdanning"
-            packageName = "vurdering"
-            resourceName = expectedResourceName
-        }
+        val request =
+            RequestFintEvent().apply {
+                orgId = "fintlabs.no"
+                domainName = "utdanning"
+                packageName = "vurdering"
+                resourceName = expectedResourceName
+            }
 
-        val entry = SyncPageEntry().apply {
-            identifier = expectedIdentifier
-            resource = mapOf("id" to 42)
-        }
+        val entry =
+            SyncPageEntry().apply {
+                identifier = expectedIdentifier
+                resource = mapOf("id" to 42)
+            }
 
         entityProducer.sendEventEntity(request, entry, 0L).get()
 

@@ -17,7 +17,6 @@ import org.springframework.context.annotation.Bean
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer
 import org.springframework.stereotype.Service
 
-
 @Service
 class ResponseFintEventConsumer(
     private val parameterizedListenerContainerFactoryService: ParameterizedListenerContainerFactoryService,
@@ -26,44 +25,45 @@ class ResponseFintEventConsumer(
     private val metamodelService: MetamodelService,
     private val kafkaConfig: KafkaConfig,
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
     fun responseFintEventListenerContainer(): ConcurrentMessageListenerContainer<String?, ResponseFintEvent> =
-        parameterizedListenerContainerFactoryService.createRecordListenerContainerFactory(
-            ResponseFintEvent::class.java,
-            this::processEvent,
-            ListenerConfiguration.stepBuilder()
-                .groupIdApplicationDefaultWithSuffix(kafkaConfig.groupIdSuffix)
-                .maxPollRecordsKafkaDefault()
-                .maxPollIntervalKafkaDefault()
-                .seekToBeginningOnAssignment()
-                .build(),
-            errorHandlerFactory.createErrorHandler(
-                ErrorHandlerConfiguration
-                    .stepBuilder<ResponseFintEvent?>()
-                    .noRetries()
-                    .skipFailedRecords()
-                    .build()
+        parameterizedListenerContainerFactoryService
+            .createRecordListenerContainerFactory(
+                ResponseFintEvent::class.java,
+                this::processEvent,
+                ListenerConfiguration
+                    .stepBuilder()
+                    .groupIdApplicationDefaultWithSuffix(kafkaConfig.groupIdSuffix)
+                    .maxPollRecordsKafkaDefault()
+                    .maxPollIntervalKafkaDefault()
+                    .seekToBeginningOnAssignment()
+                    .build(),
+                errorHandlerFactory.createErrorHandler(
+                    ErrorHandlerConfiguration
+                        .stepBuilder<ResponseFintEvent?>()
+                        .noRetries()
+                        .skipFailedRecords()
+                        .build(),
+                ),
+            ).createContainer(
+                EventTopicNamePatternParameters
+                    .builder()
+                    .topicNamePatternPrefixParameters(
+                        TopicNamePatternPrefixParameters
+                            .stepBuilder()
+                            .orgId(TopicNamePatternParameterPattern.any())
+                            .domainContextApplicationDefault()
+                            .build(),
+                    ).eventName(TopicNamePatternParameterPattern.anyOf(*createEventNames()))
+                    .build(),
             )
-        ).createContainer(
-            EventTopicNamePatternParameters
-                .builder()
-                .topicNamePatternPrefixParameters(
-                    TopicNamePatternPrefixParameters
-                        .stepBuilder()
-                        .orgId(TopicNamePatternParameterPattern.any())
-                        .domainContextApplicationDefault()
-                        .build()
-                )
-                .eventName(TopicNamePatternParameterPattern.anyOf(*createEventNames()))
-                .build()
-        )
 
     // Example topic: utdanning-vurdering-response
     private fun createEventNames(): Array<String> =
-        metamodelService.getComponents()
+        metamodelService
+            .getComponents()
             .map { component -> "${component.domainName}-${component.packageName}-response" }
             .toTypedArray()
 

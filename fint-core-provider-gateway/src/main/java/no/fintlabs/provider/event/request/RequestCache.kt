@@ -14,7 +14,7 @@ import kotlin.math.max
 
 @Component
 class RequestCache(
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -23,16 +23,20 @@ class RequestCache(
 
     var onExpired: Consumer<RequestFintEvent>? = null
 
-    private val requestCache: Cache<String, RequestFintEvent> = Caffeine.newBuilder()
-        .maximumSize(100_000)
-        .expireAfter(RequestExpiryPolicy())
-        .removalListener(::handleRemoval)
-        .build()
+    private val requestCache: Cache<String, RequestFintEvent> =
+        Caffeine
+            .newBuilder()
+            .maximumSize(100_000)
+            .expireAfter(RequestExpiryPolicy())
+            .removalListener(::handleRemoval)
+            .build()
 
-    private val tombstoneCache: Cache<String, Boolean> = Caffeine.newBuilder()
-        .expireAfterWrite(tombstoneTtlMins, TimeUnit.MINUTES)
-        .maximumSize(100_000)
-        .build()
+    private val tombstoneCache: Cache<String, Boolean> =
+        Caffeine
+            .newBuilder()
+            .expireAfterWrite(tombstoneTtlMins, TimeUnit.MINUTES)
+            .maximumSize(100_000)
+            .build()
 
     fun add(event: RequestFintEvent): Boolean {
         if (isTombstoned(event.corrId)) {
@@ -73,14 +77,22 @@ class RequestCache(
      * CRITICAL: Only trigger callback if cause is EXPIRED.
      * explicit removal (EXPLICIT) or replacement (REPLACED) should be ignored.
      */
-    private fun handleRemoval(key: String?, event: RequestFintEvent?, cause: RemovalCause) {
+    private fun handleRemoval(
+        key: String?,
+        event: RequestFintEvent?,
+        cause: RemovalCause,
+    ) {
         if (cause == RemovalCause.EXPIRED && event != null) {
             onExpired?.accept(event)
         }
     }
 
     private inner class RequestExpiryPolicy : Expiry<String, RequestFintEvent> {
-        override fun expireAfterCreate(key: String, value: RequestFintEvent, now: Long): Long {
+        override fun expireAfterCreate(
+            key: String,
+            value: RequestFintEvent,
+            now: Long,
+        ): Long {
             val remainingMillis = value.timeToLive - clock.millis()
 
             // Caffeine requires non-negative nanoseconds
@@ -88,7 +100,18 @@ class RequestCache(
         }
 
         // We don't extend life on update/read, so just return currentDuration
-        override fun expireAfterUpdate(k: String, v: RequestFintEvent, t: Long, d: Long) = d
-        override fun expireAfterRead(k: String, v: RequestFintEvent, t: Long, d: Long) = d
+        override fun expireAfterUpdate(
+            k: String,
+            v: RequestFintEvent,
+            t: Long,
+            d: Long,
+        ) = d
+
+        override fun expireAfterRead(
+            k: String,
+            v: RequestFintEvent,
+            t: Long,
+            d: Long,
+        ) = d
     }
 }

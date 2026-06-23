@@ -24,46 +24,45 @@ open class RequestFintEventConsumer(
     private val metamodelService: MetamodelService,
     private val kafkaConfig: KafkaConfig,
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Bean
-    open fun requestFintEventListenerContainer(): ConcurrentMessageListenerContainer<String, RequestFintEvent> {
-        return parameterizedListenerContainerFactoryService.createRecordListenerContainerFactory(
-            RequestFintEvent::class.java,
-            this::processEvent,
-            ListenerConfiguration
-                .stepBuilder()
-                .groupIdApplicationDefaultWithSuffix(kafkaConfig.groupIdSuffix)
-                .maxPollRecordsKafkaDefault()
-                .maxPollIntervalKafkaDefault()
-                .seekToBeginningOnAssignment()
-                .build(),
-            errorHandlerFactory.createErrorHandler(
-                ErrorHandlerConfiguration
-                    .stepBuilder<RequestFintEvent>()
-                    .noRetries()
-                    .skipFailedRecords()
-                    .build()
+    open fun requestFintEventListenerContainer(): ConcurrentMessageListenerContainer<String, RequestFintEvent> =
+        parameterizedListenerContainerFactoryService
+            .createRecordListenerContainerFactory(
+                RequestFintEvent::class.java,
+                this::processEvent,
+                ListenerConfiguration
+                    .stepBuilder()
+                    .groupIdApplicationDefaultWithSuffix(kafkaConfig.groupIdSuffix)
+                    .maxPollRecordsKafkaDefault()
+                    .maxPollIntervalKafkaDefault()
+                    .seekToBeginningOnAssignment()
+                    .build(),
+                errorHandlerFactory.createErrorHandler(
+                    ErrorHandlerConfiguration
+                        .stepBuilder<RequestFintEvent>()
+                        .noRetries()
+                        .skipFailedRecords()
+                        .build(),
+                ),
+            ).createContainer(
+                EventTopicNamePatternParameters
+                    .builder()
+                    .topicNamePatternPrefixParameters(
+                        TopicNamePatternPrefixParameters
+                            .stepBuilder()
+                            .orgId(TopicNamePatternParameterPattern.any())
+                            .domainContextApplicationDefault()
+                            .build(),
+                    ).eventName(TopicNamePatternParameterPattern.anyOf(*createEventNames()))
+                    .build(),
             )
-        ).createContainer(
-            EventTopicNamePatternParameters
-                .builder()
-                .topicNamePatternPrefixParameters(
-                    TopicNamePatternPrefixParameters
-                        .stepBuilder()
-                        .orgId(TopicNamePatternParameterPattern.any())
-                        .domainContextApplicationDefault()
-                        .build()
-                )
-                .eventName(TopicNamePatternParameterPattern.anyOf(*createEventNames()))
-                .build()
-        )
-    }
 
     // Example topic: utdanning-vurdering-request
     private fun createEventNames(): Array<String> =
-        metamodelService.getComponents()
+        metamodelService
+            .getComponents()
             .map { component -> "${component.domainName}-${component.packageName}-request" }
             .toTypedArray()
 

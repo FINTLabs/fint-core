@@ -7,9 +7,8 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 open class KafkaConfig(
-    @Value($$"${spring.kafka.consumer.group-id:}") groupId: String
+    @Value($$"${spring.kafka.consumer.group-id:}") groupId: String,
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
     val groupIdSuffix: String = createGroupIdSuffix(groupId)
 

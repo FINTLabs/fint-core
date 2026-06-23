@@ -28,8 +28,7 @@ import java.time.Instant
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @EmbeddedKafka(partitions = 1)
 @Import(TestcontainersConfiguration::class)
-class ContractRegistrationIntegrationTest {
-
+class ContractRegistrationIT {
     @Autowired
     private lateinit var context: WebApplicationContext
 
@@ -52,21 +51,24 @@ class ContractRegistrationIntegrationTest {
     fun setup() {
         contractJpaRepository.deleteAll()
 
-        val jwt = Jwt.withTokenValue("mock-token")
-            .header("alg", "none")
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(3600))
-            .claim("cn", username)
-            .claim("fintAssetIDs", orgId)
-            .claim("scope", listOf("fint-adapter"))
-            .claim("Roles", listOf("FINT_Adapter_${domainName}_${packageName}"))
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", orgId)
+                .claim("scope", listOf("fint-adapter"))
+                .claim("Roles", listOf("FINT_Adapter_${domainName}_$packageName"))
+                .build()
         principal = CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_ADAPTER")))
 
-        mockMvc = MockMvcBuilders
-            .webAppContextSetup(context)
-            .apply<DefaultMockMvcBuilder>(springSecurity())
-            .build()
+        mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(context)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
     }
 
     @Test
@@ -95,10 +97,11 @@ class ContractRegistrationIntegrationTest {
         postRegister(contract(capabilities = setOf(capability(resource = "elev"))))
         postRegister(
             contract(
-                capabilities = setOf(
-                    capability(pkg = "vurdering", resource = "elevfravar"),
-                )
-            )
+                capabilities =
+                    setOf(
+                        capability(pkg = "vurdering", resource = "elevfravar"),
+                    ),
+            ),
         )
 
         val stored = contractJpaRepository.findByUserNameWithCapabilities(username).orElseThrow()
@@ -129,34 +132,37 @@ class ContractRegistrationIntegrationTest {
     }
 
     private fun postRegister(contract: AdapterContract) {
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsBytes(contract))
-                .with(authentication(principal))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(contract))
+                    .with(authentication(principal)),
+            ).andExpect(status().isOk)
     }
 
     private fun contract(
         heartbeat: Int = 5,
         capabilities: Set<AdapterCapability> = setOf(capability(resource = "elev")),
-    ): AdapterContract = AdapterContract().apply {
-        this.adapterId = this@ContractRegistrationIntegrationTest.adapterId
-        this.orgId = this@ContractRegistrationIntegrationTest.orgId
-        this.username = this@ContractRegistrationIntegrationTest.username
-        this.heartbeatIntervalInMinutes = heartbeat
-        this.capabilities = capabilities
-    }
+    ): AdapterContract =
+        AdapterContract().apply {
+            this.adapterId = this@ContractRegistrationIT.adapterId
+            this.orgId = this@ContractRegistrationIT.orgId
+            this.username = this@ContractRegistrationIT.username
+            this.heartbeatIntervalInMinutes = heartbeat
+            this.capabilities = capabilities
+        }
 
     private fun capability(
         domain: String = domainName,
         pkg: String = packageName,
         resource: String,
-    ): AdapterCapability = AdapterCapability().apply {
-        this.domainName = domain
-        this.packageName = pkg
-        this.resourceName = resource
-        this.fullSyncIntervalInDays = 1
-        this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
-    }
+    ): AdapterCapability =
+        AdapterCapability().apply {
+            this.domainName = domain
+            this.packageName = pkg
+            this.resourceName = resource
+            this.fullSyncIntervalInDays = 1
+            this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
+        }
 }

@@ -16,7 +16,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 @SpringBootTest
 @EmbeddedKafka
 @ActiveProfiles("utdanning-vurdering")
-class RelationEventServiceTest {
+class RelationEventServiceIT {
     @Autowired
     private lateinit var relationEventService: RelationEventService
 

@@ -3,11 +3,11 @@ package no.fintlabs.provider.security
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import no.fintlabs.provider.kafka.ProviderError
+import no.fintlabs.provider.kafka.ProviderErrorPublisher
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.enums.FintScope
 import no.novari.resource.server.enums.FintType
-import no.fintlabs.provider.kafka.ProviderError
-import no.fintlabs.provider.kafka.ProviderErrorPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -24,8 +24,8 @@ import java.net.URI
 class SecurityProblemDetailHandler(
     private val objectMapper: ObjectMapper,
     private val providerErrorPublisher: ProviderErrorPublisher,
-) : AccessDeniedHandler, AuthenticationEntryPoint {
-
+) : AccessDeniedHandler,
+    AuthenticationEntryPoint {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     override fun handle(
@@ -78,10 +78,11 @@ class SecurityProblemDetailHandler(
         title: String,
         detail: String,
     ) {
-        val problem = ProblemDetail.forStatusAndDetail(status, detail).apply {
-            this.title = title
-            this.instance = URI.create(request.requestURI)
-        }
+        val problem =
+            ProblemDetail.forStatusAndDetail(status, detail).apply {
+                this.title = title
+                this.instance = URI.create(request.requestURI)
+            }
         response.status = status.value()
         response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()

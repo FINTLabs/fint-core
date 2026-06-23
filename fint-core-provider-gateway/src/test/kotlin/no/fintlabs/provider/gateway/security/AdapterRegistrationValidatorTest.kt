@@ -15,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MockKExtension::class)
 class AdapterRegistrationValidatorTest {
-
     @MockK
     lateinit var componentResourceRegistry: ComponentResourceRegistry
 
@@ -81,13 +80,10 @@ class AdapterRegistrationValidatorTest {
         packageName: String = this.packageName,
         resourceName: String = this.resourceName,
         fullSyncIntervalInDays: Int = 1,
-    ) =
-        AdapterCapability().apply {
-            this.domainName = domainName
-            this.packageName = packageName
-            this.resourceName = resourceName
-            this.fullSyncIntervalInDays = fullSyncIntervalInDays
-        }
-
-
+    ) = AdapterCapability().apply {
+        this.domainName = domainName
+        this.packageName = packageName
+        this.resourceName = resourceName
+        this.fullSyncIntervalInDays = fullSyncIntervalInDays
+    }
 }

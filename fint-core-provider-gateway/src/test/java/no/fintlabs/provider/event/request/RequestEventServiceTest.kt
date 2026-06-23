@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test
 import java.util.function.Consumer
 
 class RequestEventServiceTest {
-
     private lateinit var requestCache: RequestCache
     private lateinit var responseProducer: ResponseFintEventProducer
     private lateinit var service: RequestEventService
@@ -43,11 +42,12 @@ class RequestEventServiceTest {
         verify { requestCache.onExpired = capture(callbackSlot) }
         val registeredCallback = callbackSlot.captured
 
-        val requestEvent = RequestFintEvent().apply {
-            corrId = "123"
-            orgId = "fint.no"
-            timeToLive = 60000
-        }
+        val requestEvent =
+            RequestFintEvent().apply {
+                corrId = "123"
+                orgId = "fint.no"
+                timeToLive = 60000
+            }
 
         // Manually invoke the callback (simulating cache calling it)
         registeredCallback.accept(requestEvent)
@@ -64,7 +64,6 @@ class RequestEventServiceTest {
 
     @Nested
     inner class GetEvents {
-
         private val orgId = "fint.no"
         private val otherOrgId = "other.no"
 
@@ -78,14 +77,15 @@ class RequestEventServiceTest {
         @BeforeEach
         fun setupCache() {
             // Mock the cache to return our defined list as a sequence
-            every { requestCache.getAll() } returns sequenceOf(
-                eventFullMatch,
-                eventDiffRes,
-                eventDiffPkg,
-                eventDiffDomain,
-                eventUpperCase,
-                eventOtherOrg
-            )
+            every { requestCache.getAll() } returns
+                sequenceOf(
+                    eventFullMatch,
+                    eventDiffRes,
+                    eventDiffPkg,
+                    eventDiffDomain,
+                    eventUpperCase,
+                    eventOtherOrg,
+                )
         }
 
         @Test
@@ -107,24 +107,26 @@ class RequestEventServiceTest {
 
         @Test
         fun `should filter by domain name (case insensitive)`() {
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                domainName = "Education"
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    domainName = "Education",
+                )
 
             assertThat(result)
                 .hasSize(4)
                 .contains(eventFullMatch, eventDiffRes, eventDiffPkg, eventUpperCase)
-                .doesNotContain(eventDiffDomain, )
+                .doesNotContain(eventDiffDomain)
         }
 
         @Test
         fun `should filter by domain and package name`() {
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                domainName = "education",
-                packageName = "student"
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    domainName = "education",
+                    packageName = "student",
+                )
 
             assertThat(result)
                 .hasSize(3)
@@ -134,12 +136,13 @@ class RequestEventServiceTest {
 
         @Test
         fun `should filter by domain, package and resource name`() {
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                domainName = "education",
-                packageName = "student",
-                resourceName = "person"
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    domainName = "education",
+                    packageName = "student",
+                    resourceName = "person",
+                )
 
             assertThat(result)
                 .hasSize(2)
@@ -149,11 +152,12 @@ class RequestEventServiceTest {
 
         @Test
         fun `should return empty list if filter criteria does not match`() {
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                domainName = "education",
-                packageName = "non-existent-package"
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    domainName = "education",
+                    packageName = "non-existent-package",
+                )
 
             assertThat(result).isEmpty()
         }
@@ -161,29 +165,32 @@ class RequestEventServiceTest {
         @Test
         fun `should limit the result size when size parameter is greater than 0`() {
             // We have 6 valid events for this orgId
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                size = 2
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    size = 2,
+                )
 
             assertThat(result).hasSize(2)
         }
 
         @Test
         fun `should return all matches when size parameter is 0`() {
-            val result = service.getEvents(
-                assets = setOf(orgId),
-                size = 0
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId),
+                    size = 0,
+                )
 
             assertThat(result).hasSize(5)
         }
 
         @Test
         fun `should handle multiple assets in request`() {
-            val result = service.getEvents(
-                assets = setOf(orgId, otherOrgId)
-            )
+            val result =
+                service.getEvents(
+                    assets = setOf(orgId, otherOrgId),
+                )
 
             assertThat(result)
                 .hasSize(6)
@@ -223,14 +230,13 @@ class RequestEventServiceTest {
         org: String?,
         domainName: String?,
         pkg: String?,
-        res: String?
-    ): RequestFintEvent {
-        return RequestFintEvent().apply {
+        res: String?,
+    ): RequestFintEvent =
+        RequestFintEvent().apply {
             corrId = id
             orgId = org
             this.domainName = domainName
             packageName = pkg
             resourceName = res
         }
-    }
 }

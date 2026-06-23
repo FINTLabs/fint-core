@@ -20,31 +20,32 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 class SecurityConfiguration(
     private val securityProblemDetailHandler: SecurityProblemDetailHandler,
 ) {
-
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain =
         http
             .csrf { it.disable() }
             .authorizeHttpRequests { requests ->
                 requests
-                    .requestMatchers(*OPEN_PATHS).permitAll()
-                    .requestMatchers(HttpMethod.POST, SYNC_PATH).access(requireAdapterWithComponent())
-                    .requestMatchers(HttpMethod.PATCH, SYNC_PATH).access(requireAdapterWithComponent())
-                    .requestMatchers(HttpMethod.DELETE, SYNC_PATH).access(requireAdapterWithComponent())
-                    .anyRequest().access(requireAdapter())
-            }
-            .oauth2ResourceServer { oauth2 ->
+                    .requestMatchers(*OPEN_PATHS)
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, SYNC_PATH)
+                    .access(requireAdapterWithComponent())
+                    .requestMatchers(HttpMethod.PATCH, SYNC_PATH)
+                    .access(requireAdapterWithComponent())
+                    .requestMatchers(HttpMethod.DELETE, SYNC_PATH)
+                    .access(requireAdapterWithComponent())
+                    .anyRequest()
+                    .access(requireAdapter())
+            }.oauth2ResourceServer { oauth2 ->
                 oauth2.jwt { jwt ->
                     jwt.jwtAuthenticationConverter(CorePrincipalConverter())
                 }
                 oauth2.authenticationEntryPoint(securityProblemDetailHandler)
                 oauth2.accessDeniedHandler(securityProblemDetailHandler)
-            }
-            .exceptionHandling {
+            }.exceptionHandling {
                 it.authenticationEntryPoint(securityProblemDetailHandler)
                 it.accessDeniedHandler(securityProblemDetailHandler)
-            }
-            .build()
+            }.build()
 
     private fun requireAdapter(): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManager { authentication, _ ->
@@ -68,11 +69,12 @@ class SecurityConfiguration(
 
     companion object {
         private const val SYNC_PATH = "/{domainName}/{packageName}/{entity}"
-        private val OPEN_PATHS = arrayOf(
-            "/swagger-ui/**",
-            "/swagger-ui.html",
-            "/v3/api-docs/**",
-            "/actuator/health",
-        )
+        private val OPEN_PATHS =
+            arrayOf(
+                "/swagger-ui/**",
+                "/swagger-ui.html",
+                "/v3/api-docs/**",
+                "/actuator/health",
+            )
     }
 }

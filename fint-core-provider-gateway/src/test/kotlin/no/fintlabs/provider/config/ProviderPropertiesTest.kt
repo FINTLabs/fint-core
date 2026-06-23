@@ -9,10 +9,11 @@ import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.core.io.ClassPathResource
 
 class ProviderPropertiesTest {
-
     private fun loadFromYaml(resource: String): ProviderProperties {
         val sources = YamlPropertySourceLoader().load("test", ClassPathResource(resource))
-        val environment = org.springframework.core.env.StandardEnvironment()
+        val environment =
+            org.springframework.core.env
+                .StandardEnvironment()
         sources.forEach { environment.propertySources.addFirst(it) }
         return Binder.get(environment).bind("fint.provider", ProviderProperties::class.java).get()
     }
@@ -34,8 +35,11 @@ class ProviderPropertiesTest {
 
         val expectedOrgs = listOf("fintlabs-no", "rogfk-no", "afk-no")
         props.components.forEach { component ->
-            assertEquals(expectedOrgs, component.orgIds,
-                "${component.domainName}-${component.packageName} should have matching org-ids")
+            assertEquals(
+                expectedOrgs,
+                component.orgIds,
+                "${component.domainName}-${component.packageName} should have matching org-ids",
+            )
         }
     }
 

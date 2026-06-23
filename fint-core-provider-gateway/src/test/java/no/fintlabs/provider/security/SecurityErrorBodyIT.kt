@@ -2,10 +2,10 @@ package no.fintlabs.provider.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.AdapterContract
-import no.novari.resource.server.authentication.CorePrincipal
 import no.fintlabs.provider.TestcontainersConfiguration
 import no.fintlabs.provider.kafka.ProviderError
 import no.fintlabs.provider.kafka.ProviderErrorPublisher
+import no.novari.resource.server.authentication.CorePrincipal
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -35,8 +35,7 @@ import java.time.Instant
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @EmbeddedKafka(partitions = 1)
 @Import(TestcontainersConfiguration::class)
-class SecurityErrorBodyIntegrationTest {
-
+class SecurityErrorBodyIT {
     @Autowired
     private lateinit var context: WebApplicationContext
 
@@ -53,20 +52,21 @@ class SecurityErrorBodyIntegrationTest {
 
     @BeforeEach
     fun setup() {
-        mockMvc = MockMvcBuilders
-            .webAppContextSetup(context)
-            .apply<DefaultMockMvcBuilder>(springSecurity())
-            .build()
+        mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(context)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
     }
 
     @Test
     fun `register without authentication returns 401 with ProblemDetail body`() {
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsBytes(AdapterContract()))
-        )
-            .andExpect(status().isUnauthorized)
+        mockMvc
+            .perform(
+                post("/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(AdapterContract())),
+            ).andExpect(status().isUnauthorized)
             .andExpect(header().string("Content-Type", containsString(MediaType.APPLICATION_PROBLEM_JSON_VALUE)))
             .andExpect(jsonPath("$.status").value(401))
             .andExpect(jsonPath("$.title").value("Unauthorized"))
@@ -78,24 +78,26 @@ class SecurityErrorBodyIntegrationTest {
 
     @Test
     fun `register with JWT missing fint-adapter scope returns 403 with ProblemDetail body`() {
-        val jwt = Jwt.withTokenValue("mock-token-value")
-            .header("alg", "none")
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(3600))
-            .claim("cn", username)
-            .claim("fintAssetIDs", orgId)
-            .claim("scope", listOf("some-other-scope"))
-            .claim("Roles", listOf("FINT_Adapter_utdanning_elev"))
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token-value")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", orgId)
+                .claim("scope", listOf("some-other-scope"))
+                .claim("Roles", listOf("FINT_Adapter_utdanning_elev"))
+                .build()
         val principalWithoutAdapterScope = CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_USER")))
 
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsBytes(AdapterContract()))
-                .with(authentication(principalWithoutAdapterScope))
-        )
-            .andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                post("/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(AdapterContract()))
+                    .with(authentication(principalWithoutAdapterScope)),
+            ).andExpect(status().isForbidden)
             .andExpect(header().string("Content-Type", containsString(MediaType.APPLICATION_PROBLEM_JSON_VALUE)))
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.title").value("Forbidden"))
@@ -107,23 +109,25 @@ class SecurityErrorBodyIntegrationTest {
 
     @Test
     fun `register with missing request body returns 400 with ProblemDetail explaining the issue`() {
-        val jwt = Jwt.withTokenValue("mock-token-value")
-            .header("alg", "none")
-            .issuedAt(Instant.now())
-            .expiresAt(Instant.now().plusSeconds(3600))
-            .claim("cn", username)
-            .claim("fintAssetIDs", orgId)
-            .claim("scope", listOf("fint-adapter"))
-            .claim("Roles", listOf("FINT_Adapter_utdanning_elev"))
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token-value")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", orgId)
+                .claim("scope", listOf("fint-adapter"))
+                .claim("Roles", listOf("FINT_Adapter_utdanning_elev"))
+                .build()
         val adapterPrincipal = CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_ADAPTER")))
 
-        mockMvc.perform(
-            post("/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .with(authentication(adapterPrincipal))
-        )
-            .andExpect(status().isBadRequest)
+        mockMvc
+            .perform(
+                post("/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .with(authentication(adapterPrincipal)),
+            ).andExpect(status().isBadRequest)
             .andExpect(header().string("Content-Type", containsString(MediaType.APPLICATION_PROBLEM_JSON_VALUE)))
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.title").value("Bad Request"))

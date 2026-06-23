@@ -17,29 +17,30 @@ import org.springframework.stereotype.Component
 class ResponseEventTopicEnsurer(
     private val eventTopicService: EventTopicService,
     private val responseProducerProperties: ProducerProperties,
-    private val providerProperties: ProviderProperties
+    private val providerProperties: ProviderProperties,
 ) {
-
     @EventListener(ApplicationReadyEvent::class)
     fun ensureResponseEventTopics() {
         providerProperties.components.forEach { component ->
             val partitions = component.responsePartitions ?: responseProducerProperties.partitions
             component.orgIds.forEach { orgId ->
                 eventTopicService.createOrModifyTopic(
-                    EventTopicNameParameters.builder()
+                    EventTopicNameParameters
+                        .builder()
                         .topicNamePrefixParameters(
-                            TopicNamePrefixParameters.stepBuilder()
+                            TopicNamePrefixParameters
+                                .stepBuilder()
                                 .orgId(orgId)
                                 .domainContextApplicationDefault()
-                                .build()
-                        )
-                        .eventName("${component.domainName}-${component.packageName}-response")
+                                .build(),
+                        ).eventName("${component.domainName}-${component.packageName}-response")
                         .build(),
-                    EventTopicConfiguration.stepBuilder()
+                    EventTopicConfiguration
+                        .stepBuilder()
                         .partitions(partitions)
                         .retentionTime(responseProducerProperties.retentionTime)
                         .cleanupFrequency(EventCleanupFrequency.NORMAL)
-                        .build()
+                        .build(),
                 )
             }
         }

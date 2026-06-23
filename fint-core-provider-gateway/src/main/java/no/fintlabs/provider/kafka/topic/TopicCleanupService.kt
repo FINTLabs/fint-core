@@ -46,7 +46,6 @@ class TopicCleanupService(
     private val topicNameService: TopicNameService,
     private val kafkaAdmin: KafkaAdmin,
 ) {
-
     private val logger = LoggerFactory.getLogger(javaClass)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -122,7 +121,9 @@ class TopicCleanupService(
             } else {
                 logger.warn(
                     "Org '{}': deleting {} obsolete topic(s): {}",
-                    orgId, orphansForOrg.size, orphansForOrg
+                    orgId,
+                    orphansForOrg.size,
+                    orphansForOrg,
                 )
                 toDelete += orphansForOrg
             }
@@ -134,7 +135,11 @@ class TopicCleanupService(
      * Filters [existing] to topics that belong to [orgId] (exact `<orgId>.` prefix), contain
      * `fint-core`, and are not in the [expected] keep-set.
      */
-    private fun findOrphans(existing: Set<String>, orgId: String, expected: Set<String>): Set<String> =
+    private fun findOrphans(
+        existing: Set<String>,
+        orgId: String,
+        expected: Set<String>,
+    ): Set<String> =
         existing
             .filter { it.startsWith("$orgId.") && it.contains(FINT_CORE) }
             .filterNot(expected::contains)
@@ -147,7 +152,10 @@ class TopicCleanupService(
      * cancellation before each batch — if the scope is cancelled (e.g. on pod shutdown),
      * a [CancellationException] propagates up and the loop exits cleanly.
      */
-    private suspend fun deleteInBatches(adminClient: AdminClient, toDelete: Set<String>) {
+    private suspend fun deleteInBatches(
+        adminClient: AdminClient,
+        toDelete: Set<String>,
+    ) {
         val batchSize = cleanupTopicsProperties.batchSize.coerceAtLeast(1)
         val batches = toDelete.chunked(batchSize)
         val total = toDelete.size
@@ -158,7 +166,10 @@ class TopicCleanupService(
             deleted += batch.size
             logger.info(
                 "Batch {}/{} done — {}/{} topic(s) deleted",
-                index + 1, batches.size, deleted, total
+                index + 1,
+                batches.size,
+                deleted,
+                total,
             )
             if (index < batches.lastIndex) pauseBetweenBatches()
         }
@@ -208,45 +219,55 @@ class TopicCleanupService(
             PROVIDER_ERROR_EVENT_NAME,
             SYNC_STATUS_EVENT_NAME,
         ).forEach { eventName ->
-            expected += topicNameService.validateAndMapToTopicName(
-                EventTopicNameParameters.builder()
-                    .topicNamePrefixParameters(
-                        TopicNamePrefixParameters.stepBuilder()
-                            .orgIdApplicationDefault()
-                            .domainContextApplicationDefault()
-                            .build()
-                    )
-                    .eventName(eventName)
-                    .build()
-            )
+            expected +=
+                topicNameService.validateAndMapToTopicName(
+                    EventTopicNameParameters
+                        .builder()
+                        .topicNamePrefixParameters(
+                            TopicNamePrefixParameters
+                                .stepBuilder()
+                                .orgIdApplicationDefault()
+                                .domainContextApplicationDefault()
+                                .build(),
+                        ).eventName(eventName)
+                        .build(),
+                )
         }
 
         return expected
     }
 
-    private fun entityTopicName(orgId: String, resourceName: String): String =
+    private fun entityTopicName(
+        orgId: String,
+        resourceName: String,
+    ): String =
         topicNameService.validateAndMapToTopicName(
-            EntityTopicNameParameters.builder()
+            EntityTopicNameParameters
+                .builder()
                 .topicNamePrefixParameters(
-                    TopicNamePrefixParameters.stepBuilder()
+                    TopicNamePrefixParameters
+                        .stepBuilder()
                         .orgId(orgId)
                         .domainContextApplicationDefault()
-                        .build()
-                )
-                .resourceName(resourceName)
-                .build()
+                        .build(),
+                ).resourceName(resourceName)
+                .build(),
         )
 
-    private fun eventTopicName(orgId: String, eventName: String): String =
+    private fun eventTopicName(
+        orgId: String,
+        eventName: String,
+    ): String =
         topicNameService.validateAndMapToTopicName(
-            EventTopicNameParameters.builder()
+            EventTopicNameParameters
+                .builder()
                 .topicNamePrefixParameters(
-                    TopicNamePrefixParameters.stepBuilder()
+                    TopicNamePrefixParameters
+                        .stepBuilder()
                         .orgId(orgId)
                         .domainContextApplicationDefault()
-                        .build()
-                )
-                .eventName(eventName)
-                .build()
+                        .build(),
+                ).eventName(eventName)
+                .build(),
         )
 }

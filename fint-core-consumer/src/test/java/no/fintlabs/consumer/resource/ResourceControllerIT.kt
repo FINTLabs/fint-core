@@ -18,7 +18,7 @@ import org.springframework.test.web.reactive.server.expectBody
 )
 @EmbeddedKafka
 @ActiveProfiles("utdanning-elev")
-class ResourceControllerTest {
+class ResourceControllerIT {
     @LocalServerPort
     private var port: Int = 0
 

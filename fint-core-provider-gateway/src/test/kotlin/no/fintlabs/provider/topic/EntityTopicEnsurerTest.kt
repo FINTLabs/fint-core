@@ -16,7 +16,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class EntityTopicEnsurerTest {
-
     private lateinit var entityTopicService: EntityTopicService
     private val entityKafkaProperties = EntityKafkaProperties()
 
@@ -30,15 +29,16 @@ class EntityTopicEnsurerTest {
         EntityTopicEnsurer(
             entityTopicService,
             entityKafkaProperties,
-            ProviderProperties(components = components)
+            ProviderProperties(components = components),
         )
 
     @Test
     fun `ensureEntityTopics creates a topic for each org-id and component combination`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no")),
-            ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no", "rogfk-no")),
+                ComponentConfig(domainName = "utdanning", "vurdering", listOf("fintlabs-no")),
+            )
 
         sut(components).ensureEntityTopics()
 
@@ -47,21 +47,24 @@ class EntityTopicEnsurerTest {
 
     @Test
     fun `ensureEntityTopics uses resourceName combining domain and packageName`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no"))
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", listOf("fintlabs-no")),
+            )
 
         sut(components).ensureEntityTopics()
 
-        val expected = EntityTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters.stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName("utdanning-elev")
-            .build()
+        val expected =
+            EntityTopicNameParameters
+                .builder()
+                .topicNamePrefixParameters(
+                    TopicNamePrefixParameters
+                        .stepBuilder()
+                        .orgId("fintlabs-no")
+                        .domainContextApplicationDefault()
+                        .build(),
+                ).resourceName("utdanning-elev")
+                .build()
 
         verify(exactly = 1) { entityTopicService.createOrModifyTopic(expected, any()) }
     }
@@ -75,9 +78,10 @@ class EntityTopicEnsurerTest {
 
     @Test
     fun `ensureEntityTopics does nothing when component has no org-ids`() {
-        val components = listOf(
-            ComponentConfig(domainName = "utdanning", "elev", emptyList())
-        )
+        val components =
+            listOf(
+                ComponentConfig(domainName = "utdanning", "elev", emptyList()),
+            )
 
         sut(components).ensureEntityTopics()
 

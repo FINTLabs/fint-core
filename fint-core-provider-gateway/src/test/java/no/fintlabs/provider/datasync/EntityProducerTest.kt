@@ -29,11 +29,10 @@ import org.springframework.kafka.support.SendResult
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.time.Clock
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 class EntityProducerTest {
-
     private lateinit var factory: ParameterizedTemplateFactory
     private lateinit var kafkaProducer: ParameterizedTemplate<Any>
     private lateinit var clock: Clock
@@ -64,33 +63,37 @@ class EntityProducerTest {
         val expectedSyncTotalSize = 9L
         val expectedResourceName = "student"
 
-        val syncPage = SyncPage(expectedSyncType).apply {
-            metadata = SyncPageMetadata().apply {
-                orgId = "fintlabs.no"
-                corrId = expectedSyncCorrId
-                uriRef = "utdanning/elev/$expectedResourceName"
-                totalSize = expectedSyncTotalSize
+        val syncPage =
+            SyncPage(expectedSyncType).apply {
+                metadata =
+                    SyncPageMetadata().apply {
+                        orgId = "fintlabs.no"
+                        corrId = expectedSyncCorrId
+                        uriRef = "utdanning/elev/$expectedResourceName"
+                        totalSize = expectedSyncTotalSize
+                    }
             }
-        }
-        val entry = SyncPageEntry().apply {
-            identifier = UUID.randomUUID().toString()
-            resource = mapOf("id" to 42)
-        }
+        val entry =
+            SyncPageEntry().apply {
+                identifier = UUID.randomUUID().toString()
+                resource = mapOf("id" to 42)
+            }
 
         every { clock.millis() } returns expectedLastModified
 
         val record = sendAndCapture { sut.sendSyncEntity(syncPage, entry) }
 
-        val expected = EntityTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName("utdanning-elev")
-            .build()
+        val expected =
+            EntityTopicNameParameters
+                .builder()
+                .topicNamePrefixParameters(
+                    TopicNamePrefixParameters
+                        .stepBuilder()
+                        .orgId("fintlabs-no")
+                        .domainContextApplicationDefault()
+                        .build(),
+                ).resourceName("utdanning-elev")
+                .build()
 
         assertEquals(expected, record.topicNameParameters)
         assertEquals(expectedLastModified, record.getHeaderValue(LAST_UPDATED).long())
@@ -106,31 +109,34 @@ class EntityProducerTest {
     fun `sendEventEntity builds expected topic and headers`() {
         val expectedLastModified = 133710428L
         val expectedResourceName = "elevfravar"
-        val request = RequestFintEvent().apply {
-            orgId = "fintlabs.no"
-            domainName = "utdanning"
-            packageName = "vurdering"
-            resourceName = expectedResourceName
-        }
-        val entry = SyncPageEntry().apply {
-            identifier = UUID.randomUUID().toString()
-            resource = mapOf("id" to 42)
-        }
+        val request =
+            RequestFintEvent().apply {
+                orgId = "fintlabs.no"
+                domainName = "utdanning"
+                packageName = "vurdering"
+                resourceName = expectedResourceName
+            }
+        val entry =
+            SyncPageEntry().apply {
+                identifier = UUID.randomUUID().toString()
+                resource = mapOf("id" to 42)
+            }
 
         every { clock.millis() } returns expectedLastModified
 
         val record = sendAndCapture { sut.sendEventEntity(request, entry, expectedLastModified) }
 
-        val expected = EntityTopicNameParameters.builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId("fintlabs-no")
-                    .domainContextApplicationDefault()
-                    .build()
-            )
-            .resourceName("utdanning-vurdering")
-            .build()
+        val expected =
+            EntityTopicNameParameters
+                .builder()
+                .topicNamePrefixParameters(
+                    TopicNamePrefixParameters
+                        .stepBuilder()
+                        .orgId("fintlabs-no")
+                        .domainContextApplicationDefault()
+                        .build(),
+                ).resourceName("utdanning-vurdering")
+                .build()
 
         assertEquals(expected, record.topicNameParameters)
         assertEquals(expectedLastModified, record.getHeaderValue(LAST_UPDATED).long())
@@ -143,7 +149,9 @@ class EntityProducerTest {
     }
 
     private fun ByteArray.long(): Long = ByteBuffer.wrap(this).long
+
     private fun ParameterizedProducerRecord<Any>.getHeaderValue(key: String) = this.headers.lastHeader(key).value()
+
     private fun ParameterizedProducerRecord<Any>.getHeader(key: String) = this.headers.lastHeader(key)
 
     private fun sendAndCapture(block: () -> Unit): ParameterizedProducerRecord<Any> {
@@ -154,5 +162,4 @@ class EntityProducerTest {
         block()
         return slot.captured
     }
-
 }

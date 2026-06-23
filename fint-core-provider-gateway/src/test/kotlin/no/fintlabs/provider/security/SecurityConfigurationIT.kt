@@ -33,13 +33,12 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.WebApplicationContext
 
 @SpringBootTest(
-    classes = [SecurityConfigurationTest.TestApp::class],
+    classes = [SecurityConfigurationIT.TestApp::class],
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
 )
-@ActiveProfiles(SecurityConfigurationTest.PROFILE)
+@ActiveProfiles(SecurityConfigurationIT.PROFILE)
 @Import(TestcontainersConfiguration::class)
-class SecurityConfigurationTest {
-
+class SecurityConfigurationIT {
     @Autowired
     private lateinit var context: WebApplicationContext
 
@@ -50,10 +49,11 @@ class SecurityConfigurationTest {
 
     @BeforeEach
     fun setup() {
-        mockMvc = MockMvcBuilders
-            .webAppContextSetup(context)
-            .apply<org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder>(springSecurity())
-            .build()
+        mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(context)
+                .apply<org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder>(springSecurity())
+                .build()
     }
 
     @ParameterizedTest
@@ -69,7 +69,8 @@ class SecurityConfigurationTest {
         ],
     )
     fun `open paths are reachable without authentication even when no handler exists`(path: String) {
-        mockMvc.perform(get(path))
+        mockMvc
+            .perform(get(path))
             .andExpect { result ->
                 val code = result.response.status
                 check(code != 401 && code != 403) { "expected $path to be open, got $code" }
@@ -78,132 +79,148 @@ class SecurityConfigurationTest {
 
     @Test
     fun `unauthenticated request to protected path returns 401`() {
-        mockMvc.perform(get("/status"))
+        mockMvc
+            .perform(get("/status"))
             .andExpect(status().isUnauthorized)
     }
 
     @Test
     fun `client principal is denied on protected path`() {
-        mockMvc.perform(
-            get("/status")
-                .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client")))
-        ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                get("/status")
+                    .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
+            ).andExpect(status().isForbidden)
     }
 
     @Test
     fun `adapter without fint-adapter scope is denied`() {
-        mockMvc.perform(
-            get("/status").with(authentication(adapter(scope = "fint-client")))
-        ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                get("/status").with(authentication(adapter(scope = "fint-client"))),
+            ).andExpect(status().isForbidden)
     }
 
     @Test
     fun `adapter with fint-adapter scope passes baseline check`() {
-        mockMvc.perform(
-            get("/status").with(authentication(adapter()))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                get("/status").with(authentication(adapter())),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `sync endpoint denies adapter without matching component`() {
-        mockMvc.perform(
-            post("/utdanning/vurdering/elev")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-                .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev"))))
-        ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                post("/utdanning/vurdering/elev")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")
+                    .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
+            ).andExpect(status().isForbidden)
     }
 
     @Test
     fun `sync endpoint allows adapter with matching component`() {
-        mockMvc.perform(
-            post("/utdanning/elev/elev")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-                .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev"))))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/utdanning/elev/elev")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")
+                    .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `event POST is unauthenticated rejected`() {
-        mockMvc.perform(
-            post("/event")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-        ).andExpect(status().isUnauthorized)
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isUnauthorized)
     }
 
     @Test
     fun `event POST denies client scope`() {
-        mockMvc.perform(
-            post("/event")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-                .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client")))
-        ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")
+                    .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
+            ).andExpect(status().isForbidden)
     }
 
     @Test
     fun `event POST passes filter chain for any fint-adapter regardless of roles`() {
-        mockMvc.perform(
-            post("/event")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}")
-                .with(authentication(adapter()))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")
+                    .with(authentication(adapter())),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `event GET domain passes filter chain for any fint-adapter regardless of roles`() {
-        mockMvc.perform(
-            get("/event/utdanning").with(authentication(adapter()))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                get("/event/utdanning").with(authentication(adapter())),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `event GET domain-package passes filter chain even when component does not match roles`() {
-        mockMvc.perform(
-            get("/event/utdanning/vurdering")
-                .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev"))))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                get("/event/utdanning/vurdering")
+                    .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `event GET domain-package-resource passes filter chain for any fint-adapter`() {
-        mockMvc.perform(
-            get("/event/utdanning/elev/elev").with(authentication(adapter()))
-        ).andExpect(status().isOk)
+        mockMvc
+            .perform(
+                get("/event/utdanning/elev/elev").with(authentication(adapter())),
+            ).andExpect(status().isOk)
     }
 
     @Test
     fun `event GET denies client scope`() {
-        mockMvc.perform(
-            get("/event/utdanning")
-                .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client")))
-        ).andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                get("/event/utdanning")
+                    .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
+            ).andExpect(status().isForbidden)
     }
 
     private fun adapter(
         scope: String = "fint-adapter",
         roles: List<String> = emptyList(),
-    ): CorePrincipal = principal(
-        cn = "test@adapter.fintlabs.no",
-        scope = scope,
-        roles = roles,
-    )
+    ): CorePrincipal =
+        principal(
+            cn = "test@adapter.fintlabs.no",
+            scope = scope,
+            roles = roles,
+        )
 
     private fun principal(
         cn: String,
         scope: String,
         roles: List<String> = emptyList(),
     ): CorePrincipal {
-        val jwt = Jwt.withTokenValue("token")
-            .header("alg", "none")
-            .claim("cn", cn)
-            .claim("fintAssetIDs", "fintlabs.no")
-            .claim("scope", listOf(scope))
-            .claim("Roles", roles)
-            .build()
+        val jwt =
+            Jwt
+                .withTokenValue("token")
+                .header("alg", "none")
+                .claim("cn", cn)
+                .claim("fintAssetIDs", "fintlabs.no")
+                .claim("scope", listOf(scope))
+                .claim("Roles", roles)
+                .build()
         return CorePrincipal(jwt, emptyList())
     }
 
@@ -230,7 +247,9 @@ class SecurityConfigurationTest {
         fun postEvent(): String = "ok"
 
         @GetMapping("/event/{domainName}")
-        fun getEventsDomain(@PathVariable domainName: String): String = domainName
+        fun getEventsDomain(
+            @PathVariable domainName: String,
+        ): String = domainName
 
         @GetMapping("/event/{domainName}/{packageName}")
         fun getEventsPackage(

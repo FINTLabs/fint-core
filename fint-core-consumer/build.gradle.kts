@@ -16,8 +16,6 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.reflections:reflections:0.10.2")
 
-    testImplementation("org.jetbrains.kotlin:kotlin-test")
-
-    "integrationTestImplementation"("org.testcontainers:kafka")
-    "integrationTestImplementation"("org.awaitility:awaitility-kotlin:4.3.0")
+    testImplementation("org.testcontainers:kafka")
+    testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
 }

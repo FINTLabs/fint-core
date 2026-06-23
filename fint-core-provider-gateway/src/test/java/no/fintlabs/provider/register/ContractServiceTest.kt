@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test
 import java.util.Optional
 
 class ContractServiceTest {
-
     private val contractJpaRepository: ContractJpaRepository = mockk(relaxed = true)
     private val contractService = ContractService(contractJpaRepository)
 
@@ -22,7 +21,6 @@ class ContractServiceTest {
 
     @Nested
     inner class SaveContract {
-
         @Test
         fun `should save contract entity to repository`() {
             val contract = createContract()
@@ -39,11 +37,10 @@ class ContractServiceTest {
 
     @Nested
     inner class AdapterCanPerformCapability {
-
         @Test
         fun `should return true when capability matches`() {
             every { contractJpaRepository.findByUserNameWithCapabilities(adapterId) } returns
-                    Optional.of(createContractEntity())
+                Optional.of(createContractEntity())
 
             val result = contractService.adapterCanPerformCapability(adapterId, "utdanning", "elev", "elev")
 
@@ -53,7 +50,7 @@ class ContractServiceTest {
         @Test
         fun `should return false when capability does not match`() {
             every { contractJpaRepository.findByUserNameWithCapabilities(adapterId) } returns
-                    Optional.of(createContractEntity())
+                Optional.of(createContractEntity())
 
             val result = contractService.adapterCanPerformCapability(adapterId, "utdanning", "elev", "skoleressurs")
 
@@ -72,7 +69,6 @@ class ContractServiceTest {
 
     @Nested
     inner class UserCanAccessAdapter {
-
         @Test
         fun `should return true when username matches`() {
             every { contractJpaRepository.findById(username) } returns Optional.of(createContractEntity())
@@ -84,11 +80,12 @@ class ContractServiceTest {
 
         @Test
         fun `should return false when username does not match`() {
-            every { contractJpaRepository.findById("wrong@user.no") } returns Optional.of(
-                createContractEntity().apply {
-                    adapterId = "something-else"
-                }
-            )
+            every { contractJpaRepository.findById("wrong@user.no") } returns
+                Optional.of(
+                    createContractEntity().apply {
+                        adapterId = "something-else"
+                    },
+                )
 
             val result = contractService.userCanAccessAdapter("wrong@user.no", adapterId)
 
@@ -107,7 +104,6 @@ class ContractServiceTest {
 
     @Nested
     inner class GetAdapterIds {
-
         @Test
         fun `should return adapter ids from repository`() {
             val ids = setOf("adapter-1", "adapter-2")
@@ -119,21 +115,23 @@ class ContractServiceTest {
         }
     }
 
-    private fun createContract(): AdapterContract = AdapterContract().apply {
-        this.adapterId = this@ContractServiceTest.adapterId
-        this.orgId = "test.org.no"
-        this.username = this@ContractServiceTest.username
-        this.heartbeatIntervalInMinutes = 5
-        this.capabilities = setOf(
-            AdapterCapability().apply {
-                this.domainName = "utdanning"
-                this.packageName = "elev"
-                this.resourceName = "elev"
-                this.fullSyncIntervalInDays = 1
-                this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
-            }
-        )
-    }
+    private fun createContract(): AdapterContract =
+        AdapterContract().apply {
+            this.adapterId = this@ContractServiceTest.adapterId
+            this.orgId = "test.org.no"
+            this.username = this@ContractServiceTest.username
+            this.heartbeatIntervalInMinutes = 5
+            this.capabilities =
+                setOf(
+                    AdapterCapability().apply {
+                        this.domainName = "utdanning"
+                        this.packageName = "elev"
+                        this.resourceName = "elev"
+                        this.fullSyncIntervalInDays = 1
+                        this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
+                    },
+                )
+        }
 
     private fun createContractEntity(): ContractEntity = ContractEntity(createContract())
 }
