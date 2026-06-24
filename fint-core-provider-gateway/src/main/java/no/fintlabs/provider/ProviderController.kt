@@ -7,7 +7,7 @@ import no.fintlabs.adapter.models.sync.DeleteSyncPage
 import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
-import no.fintlabs.provider.datasync.SyncPageService
+import no.fintlabs.provider.buffer.SyncPageService
 import no.fintlabs.provider.heartbeat.HeartbeatService
 import no.fintlabs.provider.register.RegistrationService
 import no.fintlabs.provider.security.AdapterRequestValidator

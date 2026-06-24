@@ -3,7 +3,8 @@ package no.fintlabs.provider.datasync
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.provider.TestcontainersConfiguration
-import no.fintlabs.provider.datasync.EntityProducer.Companion.KEY_DELIMITER
+import no.fintlabs.provider.buffer.EntityProducer
+import no.fintlabs.provider.buffer.EntityProducer.Companion.KEY_DELIMITER
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.jupiter.api.Assertions.assertEquals

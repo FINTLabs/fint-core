@@ -1,4 +1,4 @@
-package no.fintlabs.provider.datasync
+package no.fintlabs.provider.buffer
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage

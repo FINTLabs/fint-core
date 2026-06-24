@@ -9,8 +9,9 @@ import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
+import no.fintlabs.provider.buffer.EntityProducer
 import no.fintlabs.provider.config.ProviderProperties
-import no.fintlabs.provider.datasync.EntityProducer.Companion.KEY_DELIMITER
+import no.fintlabs.provider.buffer.EntityProducer.Companion.KEY_DELIMITER
 import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID

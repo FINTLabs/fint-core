@@ -1,4 +1,4 @@
-package no.fintlabs.provider.datasync;
+package no.fintlabs.provider.buffer;
 
 import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.models.sync.SyncPageMetadata;

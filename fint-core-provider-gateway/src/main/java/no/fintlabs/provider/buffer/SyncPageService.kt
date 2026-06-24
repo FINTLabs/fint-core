@@ -1,4 +1,4 @@
-package no.fintlabs.provider.datasync
+package no.fintlabs.provider.buffer
 
 import lombok.RequiredArgsConstructor
 import no.fintlabs.adapter.models.sync.SyncPage
