@@ -12,6 +12,7 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.SyncMetadata
 import no.novari.core.shared.kafka.toHeaderBytes
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
@@ -29,6 +30,8 @@ class BufferWriter(
     companion object {
         const val KEY_DELIMITER = "\u001F"
     }
+
+    val log = LoggerFactory.getLogger(BufferWriter::class.java)
 
     fun sendSyncEntity(
         syncPage: SyncPage,
@@ -66,7 +69,8 @@ class BufferWriter(
         resource: Any?,
         lastModified: Long,
         syncMetadata: SyncMetadata?,
-    ): CompletableFuture<SendResult<String, Any>> =
+    ): CompletableFuture<SendResult<String, Any>> {
+        log.debug("SEND TO KAFKA:: {}", resource)
         kafkaTemplate.send(
             ProducerRecord<String, Any>(
                 topic,
@@ -84,6 +88,7 @@ class BufferWriter(
                 }
             },
         )
+    }
 
     private fun SyncPage.getResourceName() = metadata.uriRef.split("/").last()
 }
