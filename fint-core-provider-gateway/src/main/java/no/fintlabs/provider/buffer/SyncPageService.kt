@@ -12,7 +12,7 @@ import kotlin.time.measureTime
 @RequiredArgsConstructor
 @Service
 class SyncPageService(
-    private val entityProducer: EntityProducer,
+    private val bufferWriter: BufferWriter,
     private val metaDataKafkaProducer: MetaDataKafkaProducer,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -47,7 +47,7 @@ class SyncPageService(
     private fun sendEntities(page: SyncPage) {
         val futures =
             page.resources.map { syncPageEntry ->
-                entityProducer
+                bufferWriter
                     .sendSyncEntity(page, syncPageEntry)
                     .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
             }

@@ -3,8 +3,8 @@ package no.fintlabs.provider.datasync
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.provider.TestcontainersConfiguration
-import no.fintlabs.provider.buffer.EntityProducer
-import no.fintlabs.provider.buffer.EntityProducer.Companion.KEY_DELIMITER
+import no.fintlabs.provider.buffer.BufferWriter
+import no.fintlabs.provider.buffer.BufferWriter.Companion.KEY_DELIMITER
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,7 +26,7 @@ private const val TOPIC = "fintlabs-no.fint-felleskomponent-resource"
 @Import(TestcontainersConfiguration::class)
 class KeyDelimiterIT {
     @Autowired
-    private lateinit var entityProducer: EntityProducer
+    private lateinit var bufferWriter: BufferWriter
 
     @Autowired
     private lateinit var broker: EmbeddedKafkaBroker
@@ -50,7 +50,7 @@ class KeyDelimiterIT {
                 resource = mapOf("id" to 42)
             }
 
-        entityProducer.sendEventEntity(request, entry, 0L).get()
+        bufferWriter.sendEventEntity(request, entry, 0L).get()
 
         val consumerProps = KafkaTestUtils.consumerProps("test-group", "true", broker)
         consumerProps[ConsumerConfig.AUTO_OFFSET_RESET_CONFIG] = "earliest"

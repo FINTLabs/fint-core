@@ -19,7 +19,7 @@ import java.time.Clock
 import java.util.concurrent.CompletableFuture
 
 @Component
-class EntityProducer(
+class BufferWriter(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
     providerProperties: ProviderProperties,
     private val clock: Clock,

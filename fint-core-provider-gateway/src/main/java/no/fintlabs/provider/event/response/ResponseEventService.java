@@ -6,7 +6,7 @@ import no.fintlabs.adapter.models.event.RequestFintEvent;
 import no.fintlabs.adapter.models.event.ResponseFintEvent;
 import no.fintlabs.adapter.operation.OperationType;
 import no.novari.resource.server.authentication.CorePrincipal;
-import no.fintlabs.provider.buffer.EntityProducer;
+import no.fintlabs.provider.buffer.BufferWriter;
 import no.fintlabs.provider.event.request.RequestEventService;
 import no.fintlabs.provider.exception.InvalidOrgIdException;
 import no.fintlabs.provider.exception.InvalidResponseFintEventException;
@@ -23,7 +23,7 @@ public class ResponseEventService {
 
     private final ResponseFintEventProducer responseFintEventProducer;
     private final RequestEventService requestEventService;
-    private final EntityProducer entityProducer;
+    private final BufferWriter bufferWriter;
 
     public void handleEvent(ResponseFintEvent responseFintEvent, CorePrincipal corePrincipal) throws NoRequestFoundException, InvalidOrgIdException {
         RequestFintEvent requestEvent = requestEventService.getEvent(responseFintEvent.getCorrId())
@@ -35,7 +35,7 @@ public class ResponseEventService {
         requestEventService.removeEvent(responseFintEvent.getCorrId());
 
         if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
-            entityProducer.sendEventEntity(requestEvent, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
+            bufferWriter.sendEventEntity(requestEvent, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
         } else {
             log.info("Not sending entity to Kafka because it is a validate event or create request failed");
         }
