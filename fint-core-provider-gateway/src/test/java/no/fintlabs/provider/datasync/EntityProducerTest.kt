@@ -46,7 +46,7 @@ class EntityProducerTest {
 
         val providerProperties = ProviderProperties(orgIdValue = orgId)
 
-        sut = BufferWriter(kafkaTemplate, providerProperties, clock)
+        sut = BufferWriter(kafkaTemplate, clock, expectedTopic)
     }
 
     @AfterEach
