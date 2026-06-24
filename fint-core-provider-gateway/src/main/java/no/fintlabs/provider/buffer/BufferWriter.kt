@@ -12,6 +12,7 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.SyncMetadata
 import no.novari.core.shared.kafka.toHeaderBytes
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.SendResult
 import org.springframework.stereotype.Component
@@ -21,10 +22,9 @@ import java.util.concurrent.CompletableFuture
 @Component
 class BufferWriter(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
-    providerProperties: ProviderProperties,
     private val clock: Clock,
+    @Qualifier("topicBufferName") private val topic: String
 ) {
-    private val topic = "${providerProperties.orgId.asTopicSegment}.fint-felleskomponent-resource"
 
     companion object {
         const val KEY_DELIMITER = "\u001F"
