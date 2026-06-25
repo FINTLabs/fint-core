@@ -7,6 +7,7 @@ fint:
     base-url: http://fint-core-consumer-metamodel:8080
   kafka:
     enable-ssl: true
+  base-url: https://api.felleskomponent.no
 
 novari:
   kafka:
