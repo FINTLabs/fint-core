@@ -40,7 +40,7 @@ fun createFintResources(
         if (size > 0) {
             addSelf(createLink(builder, size, offset))
             if (offset > 0) addPrev(createLink(builder, size, calculatePrev(size, offset)))
-            if (offset + size < totalItems) createLink(builder, size, calculateNext(size, offset))
+            if (offset + size < totalItems) addNext(createLink(builder, size, calculateNext(size, offset)))
         } else {
             addSelf(Link.with(selfUrl))
         }
