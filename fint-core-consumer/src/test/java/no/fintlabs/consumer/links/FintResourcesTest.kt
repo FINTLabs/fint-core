@@ -1,11 +1,9 @@
 package no.fintlabs.consumer.links
 
-import no.fintlabs.model.resource.FintResources
 import no.fintlabs.model.resource.createFintResources
 import no.novari.fint.model.resource.Link
 import no.novari.fint.model.resource.utdanning.elev.ElevResource
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertNull
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
@@ -14,14 +12,13 @@ class FintResourcesTest {
     val baseUrl = "https://test.felleskomponent.no"
     val resourceUri = "utdanning/elev/elev"
 
-    //TODO: Continue here
     // If only one page, should only have self
     @Test
     fun `only self`() {
         val resources = (0..3).map {
             ElevResource()
         }
-        // pageSize 4, total items 4, offset 0
+        // Page with 1-4 of 4 total
         val fintResources = createFintResources(
             baseUrl,
             resourceUri,
@@ -43,7 +40,7 @@ class FintResourcesTest {
         val resources = (0..3).map {
             ElevResource()
         }
-        // pageSize 4, total items 8, offset 0
+        // Page with 1-4 of 8 total
         val fintResources = createFintResources(
             baseUrl,
             resourceUri,
@@ -67,6 +64,7 @@ class FintResourcesTest {
         val resources = (0..3).map {
             ElevResource()
         }
+        // Page with 5-8 of 8 total
         val fintResources = createFintResources(
             baseUrl,
             resourceUri,
@@ -89,6 +87,7 @@ class FintResourcesTest {
         val resources = (0..3).map {
             ElevResource()
         }
+        // Page with 5-8 of 12 total
         val fintResources = createFintResources(
             baseUrl,
             resourceUri,
