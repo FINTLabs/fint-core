@@ -1,9 +1,11 @@
 package no.novari.core.shared.model
 
+// TODO: replace this with ResourceCoordinate
 class ResourceRef(
-    val domainName: String,
-    val packageName: String,
-    val resourceName: String,
+    val domainName: String, // For example "utdanning"
+    val packageName: String, // For example "vurdering"
+    val resourceName: String, // For example "fravarsregistrering"
 ) {
+    // For example "utdanning/vurdering/fravarsregistrering"
     fun toURI() = "$domainName/$packageName/$resourceName"
 }

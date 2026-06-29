@@ -3,14 +3,18 @@ package no.fintlabs.provider.buffer
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
-import no.fintlabs.provider.config.ProviderProperties
 import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
+import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
+import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
+import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.SyncMetadata
 import no.novari.core.shared.kafka.toHeaderBytes
+import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.model.ResourceRef
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -36,9 +40,10 @@ class BufferWriter(
     fun sendSyncEntity(
         syncPage: SyncPage,
         syncEntry: SyncPageEntry,
+        coords: ResourceCoordinate
     ): CompletableFuture<SendResult<String, Any>> =
         send(
-            resourceName = syncPage.getResourceName(),
+            coords,
             resourceId = syncEntry.identifier,
             resource = syncEntry.resource,
             lastModified = clock.millis(),
@@ -51,12 +56,12 @@ class BufferWriter(
         )
 
     fun sendEventEntity(
-        request: RequestFintEvent,
+        coords: ResourceCoordinate,
         syncEntry: SyncPageEntry,
         lastModified: Long,
     ): CompletableFuture<SendResult<String, Any>> =
         send(
-            resourceName = request.resourceName,
+            coords,
             resourceId = syncEntry.identifier,
             resource = syncEntry.resource,
             lastModified = lastModified,
@@ -64,21 +69,24 @@ class BufferWriter(
         )
 
     private fun send(
-        resourceName: String,
+        coords: ResourceCoordinate,
         resourceId: String,
         resource: Any?,
         lastModified: Long,
         syncMetadata: SyncMetadata?,
     ): CompletableFuture<SendResult<String, Any>> {
         log.debug("SEND TO KAFKA:: {}", resource)
-        kafkaTemplate.send(
+        return kafkaTemplate.send(
             ProducerRecord<String, Any>(
                 topic,
-                "$resourceName$KEY_DELIMITER$resourceId",
+                "${coords.resourceName}$KEY_DELIMITER$resourceId",
                 resource,
             ).apply {
                 headers().apply {
-                    add(RESOURCE_NAME, resourceName.toByteArray())
+                    add(DOMAIN_NAME, coords.domainName.toByteArray())
+                    add(ORG_ID, coords.orgId.toByteArray())
+                    add(PACKAGE_NAME, coords.packageName.toByteArray())
+                    add(RESOURCE_NAME, coords.resourceName.toByteArray())
                     add(LAST_MODIFIED, lastModified.toHeaderBytes())
                     syncMetadata?.let {
                         add(SYNC_TYPE, byteArrayOf(it.type.ordinal.toByte()))
@@ -90,5 +98,4 @@ class BufferWriter(
         )
     }
 
-    private fun SyncPage.getResourceName() = metadata.uriRef.split("/").last()
 }

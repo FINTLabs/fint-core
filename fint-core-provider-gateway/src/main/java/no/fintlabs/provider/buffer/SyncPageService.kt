@@ -2,8 +2,8 @@ package no.fintlabs.provider.buffer
 
 import lombok.RequiredArgsConstructor
 import no.fintlabs.adapter.models.sync.SyncPage
-import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
+import no.novari.core.shared.model.ResourceCoordinate
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.concurrent.CompletableFuture
@@ -19,36 +19,30 @@ class SyncPageService(
 
     fun <T : SyncPage> doSync(
         syncPage: T,
-        domainName: String,
-        packageName: String,
-        entity: String,
+        coords: ResourceCoordinate
     ) = syncPage.logSync {
         if (syncPage.syncType == SyncType.DELETE) {
             syncPage.resources.forEach { syncPageEntry -> syncPageEntry.resource = null }
         }
 
-        mutateMetadata(syncPage.metadata, domainName, packageName, entity)
+        // Set time of SyncPage to when we processed it
+        // This lets us see in Status-Service when we have processed this page
+        syncPage.metadata.time = System.currentTimeMillis()
+
         val syncType = syncPage.syncType.toString().lowercase()
         val eventName = "adapter-$syncType-sync"
-        metaDataKafkaProducer.send(syncPage.metadata, eventName)
-        sendEntities(syncPage)
+        metaDataKafkaProducer.send(syncPage.metadata, eventName) // Send to Status-Service
+
+        sendToBuffer(syncPage, coords)
     }
 
-    private fun mutateMetadata(
-        syncPageMetadata: SyncPageMetadata,
-        domainName: String,
-        packageName: String,
-        resourceName: String,
-    ) {
-        syncPageMetadata.time = System.currentTimeMillis()
-        syncPageMetadata.uriRef = domainName.lowercase() + '/' + packageName.lowercase() + '/' + resourceName.lowercase()
-    }
 
-    private fun sendEntities(page: SyncPage) {
+
+    private fun sendToBuffer(page: SyncPage, coords: ResourceCoordinate) {
         val futures =
             page.resources.map { syncPageEntry ->
                 bufferWriter
-                    .sendSyncEntity(page, syncPageEntry)
+                    .sendSyncEntity(page, syncPageEntry, coords)
                     .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
             }
         CompletableFuture.allOf(*futures.toTypedArray()).join()

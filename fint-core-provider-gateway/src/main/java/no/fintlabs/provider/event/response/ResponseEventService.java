@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.models.event.RequestFintEvent;
 import no.fintlabs.adapter.models.event.ResponseFintEvent;
 import no.fintlabs.adapter.operation.OperationType;
+import no.novari.core.shared.model.ResourceCoordinate;
 import no.novari.resource.server.authentication.CorePrincipal;
 import no.fintlabs.provider.buffer.BufferWriter;
 import no.fintlabs.provider.event.request.RequestEventService;
@@ -29,15 +30,22 @@ public class ResponseEventService {
         RequestFintEvent requestEvent = requestEventService.getEvent(responseFintEvent.getCorrId())
                 .orElseThrow(() -> new NoRequestFoundException(responseFintEvent.getCorrId()));
 
+        ResourceCoordinate coords = new ResourceCoordinate(
+                requestEvent.getOrgId(),
+                requestEvent.getDomainName(),
+                requestEvent.getPackageName(),
+                requestEvent.getResourceName()
+        );
+
         validateEvent(requestEvent, responseFintEvent, corePrincipal);
 
         responseFintEventProducer.sendEvent(responseFintEvent, requestEvent);
         requestEventService.removeEvent(responseFintEvent.getCorrId());
 
         if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
-            bufferWriter.sendEventEntity(requestEvent, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
+            bufferWriter.sendEventEntity(coords, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
         } else {
-            log.info("Not sending entity to Kafka because it is a validate event or create request failed");
+            log.info("Not sending entity to Buffer because it is a validate event or create request failed");
         }
     }
 
