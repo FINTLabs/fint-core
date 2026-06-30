@@ -5,6 +5,8 @@ import no.novari.core.shared.model.ResourceRef
 import no.novari.core.shared.nonNullIdentifikators
 import no.novari.fint.model.resource.FintResource
 import no.novari.fint.model.resource.Link
+import no.novari.metamodel.MetamodelService
+import org.springframework.stereotype.Service
 
 /**
  * LinkServices takes a FintResource and then builds all HATEOAS _links, including self links.
@@ -38,27 +40,54 @@ import no.novari.fint.model.resource.Link
  * }
  *
  */
+@Service
 class LinkService(
     private val properties: ProviderProperties,
+    private val metamodelService: MetamodelService,
 ) {
     /**
-     * Used only once per resource on resource arrival.
+     * Used once when retrieved from Buffer, to ensure correct links before inserting into database.
      * We also reset self links because we do not trust they are set correctly on arrival.
      */
     fun mapLinks(
         resourceRef: ResourceRef,
         resource: FintResource,
     ) {
-        // Reset self links
+        resource.links.remove("self") // Delete self links, we will generate correct ones later
+        resource.removeInvalidLinks()
+        // then generateCompleteLinks
+        generateCompleteLinks(resourceRef, resource)
+        // Then reset self
         resetSelfLinks(resourceRef, resource)
 
-        // Fjern invalid links
-        resource.removeInvalidLinks()
-
-        // Generer ufullstendige links
+        // Generer fullstendige links
 
         // Relative lenker, kun id-felt og verdi
         // Korrekt fullstendig lenke, må valideres
+    }
+
+    fun generateCompleteLinks(
+        resourceRef: ResourceRef,
+        resource: FintResource,
+    ) {
+        metamodelService.getResource(resourceRef.domainName, resourceRef.packageName, resourceRef.resourceName)?.let { metaResource ->
+            resource.links.forEach { (relationName, links) ->
+                val className = metaResource.relations.first { it.name == relationName }.packageName
+
+                links.forEach { link ->
+                    val (idField, idValue) = link.href.split("/").takeLast(2)
+                    if (className.contains("felles")) {
+                        link.setVerdi("${properties.baseUrl}/${resourceRef.toURI()}/${idField.lowercase()}/$idValue")
+                    } else {
+                        // className is for example no.novari.fint.model.utdanning.elev.Elevforhold
+                        val (domainName, packageName, resourceName) = className.split(".").takeLast(3)
+                        link.setVerdi(
+                            "${properties.baseUrl}/$domainName/$packageName/${resourceName.lowercase()}/${idField.lowercase()}/$idValue",
+                        )
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -103,6 +132,9 @@ class LinkService(
         }
 
         resource.links["self"] = selfLinks
+    }
+
+    fun deleteSelfLinks() {
     }
 
     /**

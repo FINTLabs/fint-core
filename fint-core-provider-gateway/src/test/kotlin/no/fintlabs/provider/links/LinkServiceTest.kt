@@ -7,9 +7,14 @@ import no.novari.core.shared.model.ResourceRef
 import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.model.resource.Link
 import no.novari.fint.model.resource.utdanning.elev.ElevResource
+import no.novari.fint.model.utdanning.elev.Elevforhold
+import no.novari.metamodel.ComponentBuilder
+import no.novari.metamodel.MetamodelService
+import no.novari.metamodel.ReflectionService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.springframework.boot.test.context.SpringBootTest
 
 class LinkServiceTest {
     private val baseUrl = "https://test.felleskomponent.no"
@@ -18,7 +23,10 @@ class LinkServiceTest {
             every { baseUrl } returns this@LinkServiceTest.baseUrl
         }
 
-    private val linkService = LinkService(properties)
+    private val reflectionService = ReflectionService()
+    private val componentBuilder = ComponentBuilder(reflectionService)
+    private val metamodelService = MetamodelService(componentBuilder)
+    private val linkService = LinkService(properties, metamodelService)
 
     @Test
     fun `resetSelfLink resets self links and generates absolute url's from existing identifiers`() {
@@ -66,5 +74,48 @@ class LinkServiceTest {
         linkService.resetSelfLinks(resourceRef, resource)
 
         assertTrue(resource.selfLinks.isEmpty())
+    }
+
+    @Test
+    fun `mapLinks set correct HATEOAS links`() {
+        val resource = ElevResource()
+
+        resource.brukernavn = Identifikator().apply { identifikatorverdi = "Test" }
+        resource.elevnummer = Identifikator().apply { identifikatorverdi = "456" }
+        resource.person.add(Link.with("fodselsnummer/123"))
+        resource.person.add(null)
+        resource.person.add(Link(null))
+        resource.person.add(Link(""))
+
+        val resourceRef = ResourceRef("utdanning", "elev", "elev")
+        val componentUrl = "$baseUrl/${resourceRef.toURI()}"
+
+        linkService.mapLinks(resourceRef, resource)
+
+        assertEquals("$componentUrl/fodselsnummer/123", resource.person.first().href)
+
+        assertEquals(2, resource.selfLinks.size) // Assert that both identificators got links
+        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/Test" })
+        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/elevnummer/456" })
+
+        assertEquals(1, resource.person.size) // Assert that invalid links are removed
+    }
+
+    @Test
+    fun `mapLinks keeps case in identifiers and lower cases in the rest of the link`() {
+        val resource = ElevResource()
+
+        resource.brukernavn = Identifikator().apply { identifikatorverdi = "Test" }
+        resource.elevnummer = Identifikator().apply { identifikatorverdi = "456" }
+        resource.addElevforhold(Link.with("SYstEmID/ABCdef")) // "https://.../systemid/ABCdef
+        resource.addPerson(Link.with("fodselsnummer/123"))
+
+        val resourceRef = ResourceRef("utdanning", "elev", "elev")
+        val componentUrl = "$baseUrl/${resourceRef.toURI()}"
+
+        linkService.mapLinks(resourceRef, resource)
+
+        assertEquals("$baseUrl/utdanning/elev/elevforhold/systemid/ABCdef", resource.elevforhold.first().href)
+        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/Test" })
     }
 }
