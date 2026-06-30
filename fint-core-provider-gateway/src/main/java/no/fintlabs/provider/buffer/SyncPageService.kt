@@ -19,7 +19,7 @@ class SyncPageService(
 
     fun <T : SyncPage> doSync(
         syncPage: T,
-        coords: ResourceCoordinate
+        coords: ResourceCoordinate,
     ) = syncPage.logSync {
         if (syncPage.syncType == SyncType.DELETE) {
             syncPage.resources.forEach { syncPageEntry -> syncPageEntry.resource = null }
@@ -36,9 +36,10 @@ class SyncPageService(
         sendToBuffer(syncPage, coords)
     }
 
-
-
-    private fun sendToBuffer(page: SyncPage, coords: ResourceCoordinate) {
+    private fun sendToBuffer(
+        page: SyncPage,
+        coords: ResourceCoordinate,
+    ) {
         val futures =
             page.resources.map { syncPageEntry ->
                 bufferWriter

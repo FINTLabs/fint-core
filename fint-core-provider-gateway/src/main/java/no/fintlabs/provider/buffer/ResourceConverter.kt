@@ -3,11 +3,8 @@ package no.fintlabs.provider.buffer
 import com.fasterxml.jackson.databind.ObjectMapper
 import lombok.RequiredArgsConstructor
 import lombok.extern.slf4j.Slf4j
-import no.fintlabs.provider.links.LinkService
-import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.model.resource.FintResource
 import no.novari.metamodel.MetamodelService
-
 import org.springframework.stereotype.Service
 
 @Service
@@ -28,7 +25,5 @@ class ResourceConverter(
     ): FintResource =
         metaModelService.getResource(domainName, packageName, resourceName)?.let {
             objectMapper.convertValue(resource, it.resourceClass)
-        }?: throw RuntimeException() // TODO create custom exception
-
-
+        } ?: throw RuntimeException() // TODO create custom exception
 }

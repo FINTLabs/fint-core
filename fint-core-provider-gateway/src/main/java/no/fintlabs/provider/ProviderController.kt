@@ -117,12 +117,13 @@ class ProviderController(
 //            entity,
 //        )
 
-        val coords = ResourceCoordinate(
-            corePrincipal.orgId,
-            domainName,
-            packageName,
-            resourceName
-        )
+        val coords =
+            ResourceCoordinate(
+                corePrincipal.orgId,
+                domainName,
+                packageName,
+                resourceName,
+            )
         syncPageService.doSync(syncPage, coords)
         return ResponseEntity.status(status).build()
     }

@@ -53,7 +53,7 @@ class TopicCleanupServiceTest {
         batchSize: Int = 10,
         batchDelay: Duration = Duration.ZERO,
     ) = TopicCleanupService(
-        ProviderProperties(orgIdValue = "fintlabs.no", components = components),
+        ProviderProperties(orgIdValue = "fintlabs.no", components = components, baseUrl = ""),
         CleanupTopicsProperties(
             enabled = true,
             batchSize = batchSize,

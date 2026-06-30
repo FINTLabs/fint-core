@@ -102,8 +102,7 @@ class ResourceController(
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
         @PathVariable corrId: String,
-    ): ResponseEntity<Any?> =
-        ResponseEntity.ok().build()
+    ): ResponseEntity<Any?> = ResponseEntity.ok().build()
 
     @PostMapping
     fun postResource(
@@ -147,4 +146,3 @@ class ResourceController(
         private val logger = LoggerFactory.getLogger(ResourceController::class.java)
     }
 }
-

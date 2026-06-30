@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service
 @Service
 class ResourceService(
     private val cacheService: CacheService,
-    private val consumerConfiguration: ConsumerConfiguration
+    private val consumerConfiguration: ConsumerConfiguration,
 ) {
     fun getResources(
         resourceRef: ResourceRef,
@@ -28,7 +28,7 @@ class ResourceService(
             resources,
             offset,
             size,
-            cache.size
+            cache.size,
         )
     }
 

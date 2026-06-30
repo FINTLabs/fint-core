@@ -3,14 +3,14 @@ package no.fintlabs.provider.buffer
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
+import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
+import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
+import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
-import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
-import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
-import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.SyncMetadata
 import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.model.ResourceCoordinate
@@ -28,9 +28,8 @@ import java.util.concurrent.CompletableFuture
 class BufferWriter(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
     private val clock: Clock,
-    @Qualifier("topicBufferName") private val topic: String
+    @Qualifier("topicBufferName") private val topic: String,
 ) {
-
     companion object {
         const val KEY_DELIMITER = "\u001F"
     }
@@ -40,7 +39,7 @@ class BufferWriter(
     fun sendSyncEntity(
         syncPage: SyncPage,
         syncEntry: SyncPageEntry,
-        coords: ResourceCoordinate
+        coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =
         send(
             coords,
@@ -97,5 +96,4 @@ class BufferWriter(
             },
         )
     }
-
 }

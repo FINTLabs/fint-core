@@ -16,15 +16,17 @@ import java.time.Instant
 
 // READs Kafka buffer, and writes to database.
 @Component
-class BufferReader(private val resourceStore: ResourceStore, private val resourceConverter: ResourceConverter) {
-
+class BufferReader(
+    private val resourceStore: ResourceStore,
+    private val resourceConverter: ResourceConverter,
+) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
 
     @KafkaListener(topics = ["#{topicBufferName}"], groupId = "consumer-service-group")
     fun readMessage(record: ConsumerRecord<String, FintResource>) {
         log.debug("READ FROM KAFKA:: {}", record.value())
 
-        //Convert to FintRecord
+        // Convert to FintRecord
         processRecord(record)
     }
 
@@ -33,19 +35,16 @@ class BufferReader(private val resourceStore: ResourceStore, private val resourc
             record.value().identifikators.toString(),
             resourceCoordinate(record.headers()),
             record.value(),
-            Instant.now()
+            Instant.now(),
         )
     }
 
     // To set destination for a kafka message. For example utdanning-vurdering
-    private fun resourceCoordinate(headers: Headers): ResourceCoordinate {
-        return ResourceCoordinate(
+    private fun resourceCoordinate(headers: Headers): ResourceCoordinate =
+        ResourceCoordinate(
             headers.lastHeader(ORG_ID).toString(),
             headers.lastHeader(PACKAGE_NAME).toString(),
             headers.lastHeader(DOMAIN_NAME).toString(),
-            headers.lastHeader(RESOURCE_NAME).toString()
-
+            headers.lastHeader(RESOURCE_NAME).toString(),
         )
-    }
-
 }

@@ -1,5 +1,7 @@
 package no.novari.core.shared.model
 
+import no.novari.fint.model.resource.Link
+
 // TODO: replace this with ResourceCoordinate
 class ResourceRef(
     val domainName: String, // For example "utdanning"

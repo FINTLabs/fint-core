@@ -9,7 +9,7 @@ data class ProviderProperties(
     @param:Name("org-id")
     private val orgIdValue: String,
     val components: List<ComponentConfig> = emptyList(),
-    val baseUrl: String
+    val baseUrl: String = "https://api.felleskomponent.no",
 ) {
     val orgId: OrgId get() = OrgId.from(orgIdValue)
 }

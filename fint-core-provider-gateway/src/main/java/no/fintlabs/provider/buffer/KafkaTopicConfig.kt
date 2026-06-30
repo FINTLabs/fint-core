@@ -11,14 +11,15 @@ import org.springframework.kafka.config.TopicBuilder
 
 @Configuration
 class KafkaTopicConfig(
-    @Qualifier("topicBufferName") private val topic: String
+    @Qualifier("topicBufferName") private val topic: String,
 ) {
-
     @Bean
-    fun kafkaTopic() = TopicBuilder.name(topic)
-        .partitions(1)
-        .replicas(1)
-        .config(CLEANUP_POLICY_CONFIG, "$CLEANUP_POLICY_COMPACT, $CLEANUP_POLICY_DELETE")
-        .config(RETENTION_MS_CONFIG, "2592000000")
-        .build()
+    fun kafkaTopic() =
+        TopicBuilder
+            .name(topic)
+            .partitions(1)
+            .replicas(1)
+            .config(CLEANUP_POLICY_CONFIG, "$CLEANUP_POLICY_COMPACT, $CLEANUP_POLICY_DELETE")
+            .config(RETENTION_MS_CONFIG, "2592000000")
+            .build()
 }
