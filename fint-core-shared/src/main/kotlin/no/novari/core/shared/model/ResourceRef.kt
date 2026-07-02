@@ -9,5 +9,5 @@ class ResourceRef(
     val resourceName: String, // For example "fravarsregistrering"
 ) {
     // For example "utdanning/vurdering/fravarsregistrering"
-    fun toURI() = "$domainName/$packageName/$resourceName"
+    fun toURI() = "$domainName/$packageName/$resourceName".lowercase()
 }
