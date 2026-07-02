@@ -14,6 +14,7 @@ import no.novari.metamodel.ReflectionService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class LinkServiceTest {
     private val baseUrl = "https://test.felleskomponent.no"
@@ -81,10 +82,10 @@ class LinkServiceTest {
 
         resource.brukernavn = Identifikator().apply { identifikatorverdi = "Test" }
         resource.elevnummer = Identifikator().apply { identifikatorverdi = "456" }
-        resource.person.add(Link.with("fodselsnummer/123"))
-        resource.person.add(null)
-        resource.person.add(Link(null))
-        resource.person.add(Link(""))
+        resource.addPerson(Link.with("fodselsnummer/123"))
+        resource.addPerson(null)
+        resource.addPerson(Link(null))
+        resource.addPerson(Link(""))
 
         val resourceRef = ResourceRef("utdanning", "elev", "elev")
         val componentUrl = "$baseUrl/${resourceRef.toURI()}"
@@ -117,4 +118,12 @@ class LinkServiceTest {
         assertEquals("$baseUrl/utdanning/elev/elevforhold/systemid/ABCdef", resource.elevforhold.first().href)
         assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/Test" })
     }
+
+    @Test
+    fun `Unknown resourceRef throws exception`() {
+        val resourceRef = ResourceRef("utdanning", "vurdering", "not-a-resource")
+        assertThrows<RuntimeException> { linkService.mapLinks(resourceRef, ElevResource()) }
+    }
+
+
 }

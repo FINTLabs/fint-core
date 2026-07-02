@@ -3,6 +3,7 @@ package no.fintlabs.provider.links
 import no.fintlabs.provider.config.ProviderProperties
 import no.novari.core.shared.model.ResourceRef
 import no.novari.core.shared.nonNullIdentifikators
+import no.novari.fint.model.FintRelation
 import no.novari.fint.model.resource.FintResource
 import no.novari.fint.model.resource.Link
 import no.novari.metamodel.MetamodelService
@@ -55,40 +56,50 @@ class LinkService(
     ) {
         resource.links.remove("self") // Delete self links, we will generate correct ones later
         resource.removeInvalidLinks()
-        // then generateCompleteLinks
         generateCompleteLinks(resourceRef, resource)
-        // Then reset self
         resetSelfLinks(resourceRef, resource)
-
-        // Generer fullstendige links
-
-        // Relative lenker, kun id-felt og verdi
-        // Korrekt fullstendig lenke, må valideres
+        resource.nestedResources.forEach {
+            mapLinks(it.javaClass.name.toResourceRef(), it)
+        }
     }
 
+    /**
+     * Generates completed links for each link in the [resource].
+     * If the link refers to a common resource, it inherits the [resourceRef] from the resource.
+     */
     fun generateCompleteLinks(
         resourceRef: ResourceRef,
         resource: FintResource,
-    ) {
-        metamodelService.getResource(resourceRef.domainName, resourceRef.packageName, resourceRef.resourceName)?.let { metaResource ->
-            resource.links.forEach { (relationName, links) ->
-                val className = metaResource.relations.first { it.name == relationName }.packageName
+    ) = resourceRef.getMetaResource()?.let { metaResource ->
+        resource.links.forEach { (relationName, links) ->
+            val className = metaResource.relations.first { it.name == relationName }
+            val relationResourceRef = className.packageName.toResourceRef()
 
-                links.forEach { link ->
-                    val (idField, idValue) = link.href.split("/").takeLast(2)
-                    if (className.contains("felles")) {
-                        link.setVerdi("${properties.baseUrl}/${resourceRef.toURI()}/${idField.lowercase()}/$idValue")
-                    } else {
-                        // className is for example no.novari.fint.model.utdanning.elev.Elevforhold
-                        val (domainName, packageName, resourceName) = className.split(".").takeLast(3)
-                        link.setVerdi(
-                            "${properties.baseUrl}/$domainName/$packageName/${resourceName.lowercase()}/${idField.lowercase()}/$idValue",
-                        )
-                    }
+            links.forEach { link ->
+                val (idField, idValue) = link.href.split("/").takeLast(2)
+                if (relationResourceRef.isCommonResource()) {
+                    link.setVerdi(resourceRef.toHref(idField, idValue))
+                } else {
+                    link.setVerdi(relationResourceRef.toHref(idField, idValue))
                 }
             }
         }
-    }
+    } ?: throw RuntimeException("Could not find meta resource for ${resourceRef.toURI()}")
+
+    /**
+     * If the resource is a common resource the package name is "felles".
+     */
+    private fun ResourceRef.isCommonResource() = packageName == "felles"
+
+    /**
+     * The String is expected to be a java class name.
+     * The [ResourceRef.packageName] could be "felles" if it's a common resource.
+     */
+    private fun String.toResourceRef() =
+        split(".",).takeLast(3)
+            .let { (domainName, packageName, resourceName) -> ResourceRef(domainName, packageName, resourceName) }
+
+    private fun ResourceRef.getMetaResource() = metamodelService.getResource(domainName, packageName, resourceName)
 
     /**
      * Iterate over non-null identifiers of a resource and populate those in self links.
@@ -128,7 +139,7 @@ class LinkService(
 
         // https://api.felleskomponent.no/<domain>/<package>/<resource>/idField/idValue
         resource.nonNullIdentifikators().entries.forEach { (idField, identifikator) ->
-            selfLinks.add(resourceRef.toLink(idField, identifikator.identifikatorverdi))
+            selfLinks.add(Link.with(resourceRef.toHref(idField, identifikator.identifikatorverdi)))
         }
 
         resource.links["self"] = selfLinks
@@ -141,10 +152,10 @@ class LinkService(
      * Generates an absolute Fint link in lowercase except the idValue.
      * idValue is case-sensetive on look-up, so we don't mutate it.
      */
-    fun ResourceRef.toLink(
+    fun ResourceRef.toHref(
         idField: String,
         idValue: String,
-    ): Link = Link.with("${properties.baseUrl}/$domainName/$packageName/$resourceName/${idField.lowercase()}/$idValue")
+    ): String = "${properties.baseUrl}/${toURI()}/${idField.lowercase()}/$idValue"
 
     fun FintResource.removeInvalidLinks() = links.values.forEach { it.retainAll { link -> link.isValid() } }
 
