@@ -4,7 +4,6 @@ package no.fintlabs.provider.security;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import no.novari.resource.server.authentication.CorePrincipal;
-import no.fintlabs.provider.exception.*;
 import no.fintlabs.provider.register.ContractJpaRepository;
 import no.fintlabs.provider.register.ContractService;
 import org.springframework.stereotype.Component;

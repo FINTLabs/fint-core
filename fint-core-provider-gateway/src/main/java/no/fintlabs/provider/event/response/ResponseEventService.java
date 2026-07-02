@@ -7,12 +7,12 @@ import no.fintlabs.adapter.models.event.ResponseFintEvent;
 import no.fintlabs.adapter.operation.OperationType;
 import no.novari.core.shared.model.ResourceCoordinate;
 import no.novari.resource.server.authentication.CorePrincipal;
-import no.fintlabs.provider.buffer.BufferWriter;
+import no.fintlabs.provider.sync.BufferWriter;
 import no.fintlabs.provider.event.request.RequestEventService;
-import no.fintlabs.provider.exception.InvalidOrgIdException;
-import no.fintlabs.provider.exception.InvalidResponseFintEventException;
-import no.fintlabs.provider.exception.InvalidSyncPageEntryException;
-import no.fintlabs.provider.exception.NoRequestFoundException;
+import no.fintlabs.provider.event.InvalidOrgIdException;
+import no.fintlabs.provider.event.InvalidResponseFintEventException;
+import no.fintlabs.provider.sync.InvalidSyncPageEntryException;
+import no.fintlabs.provider.event.NoRequestFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;

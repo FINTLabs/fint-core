@@ -1,8 +1,6 @@
 package no.fintlabs.provider.security;
 
 import no.novari.resource.server.authentication.CorePrincipal;
-import no.fintlabs.provider.exception.InvalidOrgId;
-import no.fintlabs.provider.exception.InvalidUsername;
 import no.fintlabs.provider.register.ContractJpaRepository;
 import no.fintlabs.provider.register.ContractService;
 import org.junit.jupiter.api.Test;

@@ -7,8 +7,6 @@ import no.fintlabs.adapter.models.event.ResponseFintEvent;
 import no.novari.resource.server.authentication.CorePrincipal;
 import no.fintlabs.provider.event.request.RequestEventService;
 import no.fintlabs.provider.event.response.ResponseEventService;
-import no.fintlabs.provider.exception.InvalidOrgIdException;
-import no.fintlabs.provider.exception.NoRequestFoundException;
 import no.fintlabs.provider.security.AdapterRequestValidator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

@@ -3,7 +3,6 @@ package no.fintlabs.provider.register;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.models.AdapterContract;
-import no.fintlabs.provider.security.AdapterRegistrationValidator;
 import org.springframework.stereotype.Service;
 
 @Slf4j
