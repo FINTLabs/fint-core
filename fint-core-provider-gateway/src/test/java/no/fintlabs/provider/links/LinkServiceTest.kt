@@ -124,6 +124,4 @@ class LinkServiceTest {
         val resourceRef = ResourceRef("utdanning", "vurdering", "not-a-resource")
         assertThrows<RuntimeException> { linkService.mapLinks(resourceRef, ElevResource()) }
     }
-
-
 }

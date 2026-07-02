@@ -96,7 +96,8 @@ class LinkService(
      * The [ResourceRef.packageName] could be "felles" if it's a common resource.
      */
     private fun String.toResourceRef() =
-        split(".",).takeLast(3)
+        split(".")
+            .takeLast(3)
             .let { (domainName, packageName, resourceName) -> ResourceRef(domainName, packageName, resourceName) }
 
     private fun ResourceRef.getMetaResource() = metamodelService.getResource(domainName, packageName, resourceName)
