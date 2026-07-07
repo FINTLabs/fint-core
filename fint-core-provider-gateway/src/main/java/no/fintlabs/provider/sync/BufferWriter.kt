@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture
 class BufferWriter(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
     private val clock: Clock,
-    @Qualifier("topicBufferName") private val topic: String,
+    @param:Qualifier("topicBufferName") private val topic: String,
 ) {
     companion object {
         const val KEY_DELIMITER = "\u001F"
