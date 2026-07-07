@@ -17,7 +17,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.util.UUID
 
 class SyncControllerIT : GatewayIntegrationTestBase() {
-
     // TODO: This test should happen in the security layer of spring, not the controller
     @Test
     @Disabled("Enable in next iteration - where we enable contract validation")
