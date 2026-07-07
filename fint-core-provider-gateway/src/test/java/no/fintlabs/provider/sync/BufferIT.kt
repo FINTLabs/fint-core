@@ -6,6 +6,7 @@ import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.model.resource.utdanning.elev.ElevResource
 import org.apache.kafka.clients.admin.AdminClient
@@ -94,6 +95,13 @@ class BufferIT(
     fun `tests sends resource to buffer topic`() {
         val resource = SyncPageEntry.of("123", createElev())
 
+        val resourceCoordinate =
+            ResourceCoordinate(
+                "fintlabs.no",
+                "utdanning",
+                "elev",
+                "elev",
+            )
         val sync =
             SyncPage(
                 SyncPageMetadata(
@@ -104,13 +112,13 @@ class BufferIT(
                     1L,
                     1L,
                     1L,
-                    "beta.felleskomponent.no/utdanning/utdanning/elev",
+                    "beta.felleskomponent.no/utdanning/elev",
                     1782300748715L,
                 ),
                 listOf(resource),
                 SyncType.FULL,
             )
-//        writer.sendSyncEntity(sync, resource)
+        writer.sendSyncEntity(sync, resource, resourceCoordinate)
         verify(reader, timeout(5000).times(1))
             .readMessage(any())
     }
