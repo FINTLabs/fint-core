@@ -4,6 +4,7 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.nonNullIdentifikators
 import no.novari.fint.model.resource.FintResource
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.findById
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -33,4 +34,12 @@ class ResourceStore(
 
         template.save(resourceEntry, resourceCoordinate.toCollectionName().value)
     }
+
+    fun read(
+        resourceId: String,
+        resourceCoordinate: ResourceCoordinate,
+    ) = template.findById<ResourceEntry>(
+        resourceId,
+        resourceCoordinate.toCollectionName().value,
+    )
 }

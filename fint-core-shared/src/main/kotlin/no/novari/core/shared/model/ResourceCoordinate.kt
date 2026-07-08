@@ -31,5 +31,5 @@ data class ResourceCoordinate(
      * `<assetId>_<domainName>_<packageName>_<resourceName>`.
      * `fintlabs.no_utdanning_vurdering_elevfravar`
      */
-    fun toCollectionName(): CollectionName = CollectionName("${orgId}_${domainName}_${packageName}_$resourceName")
+    fun toCollectionName(): CollectionName = CollectionName("${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName")
 }
