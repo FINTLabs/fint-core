@@ -1,36 +1,52 @@
 package no.fintlabs.consumer.resource
 
-import no.fintlabs.cache.CacheService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.model.resource.FintResources
 import no.fintlabs.model.resource.createFintResources
-import no.novari.core.shared.model.ResourceRef
+import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.model.resource.FintResource
+import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.stereotype.Service
+import kotlin.time.Instant
 
 @Service
 class ResourceService(
-    private val cacheService: CacheService,
     private val consumerConfiguration: ConsumerConfiguration,
+    private val resourceStore: ResourceStore,
 ) {
     fun getResources(
-        resourceRef: ResourceRef,
+        resourceCoordinate: ResourceCoordinate,
         size: Int,
-        offset: Int,
-        sinceTimeStamp: Long,
+        offset: Long,
+        sinceTimeStamp: Long?,
         filter: String?,
     ): FintResources {
-        val cache = cacheService.getCache(resourceRef.resourceName)
-        val resources = cache.getList(size.toLong(), offset.toLong(), sinceTimeStamp, filter)
+        val criteria = sinceTimeStamp.toCriteria()
+        val resources =
+            if (size == 0) {
+                // find all resources in a collection
+                // This should not be allowed, but since our customers already uses it, we have to implement it
+                // to not break the contract.
+                resourceStore.findAll(resourceCoordinate.toCollectionName())
+            } else {
+                resourceStore.findPage(criteria, size, offset, resourceCoordinate.toCollectionName())
+            }
+        // pagination
         return createFintResources(
             consumerConfiguration.baseUrl,
-            resourceRef.toURI(),
-            resources,
+            resourceCoordinate.toResourceUri(),
+            resources.map { it.data },
             offset,
             size,
-            cache.size,
+            resources.size,
         )
     }
+
+    fun Long?.toCriteria() =
+        this?.let {
+            Criteria.where("lastModified").gte(Instant.fromEpochSeconds(this))
+        }
 
     fun getResourceById(
         resourceName: String,

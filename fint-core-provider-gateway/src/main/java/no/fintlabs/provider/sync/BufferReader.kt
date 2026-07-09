@@ -29,7 +29,7 @@ class BufferReader(
     fun readMessage(record: ConsumerRecord<String, String>) {
         log.debug("READ FROM KAFKA:: {}", record.value())
 
-        // Convert to FintRecord
+        // Convert to FintRecord and save it
         processRecord(record)
     }
 
@@ -46,7 +46,7 @@ class BufferReader(
 
         resourceStore.save(
             record.extractIdentifier(),
-            coords,
+            coords.toCollectionName(),
             resource,
             Instant.now(),
         )

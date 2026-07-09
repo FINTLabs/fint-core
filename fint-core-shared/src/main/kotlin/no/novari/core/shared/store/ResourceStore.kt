@@ -1,10 +1,14 @@
 package no.novari.core.shared.store
 
-import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.nonNullIdentifikators
 import no.novari.fint.model.resource.FintResource
+import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.find
+import org.springframework.data.mongodb.core.findAll
 import org.springframework.data.mongodb.core.findById
+import org.springframework.data.mongodb.core.query.Criteria
+import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -14,7 +18,7 @@ class ResourceStore(
 ) {
     fun save(
         resourceId: String,
-        resourceCoordinate: ResourceCoordinate,
+        collectionName: String,
         resource: FintResource,
         timestamp: Instant,
     ) {
@@ -32,14 +36,52 @@ class ResourceStore(
                 timestamp,
             )
 
-        template.save(resourceEntry, resourceCoordinate.toCollectionName().value)
+        template.save(resourceEntry, collectionName)
     }
 
-    fun read(
+    fun findByResourceId(
         resourceId: String,
-        resourceCoordinate: ResourceCoordinate,
+        collectionName: String,
     ) = template.findById<ResourceEntry>(
         resourceId,
-        resourceCoordinate.toCollectionName().value,
+        collectionName,
     )
+
+    fun findAll(
+        filter: Criteria?,
+        collectionName: String,
+    ) {
+        val query = baseQuery(filter)
+        template.find<ResourceEntry>(query, collectionName) // TODO: Check if this actually returns all
+    }
+
+    fun findPage(
+        filter: Criteria?,
+        size: Int,
+        offset: Long,
+        collectionName: String,
+    ): List<ResourceEntry> {
+        val query = baseQuery(filter)
+        val pageQuery = Query.of(query).skip(offset).limit(size)
+
+        return template.find<ResourceEntry>(pageQuery, collectionName)
+    }
+
+    /**
+     * Constructs a base query object for MongoDB operations.
+     *
+     * The query is initialized optionally with filtering criteria and is sorted in ascending
+     * order by `createdAt` and `_id`.
+     *
+     * In other words, since the controller takes a sinceTimeStamp, we have to account for it here. So we insert
+     * it as base for each query.
+     *
+     * @param filter optional filtering criteria to be applied to the query. If null, no criteria are added.
+     * @return a query object with the applied criteria and sorting.
+     */
+    private fun baseQuery(filter: Criteria?): Query =
+        Query().apply {
+            filter?.let { addCriteria(it) }
+            with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
+        }
 }

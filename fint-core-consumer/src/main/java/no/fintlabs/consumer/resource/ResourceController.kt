@@ -12,6 +12,8 @@ import no.fintlabs.consumer.resource.event.RequestValidated
 import no.fintlabs.consumer.resource.event.ResourceCreated
 import no.fintlabs.consumer.resource.event.ResourceDeleted
 import no.fintlabs.model.resource.FintResources
+import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.ResourceRef
 import no.novari.fint.model.resource.FintResource
 import org.slf4j.LoggerFactory
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -39,12 +42,13 @@ class ResourceController(
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
         @RequestParam(defaultValue = "0") size: Int,
-        @RequestParam(defaultValue = "0") offset: Int,
-        @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
+        @RequestParam(defaultValue = "0") offset: Long,
+        @RequestParam(defaultValue = "0") sinceTimeStamp: Long, // TODO: ta hensyn til denne
         @RequestParam(required = false, name = "\$filter") filter: String?,
+        @RequestHeader("x-org-id") orgId: String,
     ): FintResources? =
         resourceService.getResources(
-            ResourceRef(domainName, packageName, resourceName),
+            ResourceCoordinate(orgId, domainName, packageName, resourceName),
             size,
             offset,
             sinceTimeStamp,
@@ -57,10 +61,11 @@ class ResourceController(
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
         @RequestParam(defaultValue = "0") size: Int,
-        @RequestParam(defaultValue = "0") offset: Int,
+        @RequestParam(defaultValue = "0") offset: Long,
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestBody(required = false) filter: String?,
-    ): FintResources? = getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter)
+        @RequestHeader("x-org-id") orgId: String,
+    ): FintResources? = getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId)
 
     @GetMapping(EndpointsConstants.BY_ID)
     fun getResourceById(
@@ -77,12 +82,11 @@ class ResourceController(
 
     @GetMapping(EndpointsConstants.LAST_UPDATED)
     fun getLastUpdated(
-        @PathVariable resource: String,
         @PathVariable domainName: String,
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
     ): ResponseEntity<LastUpdatedResponse> =
-        resourceService.getLastUpdated(resource).let {
+        resourceService.getLastUpdated(resourceName).let {
             ResponseEntity.ok(LastUpdatedResponse(it))
         }
 

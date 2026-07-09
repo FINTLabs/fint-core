@@ -1,17 +1,11 @@
 package no.novari.core.shared.model
 
 /**
- * A Mongo collection name, wrapped so it can't be confused with the other plain-[String]
- * identifiers (asset id, resource name, org id) flowing through the storage layer.
- */
-@JvmInline
-value class CollectionName(
-    val value: String,
-)
-
-/**
- * Fully-qualified, asset-scoped identity of a stored resource type: one asset's slice of a
- * `domain-package-resource`. Maps 1:1 to a physical collection via [toCollectionName].
+ * ResourceCoordinate is mostly used to keep information needed to generate the CollectionName when we
+ * are retrieving from the database. It is usally created with the parameters that we receive in the controllers.
+ *
+ * For example, if someone from fintlabs want to retrieve a Fravar. The resulting CollectionName is
+ * fintlabs_no_utdanning_vurdering_fravar
  */
 data class ResourceCoordinate(
     val orgId: String,
@@ -31,5 +25,7 @@ data class ResourceCoordinate(
      * `<assetId>_<domainName>_<packageName>_<resourceName>`.
      * `fintlabs.no_utdanning_vurdering_elevfravar`
      */
-    fun toCollectionName(): CollectionName = CollectionName("${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName")
+    fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
+
+    fun toResourceUri(): String = "${domainName}_${packageName}_$resourceName"
 }

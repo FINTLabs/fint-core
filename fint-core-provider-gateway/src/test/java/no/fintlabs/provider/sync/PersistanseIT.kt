@@ -7,24 +7,18 @@ import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.model.felles.kompleksedatatyper.Kontaktinformasjon
 import no.novari.fint.model.resource.felles.kompleksedatatyper.AdresseResource
 import no.novari.fint.model.resource.utdanning.elev.ElevResource
 import org.awaitility.kotlin.await
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
-import org.mockito.kotlin.any
-import org.mockito.kotlin.timeout
-import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.mongodb.core.findAll
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import java.time.Duration
 
@@ -69,7 +63,7 @@ class PersistanseIT(
         writer.sendSyncEntity(sync, resource, resourceCoordinate).get() // .get() because it is async
 
         await.atMost(Duration.ofSeconds(5)).untilAsserted {
-            val entry = resourceStore.read("123", resourceCoordinate)
+            val entry = resourceStore.findByResourceId("123", resourceCoordinate.toCollectionName())
 
             assertNotNull(entry)
             assertTrue(entry.identifiers.any { it.value == "123" })

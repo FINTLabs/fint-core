@@ -24,12 +24,28 @@ class FintResources : AbstractCollectionResources<FintResource> {
  * This ensures that all links needed for pagination purposes are present.
  * Calculates Links for self, prev and next.
  * Sets offset and totalItems.
+ *
+ * Example:
+ * ```
+ * createFintResources(
+ *     baseUrl = "https://api.felleskomponent.no",
+ *     resourceUri = "utdanning/elev/elev",
+ *     resources = listOf(elevResource1, elevResource2),
+ *     offset = 0,
+ *     size = 2,
+ *     totalItems = 10,
+ * )
+ * ```
+ *
+ * This produces pagination links based on:
+ * - self: `https://api.felleskomponent.no/utdanning/elev/elev?offset=0&size=2`
+ * - next: `https://api.felleskomponent.no/utdanning/elev/elev?offset=2&size=2`
  */
 fun createFintResources(
     baseUrl: String,
     resourceUri: String,
     resources: List<FintResource>,
-    offset: Int,
+    offset: Long,
     size: Int,
     totalItems: Int,
 ): FintResources {
@@ -44,7 +60,7 @@ fun createFintResources(
         } else {
             addSelf(Link.with(selfUrl))
         }
-        this.offset = offset
+        this.offset = offset.toInt()
         this.totalItems = totalItems
     }
 }
@@ -52,7 +68,7 @@ fun createFintResources(
 private fun createLink(
     builder: UriComponentsBuilder,
     size: Int,
-    offset: Int,
+    offset: Long,
 ): Link {
     return Link.with(
         builder
@@ -65,11 +81,11 @@ private fun createLink(
 // Calculate previous offset
 private fun calculatePrev(
     size: Int,
-    offset: Int,
+    offset: Long,
 ) = max(0, offset - size)
 
 // Calculate next offset
 private fun calculateNext(
     size: Int,
-    offset: Int,
+    offset: Long,
 ) = offset + size
