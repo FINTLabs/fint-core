@@ -46,14 +46,14 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long, // TODO: ta hensyn til denne
         @RequestParam(required = false, name = "\$filter") filter: String?,
         @RequestHeader("x-org-id") orgId: String,
-    ): FintResources? =
+    ): ResponseEntity<FintResources> =
         resourceService.getResources(
             ResourceCoordinate(orgId, domainName, packageName, resourceName),
             size,
             offset,
             sinceTimeStamp,
             filter,
-        )
+        ).let { ResponseEntity.ok(it) }
 
     @PostMapping("/\$query")
     fun getResourceByOdataFilter(
@@ -65,7 +65,8 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestBody(required = false) filter: String?,
         @RequestHeader("x-org-id") orgId: String,
-    ): FintResources? = getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId)
+    ): ResponseEntity<FintResources> =
+        getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId)
 
     @GetMapping(EndpointsConstants.BY_ID)
     fun getResourceById(
@@ -134,7 +135,7 @@ class ResourceController(
 //             .toAcceptedResponse()
 
     private fun RequestFailed.FailureType.toHttpStatus() =
-        when (this) {
+        when(this) {
             RequestFailed.FailureType.REJECTED -> HttpStatus.BAD_REQUEST
             RequestFailed.FailureType.CONFLICT -> HttpStatus.CONFLICT
             RequestFailed.FailureType.ERROR -> HttpStatus.INTERNAL_SERVER_ERROR
