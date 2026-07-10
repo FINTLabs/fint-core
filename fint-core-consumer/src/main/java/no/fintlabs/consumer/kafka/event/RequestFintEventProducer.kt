@@ -1,43 +1,22 @@
 package no.fintlabs.consumer.kafka.event
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
-import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
 import org.slf4j.LoggerFactory
+import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.support.SendResult
 import org.springframework.stereotype.Service
+import java.util.concurrent.CompletableFuture
 
 @Service
 class RequestFintEventProducer(
-    parameterizedTemplateFactory: ParameterizedTemplateFactory,
-    consumerConfig: ConsumerConfiguration,
+    private val kafkaTemplate: KafkaTemplate<String, RequestFintEvent>,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val producer = parameterizedTemplateFactory.createTemplate(RequestFintEvent::class.java)
 
-    private val topicNameParameters =
-        EventTopicNameParameters
-            .builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId(consumerConfig.orgId.asTopicSegment)
-                    .domainContextApplicationDefault()
-                    .build(),
-            ).eventName("${consumerConfig.domain}-${consumerConfig.packageName}-request")
-            .build()
-
-    fun publish(requestFintEvent: RequestFintEvent) {
-        logger.info("Publishing RequestFintEvent: {}", requestFintEvent.corrId)
-        producer.send(
-            ParameterizedProducerRecord
-                .builder<RequestFintEvent>()
-                .key(requestFintEvent.corrId)
-                .topicNameParameters(topicNameParameters)
-                .value(requestFintEvent)
-                .build(),
-        )
+    // TODO: What should we name this topic? Is it fine? Should it be shared across all components, or should each org gets it own?
+    fun publish(requestFintEvent: RequestFintEvent): CompletableFuture<SendResult<String?, RequestFintEvent>> {
+        logger.info("Published RequestFintEvent to Kafka")
+        return kafkaTemplate.send("fintlabs-no.fint-core.event.request-fint-even", requestFintEvent)
     }
+
 }
