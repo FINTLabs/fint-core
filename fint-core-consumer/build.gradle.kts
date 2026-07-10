@@ -5,9 +5,6 @@ plugins {
 dependencies {
     implementation(project(":fint-core-shared"))
 
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("org.springframework.boot:spring-boot-starter-aop")
-
     implementation("no.fintlabs:fint-antlr:1.1.1")
     implementation("no.novari:fint-core-relations:1.0.0-rc.1")
     implementation("no.fintlabs:fint-core-status-models:1.0.0")

@@ -8,7 +8,6 @@ plugins {
 dependencies {
     implementation(project(":fint-core-shared"))
 
-    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
 
     implementation("jakarta.annotation:jakarta.annotation-api:3.0.0-M1")
