@@ -75,9 +75,10 @@ class ResourceController(
         @PathVariable resourceName: String,
         @PathVariable idField: String,
         @PathVariable idValue: String,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<FintResource?> =
         resourceService
-            .getResourceById(resourceName, idField, idValue)
+            .getResourceById(ResourceCoordinate(orgId, domainName, packageName, resourceName), idField, idValue)
             ?.let { ResponseEntity.ok(it) }
             ?: ResponseEntity.notFound().build()
 
@@ -86,20 +87,20 @@ class ResourceController(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<LastUpdatedResponse> =
-        resourceService.getLastUpdated(resourceName).let {
-            ResponseEntity.ok(LastUpdatedResponse(it))
-        }
+        resourceService.getLastUpdated(ResourceCoordinate(orgId, domainName, packageName, resourceName))
+            .let { ResponseEntity.ok(LastUpdatedResponse(it)) }
 
     @GetMapping(EndpointsConstants.CACHE_SIZE)
     fun getResourceCacheSize(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<ResourceCacheSizeResponse> =
-        resourceService.getCacheSize(resourceName).let {
-            ResponseEntity.ok(ResourceCacheSizeResponse(it))
-        }
+        resourceService.getCacheSize(ResourceCoordinate(orgId, domainName, packageName, resourceName))
+            .let { ResponseEntity.ok(ResourceCacheSizeResponse(it)) }
 
     @GetMapping(EndpointsConstants.STATUS_ID)
     fun getStatus(
@@ -107,6 +108,7 @@ class ResourceController(
         @PathVariable packageName: String,
         @PathVariable resourceName: String,
         @PathVariable corrId: String,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<Any?> = ResponseEntity.ok().build()
 
     @PostMapping
@@ -116,6 +118,7 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestBody resourceData: Any,
         @RequestParam(name = "validate", required = false) validateOnly: Boolean,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<Nothing> = ResponseEntity.ok().build()
 //         requestFintEventService
 //             .createAndPublish(resource, resourceData, validateOnly)
@@ -129,6 +132,7 @@ class ResourceController(
         @PathVariable idField: String,
         @PathVariable idValue: String,
         @RequestBody resourceData: Any?,
+        @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<Nothing> = ResponseEntity.ok().build()
 //         requestFintEventService
 //             .createAndPublish(resource, resourceData, OperationType.UPDATE)
