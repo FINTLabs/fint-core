@@ -15,6 +15,7 @@ import java.time.Instant
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
+    private val bsonConverter: FintResourceBsonConverter,
 ) {
     fun save(
         resourceId: String,
@@ -27,10 +28,12 @@ class ResourceStore(
                 IdentifierRef(field, identifier.identifikatorverdi)
             }
 
+        // Data field should be stored as org.bson.Document.
+        val data = bsonConverter.toDocument(resource)
         val resourceEntry =
             ResourceEntry(
                 resourceId,
-                resource,
+                data,
                 identifiers,
                 timestamp,
                 timestamp,

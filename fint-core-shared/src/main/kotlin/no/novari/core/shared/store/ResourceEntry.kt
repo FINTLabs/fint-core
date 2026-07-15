@@ -2,6 +2,7 @@ package no.novari.core.shared.store
 
 import no.novari.core.shared.nonNullIdentifikators
 import no.novari.fint.model.resource.FintResource
+import org.bson.Document
 import org.springframework.data.annotation.Id
 import java.time.Instant
 
@@ -21,7 +22,7 @@ data class IdentifierRef(
 
 data class ResourceEntry(
     @Id val id: String,
-    val data: FintResource,
+    val data: Document,
     val identifiers: List<IdentifierRef>,
     val createdAt: Instant,
     val lastModified: Instant,

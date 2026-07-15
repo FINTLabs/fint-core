@@ -3,6 +3,9 @@ fint:
     org-id: fintlabs.no
     buffer:
       topic: ${fint.provider.org-id}
+      consumer:
+        batch-size: 100
+        concurrency: 1
   metamodel:
     base-url: http://fint-core-consumer-metamodel:8080
   kafka:

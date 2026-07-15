@@ -71,8 +71,10 @@ class SyncPageService(
     }
 
     private inline fun SyncPage.logSync(action: () -> Unit) {
+        val startOrContinue = if (metadata.page != 0L) "Continuing" else "Starting"
         log.info(
-            "Start {} sync: {}({}), {}, total size: {}, page size: {}, page: {}, total pages: {}",
+            "{} {} sync: {}({}), {}, total size: {}, page size: {}, page: {}, total pages: {}",
+            startOrContinue,
             syncType.toString().lowercase(),
             metadata.corrId,
             metadata.orgId,

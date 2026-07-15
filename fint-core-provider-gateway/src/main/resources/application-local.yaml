@@ -36,6 +36,8 @@ spring:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: provider
+      properties:
+        max.poll.records: 500
 
 management:
   endpoints:

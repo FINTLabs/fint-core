@@ -25,12 +25,17 @@ class BufferReader(
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
 
-    @KafkaListener(topics = ["#{topicBufferName}"], groupId = "consumer-service-group")
-    fun readMessage(record: ConsumerRecord<String, String>) {
-        log.debug("READ FROM KAFKA:: {}", record.value())
+    @KafkaListener(
+        topics = ["#{topicBufferName}"],
+        groupId = "consumer-service-group",
+        containerFactory = "bufferKafkaListenerContainerFactory",
+    )
+    fun readMessage(records: List<ConsumerRecord<String, String>>) {
+//        log.debug("READ FROM KAFKA:: {}", record.value())
+        log.info(records.size.toString())
 
         // Convert to FintRecord and save it
-        processRecord(record)
+        records.forEach(::processRecord)
     }
 
     private fun processRecord(record: ConsumerRecord<String, String>) {
