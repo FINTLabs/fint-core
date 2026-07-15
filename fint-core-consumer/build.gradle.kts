@@ -8,7 +8,6 @@ dependencies {
     implementation("no.fintlabs:fint-antlr:1.1.1")
     implementation("no.novari:fint-core-relations:1.0.0-rc.1")
     implementation("no.fintlabs:fint-core-status-models:1.0.0")
-    implementation("no.fintlabs:core-resource-server:3.0.0-rc-8")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     implementation("com.google.guava:guava:33.5.0-jre")
