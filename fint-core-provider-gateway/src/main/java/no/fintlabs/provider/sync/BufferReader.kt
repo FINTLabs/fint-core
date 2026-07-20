@@ -8,6 +8,7 @@ import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.stringValue
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.ResourceStore
+import no.novari.core.shared.store.ResourceWrite
 import no.novari.fint.model.resource.FintResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
@@ -31,16 +32,24 @@ class BufferReader(
         containerFactory = "bufferKafkaListenerContainerFactory",
     )
     fun readMessage(records: List<ConsumerRecord<String, String>>) {
-//        log.debug("READ FROM KAFKA:: {}", record.value())
-        log.info(records.size.toString())
+        log.debug("Read {} records from Kafka buffer", records.size)
 
-        // Convert to FintRecord and save it
-        records.forEach(::processRecord)
+        // Convert all to ResourceWrite object
+        val writes = records.map(::toResourceWrite)
+
+        resourceStore.saveAll(writes)
     }
 
-    private fun processRecord(record: ConsumerRecord<String, String>) {
+    /**
+     * Converts a Kafka ConsumerRecord into a ResourceWrite object.
+     *
+     * @param record the Kafka consumer record containing the resource data and headers.
+     * @return a ResourceWrite object representing the transformed resource.
+     */
+    private fun toResourceWrite(record: ConsumerRecord<String, String>): ResourceWrite {
         val coords = resourceCoordinate(record.headers())
         val payload = objectMapper.readValue(record.value(), Any::class.java)
+
         val resource =
             resourceConverter.convert(
                 coords.domainName,
@@ -49,11 +58,11 @@ class BufferReader(
                 payload,
             )
 
-        resourceStore.save(
-            record.extractIdentifier(),
-            coords.toCollectionName(),
-            resource,
-            Instant.now(),
+        return ResourceWrite(
+            resourceId = record.extractIdentifier(),
+            collectionName = coords.toCollectionName(),
+            resource = resource,
+            timestamp = Instant.now(),
         )
     }
 

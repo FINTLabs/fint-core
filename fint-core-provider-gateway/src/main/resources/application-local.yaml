@@ -37,7 +37,7 @@ spring:
     consumer:
       group-id: provider
       properties:
-        max.poll.records: 500
+        max.poll.records: 1500
 
 management:
   endpoints:
@@ -48,3 +48,4 @@ management:
 logging:
   level:
     root: INFO
+    "no.fintlabs.provider.sync.BufferReader": DEBUG
