@@ -27,5 +27,5 @@ data class ResourceCoordinate(
      */
     fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
 
-    fun toResourceUri(): String = "${domainName}_${packageName}_$resourceName"
+    fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
 }
