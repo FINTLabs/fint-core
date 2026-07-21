@@ -85,9 +85,9 @@ class ResourceStore(
     fun findAll(
         filter: Criteria?,
         collectionName: String,
-    ) {
+    ): List<ResourceEntry> {
         val query = baseQuery(filter)
-        template.find<ResourceEntry>(query, collectionName) // TODO: Check if this actually returns all
+        return template.find<ResourceEntry>(query, collectionName)
     }
 
     fun findPage(
