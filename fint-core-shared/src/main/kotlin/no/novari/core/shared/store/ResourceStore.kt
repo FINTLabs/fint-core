@@ -6,6 +6,7 @@ import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.findById
+import org.springframework.data.mongodb.core.findOne
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
@@ -74,6 +75,9 @@ class ResourceStore(
             }
     }
 
+    /**
+     * Gets resource by database _id field.
+     */
     fun findByResourceId(
         resourceId: String,
         collectionName: String,
@@ -81,6 +85,39 @@ class ResourceStore(
         resourceId,
         collectionName,
     )
+
+    /**
+     * Finds a resource entry from a given collection using a specific identifier field and value.
+     *
+     * The method queries for a resource in the database collection by looking for a matching
+     * identifier field and value combination within the `identifiers` array of the resource document.
+     *
+     * For example, if we have an elev with elevnummer, the id has the path /elev/elevnummer/1234.
+     * This method will then query for that identifier instead of the _id field.
+     *
+     * @param idField The name of the identifier field to query against.
+     * @param idValue The value of the identifier field to query for.
+     * @param collectionName The name of the collection where the resource is stored.
+     * @return The matching resource entry if found, or null if no match is found.
+     */
+    fun findByIdentifier(
+        idField: String,
+        idValue: String,
+        collectionName: String,
+    ): ResourceEntry? {
+        val query =
+            Query.query(
+                Criteria.where("identifiers").elemMatch(
+                    Criteria
+                        .where("field")
+                        .`is`(idField)
+                        .and("value")
+                        .`is`(idValue),
+                ),
+            )
+
+        return template.findOne<ResourceEntry>(query, collectionName)
+    }
 
     fun findAll(
         filter: Criteria?,

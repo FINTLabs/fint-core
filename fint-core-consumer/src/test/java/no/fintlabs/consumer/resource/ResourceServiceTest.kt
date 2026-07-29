@@ -6,6 +6,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.model.resource.utdanning.vurdering.ElevfravarResource
@@ -84,11 +85,39 @@ class ResourceServiceTest {
         assertEquals(2, result.size)
     }
 
+    // TODO: implement filtering
     @Test
     fun `getResources with filter returns as expected`() {
     }
 
-    // Test for getResourceById
+    @Test
+    fun `getResourceById gives correct entity by id`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val systemId = "resource-2"
+        val entry =
+            resourceEntry(
+                id = "stored-resource-id",
+                data = Document("systemId", Document("identifikatorverdi", systemId)),
+                identifiers = listOf(IdentifierRef("systemId", systemId)),
+            )
+
+        every {
+            metamodelService.getResource("utdanning", "vurdering", "elevfravar")
+        } returns elevFravarMetaResource()
+        every {
+            resourceStore.findByIdentifier("systemId", systemId, collectionName)
+        } returns entry
+
+        val result = resourceService.getResourceById(resourceCoordinate, "systemId", systemId)
+
+        verify(exactly = 1) {
+            resourceStore.findByIdentifier("systemId", systemId, collectionName)
+        }
+
+        assertNotNull(result)
+        val elevfravar = result as ElevfravarResource
+        assertEquals(systemId, elevfravar.systemId.identifikatorverdi)
+    }
 
     // Test for getLastUpdated
 
@@ -115,4 +144,16 @@ class ResourceServiceTest {
             createdAt = Instant.EPOCH,
             lastModified = Instant.EPOCH,
         )
+
+    private fun resourceEntry(
+        id: String,
+        data: Document = Document(),
+        identifiers: List<IdentifierRef> = emptyList(),
+    ) = ResourceEntry(
+        id = id,
+        data = data,
+        identifiers = identifiers,
+        createdAt = Instant.EPOCH,
+        lastModified = Instant.EPOCH,
+    )
 }

@@ -70,11 +70,27 @@ class ResourceService(
             Criteria.where("lastModified").gte(Instant.ofEpochMilli(this))
         }
 
+    /**
+     * Retrieves a single resource based on its identifier from a specific collection.
+     *
+     * The method fetches a resource from the database using a combination of resource coordinate,
+     * identifier field, and identifier value. If the matching resource is found, it is converted
+     * to a `FintResource` object. If no match is found, the method returns null.
+     *
+     * @param resourceCoordinate The coordinate defining the resource's collection and structure.
+     * @param idField The name of the identifier field used to query the resource.
+     * @param idValue The value of the specified identifier field used to find the resource.
+     * @return The matching `FintResource` if found, or null if no match is found.
+     */
     fun getResourceById(
         resourceCoordinate: ResourceCoordinate,
         idField: String,
         idValue: String,
-    ): FintResource? = TODO("Get resource by id from MongoDB")
+    ): FintResource? {
+        val collectionName = resourceCoordinate.toCollectionName()
+        val entry = resourceStore.findByIdentifier(idField, idValue, collectionName) ?: return null
+        return listOf(entry).toFintResources(resourceCoordinate).single()
+    }
 
     fun getLastUpdated(resourceCoordinate: ResourceCoordinate): Long =
         TODO("Get lastUpdated of resource coordinate in MongoDB")
