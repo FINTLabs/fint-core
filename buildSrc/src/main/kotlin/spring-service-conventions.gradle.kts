@@ -40,12 +40,7 @@ dependencies {
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
-    implementation("no.novari:fint-utdanning-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-administrasjon-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-personvern-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-okonomi-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-ressurs-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-arkiv-resource-model-java:$fintVersion")
+    implementation("no.novari:fint-core-information-model:0.0.1-rc.3")
     implementation("no.novari:kafka:6.0.0")
 
 
