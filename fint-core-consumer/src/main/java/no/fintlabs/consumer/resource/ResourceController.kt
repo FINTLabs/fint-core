@@ -43,17 +43,18 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestParam(defaultValue = "0") size: Int,
         @RequestParam(defaultValue = "0") offset: Long,
-        @RequestParam(defaultValue = "0") sinceTimeStamp: Long, // TODO: ta hensyn til denne
+        @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestParam(required = false, name = "\$filter") filter: String?,
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<FintResources> =
-        resourceService.getResources(
-            ResourceCoordinate(orgId, domainName, packageName, resourceName),
-            size,
-            offset,
-            sinceTimeStamp,
-            filter,
-        ).let { ResponseEntity.ok(it) }
+        resourceService
+            .getResources(
+                ResourceCoordinate(orgId, domainName, packageName, resourceName),
+                size,
+                offset,
+                sinceTimeStamp,
+                filter,
+            ).let { ResponseEntity.ok(it) }
 
     @PostMapping("/\$query")
     fun getResourceByOdataFilter(
@@ -78,8 +79,11 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<FintResource?> =
         resourceService
-            .getResourceById(ResourceCoordinate(orgId, domainName, packageName, resourceName), idField, idValue)
-            ?.let { ResponseEntity.ok(it) }
+            .getResourceById(
+                ResourceCoordinate(orgId, domainName, packageName, resourceName),
+                idField.lowercase(),
+                idValue,
+            )?.let { ResponseEntity.ok(it) }
             ?: ResponseEntity.notFound().build()
 
     @GetMapping(EndpointsConstants.LAST_UPDATED)
@@ -89,7 +93,8 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<LastUpdatedResponse> =
-        resourceService.getLastUpdated(ResourceCoordinate(orgId, domainName, packageName, resourceName))
+        resourceService
+            .getLastUpdated(ResourceCoordinate(orgId, domainName, packageName, resourceName))
             .let { ResponseEntity.ok(LastUpdatedResponse(it)) }
 
     @GetMapping(EndpointsConstants.CACHE_SIZE)
@@ -99,7 +104,8 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<ResourceCacheSizeResponse> =
-        resourceService.getCacheSize(ResourceCoordinate(orgId, domainName, packageName, resourceName))
+        resourceService
+            .getCacheSize(ResourceCoordinate(orgId, domainName, packageName, resourceName))
             .let { ResponseEntity.ok(ResourceCacheSizeResponse(it)) }
 
     @GetMapping(EndpointsConstants.STATUS_ID)
@@ -139,7 +145,7 @@ class ResourceController(
 //             .toAcceptedResponse()
 
     private fun RequestFailed.FailureType.toHttpStatus() =
-        when(this) {
+        when (this) {
             RequestFailed.FailureType.REJECTED -> HttpStatus.BAD_REQUEST
             RequestFailed.FailureType.CONFLICT -> HttpStatus.CONFLICT
             RequestFailed.FailureType.ERROR -> HttpStatus.INTERNAL_SERVER_ERROR

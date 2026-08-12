@@ -29,4 +29,4 @@ data class ResourceEntry(
 )
 
 fun FintResource.toIdentifierRefs(): List<IdentifierRef> =
-    nonNullIdentifikators().map { (field, identifier) -> IdentifierRef(field, identifier.identifikatorverdi) }
+    nonNullIdentifikators().map { (field, identifier) -> IdentifierRef(field.lowercase(), identifier.identifikatorverdi) }
