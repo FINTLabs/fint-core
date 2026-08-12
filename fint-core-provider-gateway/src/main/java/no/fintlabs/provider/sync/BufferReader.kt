@@ -1,6 +1,7 @@
 package no.fintlabs.provider.sync
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import no.fintlabs.provider.links.LinkService
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
@@ -9,7 +10,6 @@ import no.novari.core.shared.kafka.stringValue
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
-import no.novari.fint.model.resource.FintResource
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
 import org.slf4j.LoggerFactory
@@ -23,6 +23,7 @@ class BufferReader(
     private val resourceStore: ResourceStore,
     private val resourceConverter: ResourceConverter,
     private val objectMapper: ObjectMapper,
+    private val linkService: LinkService,
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
 
@@ -57,6 +58,7 @@ class BufferReader(
                 coords.resourceName,
                 payload,
             )
+        linkService.mapLinks(resource)
 
         return ResourceWrite(
             resourceId = record.extractIdentifier(),
