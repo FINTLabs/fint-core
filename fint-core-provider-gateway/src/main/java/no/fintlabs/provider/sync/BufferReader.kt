@@ -22,7 +22,6 @@ import java.time.Instant
 class BufferReader(
     private val resourceStore: ResourceStore,
     private val resourceConverter: ResourceConverter,
-    private val objectMapper: ObjectMapper,
     private val linkService: LinkService,
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
