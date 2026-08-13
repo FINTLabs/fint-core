@@ -36,8 +36,7 @@ class BufferReader(
 
         val writes = records.map { record ->
             val coords = resourceCoordinate(record.headers())
-            val resource =
-                resourceConverter.convert(coords.domainName, coords.packageName, coords.resourceName, record.value())
+            val resource = resourceConverter.convert(coords, record.value())
             linkService.mapLinks(resource)
             ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
         }
