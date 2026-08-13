@@ -24,10 +24,7 @@ class LinkServiceTest {
             every { baseUrl } returns this@LinkServiceTest.baseUrl
         }
 
-    private val reflectionService = ReflectionService()
-    private val componentBuilder = ComponentBuilder(reflectionService)
-    private val metamodelService = MetamodelService(componentBuilder)
-    private val linkService = LinkService(properties, metamodelService)
+    private val linkService = LinkService()
 
     @Test
     fun `invalid links are removed`() {
