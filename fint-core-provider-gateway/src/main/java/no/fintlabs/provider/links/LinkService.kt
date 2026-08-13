@@ -42,21 +42,16 @@ import org.springframework.stereotype.Service
  *
  */
 @Service
-class LinkService(
-    private val properties: ProviderProperties,
-    private val metamodelService: MetamodelService,
-) {
+class LinkService {
     /**
      * Used once when retrieved from Buffer, to ensure correct links before inserting into database.
-     * We also reset self links because we do not trust they are set correctly on arrival.
+     * We also delete self links, as they will be generated upon consumer response.
      */
     fun mapLinks(resource: FintResource) {
-        resource.links.remove("self") // Delete self links, we will generate correct ones later
+        resource.links.remove("self")
         resource.removeInvalidLinks()
-        formatLinksToRelativeURI(resource)
-        resource.nestedResources.forEach {
-            mapLinks(it)
-        }
+        resource.formatLinksToRelativeURI()
+        resource.nestedResources.forEach { mapLinks(it) }
     }
 
     /**
@@ -67,15 +62,12 @@ class LinkService(
      * a relative format with the structure `idField/idValue`.
      *
      * For example, a link with `href` value `https://example.com/fodselsnummer/123` will be updated to `fodselsnummer/123`.
-     *
-     * @param resource The FintResource containing the links to be reformatted to relative URIs.
      */
-    fun formatLinksToRelativeURI(resource: FintResource) {
-        resource.links.values.flatten().forEach {
-            val (idField, idValue) = it.href.split("/").takeLast(2)
-            it.setVerdi("$idField/$idValue")
+    fun FintResource.formatLinksToRelativeURI() =
+        links.values.flatten().forEach { link ->
+            val (idField, idValue) = link.href.split("/").takeLast(2)
+            link.setVerdi("$idField/$idValue")
         }
-    }
 
     fun FintResource.removeInvalidLinks() =
         links.entries.removeIf { (_, value) ->
