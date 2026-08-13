@@ -10,36 +10,10 @@ import no.novari.metamodel.MetamodelService
 import org.springframework.stereotype.Service
 
 /**
- * LinkServices takes a FintResource and then builds all HATEOAS _links, including self links.
- * For example, we recieve this:
- * {
- *      brukernavn: "Test",
- *      elevnummer: "456",
- *      ...
- *      _links: {
- *          person: [
- *              { href: "fodselsnummer/123" }
- *          ]
- *      }
- * }
+ * Service for performing operations on links within a FintResource.
+ * Provides functionality for mapping and validating links, as well as formatting them to relative URIs.
  *
- * LinkService will then build a correct FINT url based on the objects in _links
- * Return in this example will be:
- * {
- *      brukernavn: "Test",
- *      elevnummer: "456",
- *      ...
- *      _links: {
- *          person: [
- *              { href: "https://api.felleskomponent.no/utdanning/elev/person/fodselsnummer/123" }
- *          ],
- *          self: [
- *              { href: "https://api.felleskomponent.no/utdanning/elev/elev/elevnummer/456" },
- *              { href: "https://api.felleskomponent.no/utdanning/elev/elev/brukernavn/Test" }
- *          ]
- *      }
- * }
- *
+ * The service ensures that links within a FintResource are correctly formatted and valid before they are used or stored.
  */
 @Service
 class LinkService {
