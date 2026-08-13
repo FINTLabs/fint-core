@@ -1,5 +1,6 @@
 package no.novari.core.shared.store
 
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.model.resource.FintResource
 import java.time.Instant
 
@@ -19,5 +20,5 @@ data class ResourceWrite(
     val resourceId: String,
     val collectionName: String,
     val resource: FintResource,
-    val timestamp: Instant,
+    val timestamp: Instant = Instant.now(),
 )

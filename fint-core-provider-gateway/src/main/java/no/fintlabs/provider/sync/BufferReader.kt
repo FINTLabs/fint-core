@@ -35,37 +35,15 @@ class BufferReader(
     fun readMessage(records: List<ConsumerRecord<String, String>>) {
         log.debug("Read {} records from Kafka buffer", records.size)
 
-        // Convert all to ResourceWrite object
-        val writes = records.map(::toResourceWrite)
+        val writes = records.map { record ->
+            val coords = resourceCoordinate(record.headers())
+            val resource =
+                resourceConverter.convert(coords.domainName, coords.packageName, coords.resourceName, record.value())
+            linkService.mapLinks(resource)
+            ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
+        }
 
         resourceStore.saveAll(writes)
-    }
-
-    /**
-     * Converts a Kafka ConsumerRecord into a ResourceWrite object.
-     *
-     * @param record the Kafka consumer record containing the resource data and headers.
-     * @return a ResourceWrite object representing the transformed resource.
-     */
-    private fun toResourceWrite(record: ConsumerRecord<String, String>): ResourceWrite {
-        val coords = resourceCoordinate(record.headers())
-        val payload = objectMapper.readValue(record.value(), Any::class.java)
-
-        val resource =
-            resourceConverter.convert(
-                coords.domainName,
-                coords.packageName,
-                coords.resourceName,
-                payload,
-            )
-        linkService.mapLinks(resource)
-
-        return ResourceWrite(
-            resourceId = record.extractIdentifier(),
-            collectionName = coords.toCollectionName(),
-            resource = resource,
-            timestamp = Instant.now(),
-        )
     }
 
     private fun resourceCoordinate(headers: Headers): ResourceCoordinate =
