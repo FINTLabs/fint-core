@@ -3,6 +3,7 @@ package no.fintlabs.consumer.resource
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EndpointsConstants
+import no.fintlabs.consumer.resource.dto.FintResourcesResponse
 import no.fintlabs.consumer.resource.dto.LastUpdatedResponse
 import no.fintlabs.consumer.resource.dto.ResourceCacheSizeResponse
 import no.fintlabs.consumer.resource.event.RequestAccepted
@@ -11,11 +12,9 @@ import no.fintlabs.consumer.resource.event.RequestGone
 import no.fintlabs.consumer.resource.event.RequestValidated
 import no.fintlabs.consumer.resource.event.ResourceCreated
 import no.fintlabs.consumer.resource.event.ResourceDeleted
-import no.fintlabs.model.resource.FintResources
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.model.ResourceRef
-import no.novari.fint.model.resource.FintResource
+import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -46,7 +45,7 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestParam(required = false, name = "\$filter") filter: String?,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<FintResources> =
+    ): ResponseEntity<FintResourcesResponse> =
         resourceService
             .getResources(
                 ResourceCoordinate(orgId, domainName, packageName, resourceName),
@@ -66,7 +65,7 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestBody(required = false) filter: String?,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<FintResources> =
+    ): ResponseEntity<FintResourcesResponse> =
         getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId)
 
     @GetMapping(EndpointsConstants.BY_ID)

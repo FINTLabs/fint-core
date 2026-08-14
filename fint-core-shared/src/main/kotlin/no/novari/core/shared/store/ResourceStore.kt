@@ -1,6 +1,6 @@
 package no.novari.core.shared.store
 
-import no.novari.fint.model.resource.FintResource
+import no.novari.fint.core.model.FintResource
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate

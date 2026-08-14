@@ -1,27 +1,26 @@
 package no.fintlabs.consumer.resource
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.consumer.config.ConsumerConfiguration
+import no.novari.core.shared.json.FintModelModule
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
-import no.novari.fint.model.resource.utdanning.vurdering.ElevfravarResource
-import no.novari.metamodel.MetamodelService
-import no.novari.metamodel.model.Component
-import no.novari.metamodel.model.Resource
+import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
 import org.bson.Document
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
 class ResourceServiceTest {
     private val resourceStore = mockk<ResourceStore>()
-    private val metamodelService = mockk<MetamodelService>()
 
     private val resourceService =
         ResourceService(
@@ -34,9 +33,9 @@ class ResourceServiceTest {
                     podUrl = "http://localhost",
                 ),
             resourceStore = resourceStore,
-            metamodelService = metamodelService,
-            objectMapper = ObjectMapper(),
+            objectMapper = ObjectMapper().registerKotlinModule().registerModule(FintModelModule()),
         )
+
     val resourceCoordinate =
         ResourceCoordinate(
             "fintlabs.no",
@@ -45,16 +44,14 @@ class ResourceServiceTest {
             "elevfravar",
         )
 
-    // Test for getResources
     @Test
     fun `getResources calls findAll when size is 0`() {
         every {
-            metamodelService.getResource("utdanning", "vurdering", "elevfravar")
-        } returns elevFravarMetaResource()
-        every {
             resourceStore.findAll(null, "fintlabs_no_utdanning_vurdering_elevfravar")
         } returns emptyList()
+
         val result = resourceService.getResources(resourceCoordinate, 0, 0, null, null)
+
         verify(exactly = 1) {
             resourceStore.findAll(null, "fintlabs_no_utdanning_vurdering_elevfravar")
         }
@@ -70,9 +67,6 @@ class ResourceServiceTest {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries = (1..5).map { resourceEntry("resource-$it") }
 
-        every {
-            metamodelService.getResource("utdanning", "vurdering", "elevfravar")
-        } returns elevFravarMetaResource()
         every {
             resourceStore.findPage(null, 2, 0, collectionName)
         } returns entries.take(2)
@@ -102,9 +96,6 @@ class ResourceServiceTest {
             )
 
         every {
-            metamodelService.getResource("utdanning", "vurdering", "elevfravar")
-        } returns elevFravarMetaResource()
-        every {
             resourceStore.findByIdentifier("systemId", systemId, collectionName)
         } returns entry
 
@@ -115,26 +106,20 @@ class ResourceServiceTest {
         }
 
         assertNotNull(result)
-        val elevfravar = result as ElevfravarResource
-        assertEquals(systemId, elevfravar.systemId.identifikatorverdi)
+        val elevfravar = result as Elevfravar
+        assertEquals(systemId, elevfravar.systemId?.identifikatorverdi)
     }
 
-    // Test for getLastUpdated
+    @Test
+    fun `an unknown resource coordinate is rejected by the model`() {
+        val unknown = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "finnesikke")
 
-    // Test for getCacheSize
+        every { resourceStore.findAll(null, any()) } returns listOf(resourceEntry("resource-1"))
 
-    private fun elevFravarMetaResource() =
-        Resource(
-            name = "elevfravar",
-            component = Component("utdanning", "vurdering"),
-            className = ElevfravarResource::class.java.name,
-            resourceClass = ElevfravarResource::class.java,
-            isCommon = false,
-            writeable = true,
-            fields = emptySet(),
-            idFields = setOf("systemId"),
-            relations = emptyList(),
-        )
+        assertThrows<IllegalArgumentException> {
+            resourceService.getResources(unknown, 0, 0, null, null)
+        }
+    }
 
     private fun resourceEntry(id: String) =
         ResourceEntry(

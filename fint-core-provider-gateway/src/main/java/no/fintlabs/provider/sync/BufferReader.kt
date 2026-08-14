@@ -1,7 +1,5 @@
 package no.fintlabs.provider.sync
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import no.fintlabs.provider.links.LinkService
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
@@ -22,7 +20,6 @@ import java.time.Instant
 class BufferReader(
     private val resourceStore: ResourceStore,
     private val resourceConverter: ResourceConverter,
-    private val linkService: LinkService,
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
 
@@ -34,12 +31,13 @@ class BufferReader(
     fun readMessage(records: List<ConsumerRecord<String, String>>) {
         log.debug("Read {} records from Kafka buffer", records.size)
 
-        val writes = records.map { record ->
-            val coords = resourceCoordinate(record.headers())
-            val resource = resourceConverter.convert(coords, record.value())
-            linkService.mapLinks(resource)
-            ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
-        }
+        val writes =
+            records.map { record ->
+                val coords = resourceCoordinate(record.headers())
+                val resource = resourceConverter.convert(coords, record.value())
+                resource.links.remove("self")
+                ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
+            }
 
         resourceStore.saveAll(writes)
     }
