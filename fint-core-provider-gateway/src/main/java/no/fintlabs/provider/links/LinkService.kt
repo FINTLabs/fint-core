@@ -42,123 +42,38 @@ import org.springframework.stereotype.Service
  *
  */
 @Service
-class LinkService(
-    private val properties: ProviderProperties,
-    private val metamodelService: MetamodelService,
-) {
+class LinkService {
     /**
      * Used once when retrieved from Buffer, to ensure correct links before inserting into database.
-     * We also reset self links because we do not trust they are set correctly on arrival.
+     * We also delete self links, as they will be generated upon consumer response.
      */
-    fun mapLinks(
-        resourceRef: ResourceRef,
-        resource: FintResource,
-    ) {
-        resource.links.remove("self") // Delete self links, we will generate correct ones later
+    fun mapLinks(resource: FintResource) {
+        resource.links.remove("self")
         resource.removeInvalidLinks()
-        generateCompleteLinks(resourceRef, resource)
-        resetSelfLinks(resourceRef, resource)
-        resource.nestedResources.forEach {
-            mapLinks(it.javaClass.name.toResourceRef(), it)
-        }
+        resource.formatLinksToRelativeURI()
+        resource.nestedResources.forEach { mapLinks(it) }
     }
 
     /**
-     * Generates completed links for each link in the [resource].
-     * If the link refers to a common resource, it inherits the [resourceRef] from the resource.
-     */
-    fun generateCompleteLinks(
-        resourceRef: ResourceRef,
-        resource: FintResource,
-    ) = resourceRef.getMetaResource()?.let { metaResource ->
-        resource.links.forEach { (relationName, links) ->
-            val className = metaResource.relations.first { it.name == relationName }
-            val relationResourceRef = className.packageName.toResourceRef()
-
-            links.forEach { link ->
-                val (idField, idValue) = link.href.split("/").takeLast(2)
-                if (relationResourceRef.isCommonResource()) {
-                    link.setVerdi(resourceRef.toHref(idField, idValue))
-                } else {
-                    link.setVerdi(relationResourceRef.toHref(idField, idValue))
-                }
-            }
-        }
-    } ?: throw RuntimeException("Could not find meta resource for ${resourceRef.toURI()}")
-
-    /**
-     * If the resource is a common resource the package name is "felles".
-     */
-    private fun ResourceRef.isCommonResource() = packageName == "felles"
-
-    /**
-     * The String is expected to be a java class name.
-     * The [ResourceRef.packageName] could be "felles" if it's a common resource.
-     */
-    private fun String.toResourceRef() =
-        split(".")
-            .takeLast(3)
-            .let { (domainName, packageName, resourceName) -> ResourceRef(domainName, packageName, resourceName) }
-
-    private fun ResourceRef.getMetaResource() = metamodelService.getResource(domainName, packageName, resourceName)
-
-    /**
-     * Iterate over non-null identifiers of a resource and populate those in self links.
+     * Formats the links within the provided FintResource to relative URIs, based on their current href values.
      *
-     * For example, we recieve this Elev resource:
-     * {
-     *      brukernavn: "Test",
-     *      elevnummer: "456",
-     *      ...
-     *      _links: {
-     *          self: [
-     *              { href: "http:///Invalid-link.com/123/abc" }
-     *          ]
-     *      }
-     * }
+     * The method processes each link in the FintResource's `_links` map, extracting the two last segments
+     * from the `href` (assumed to represent an identifier field and value) and updates the link to use
+     * a relative format with the structure `idField/idValue`.
      *
-     * Then we iterate over the identifikators that are not null, brukernavn and elevnummer in this case and generate this:
-     *
-     * {
-     *      brukernavn: "Test",
-     *      elevnummer: "456",
-     *      ...
-     *      _links: {
-     *          self: [
-     *              { href: "https://api.felleskomponent.no/utdanning/elev/elev/brukernavn/Test" },
-     *              { href: "https://api.felleskomponent.no/utdanning/elev/elev/elevnummer/456" },
-     *          ]
-     *      }
-     * }
-     *
+     * For example, a link with `href` value `https://example.com/fodselsnummer/123` will be updated to `fodselsnummer/123`.
      */
-    fun resetSelfLinks(
-        resourceRef: ResourceRef,
-        resource: FintResource,
-    ) {
-        val selfLinks = mutableListOf<Link>()
-
-        // https://api.felleskomponent.no/<domain>/<package>/<resource>/idField/idValue
-        resource.nonNullIdentifikators().entries.forEach { (idField, identifikator) ->
-            selfLinks.add(Link.with(resourceRef.toHref(idField, identifikator.identifikatorverdi)))
+    fun FintResource.formatLinksToRelativeURI() =
+        links.values.flatten().forEach { link ->
+            val (idField, idValue) = link.href.split("/").takeLast(2)
+            link.setVerdi("$idField/$idValue")
         }
 
-        resource.links["self"] = selfLinks
-    }
+    fun FintResource.removeInvalidLinks() =
+        links.entries.removeIf { (_, value) ->
+            value.retainAll { link -> link.isValid() }
+            value.isEmpty()
+        }
 
-    fun deleteSelfLinks() {
-    }
-
-    /**
-     * Generates an absolute Fint link in lowercase except the idValue.
-     * idValue is case-sensetive on look-up, so we don't mutate it.
-     */
-    fun ResourceRef.toHref(
-        idField: String,
-        idValue: String,
-    ): String = "${properties.baseUrl}/${toURI()}/${idField.lowercase()}/$idValue"
-
-    fun FintResource.removeInvalidLinks() = links.values.forEach { it.retainAll { link -> link.isValid() } }
-
-    fun Link?.isValid() = this != null && !href.isNullOrBlank()
+    fun Link?.isValid() = this != null && !href.isNullOrBlank() && href.contains("/")
 }

@@ -14,6 +14,7 @@ import no.novari.metamodel.ReflectionService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNull
 import org.junit.jupiter.api.assertThrows
 
 class LinkServiceTest {
@@ -29,99 +30,31 @@ class LinkServiceTest {
     private val linkService = LinkService(properties, metamodelService)
 
     @Test
-    fun `resetSelfLink resets self links and generates absolute url's from existing identifiers`() {
+    fun `invalid links are removed`() {
         val resource =
             ElevResource().apply {
                 brukernavn = Identifikator().apply { identifikatorverdi = "abc123" }
                 elevnummer = Identifikator().apply { identifikatorverdi = "kafka123" }
                 links["self"] = (0..10).map { Link.with("RandomInvalidLink") }
+                addElevforhold(Link.with("RandomInvalidLink"))
+                addElevforhold(Link.with("valid/link"))
+                addPerson(Link.with("RandomInvalidLink"))
             }
-        val resourceRef = ResourceRef("utdanning", "elev", "elev")
-        val componentUrl = "$baseUrl/${resourceRef.toURI()}"
-
-        linkService.resetSelfLinks(resourceRef, resource)
-
-        assertTrue(resource.selfLinks.size == 2)
-        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/abc123" })
-        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/elevnummer/kafka123" })
+        linkService.mapLinks(resource)
+        assertEquals(1, resource.links["elevforhold"]?.size)
+        assertNull(resource.links["person"])
+        assertNull(resource.links["self"])
     }
 
     @Test
-    fun `resetSelfLink does not mutate identifikators`() {
-        val brukernavnId = "UPPERCASE_123"
-        val elevnummerId = "Test)382839!ifF"
-
+    fun `links are formatted to correct relative URI`() {
         val resource =
             ElevResource().apply {
-                brukernavn = Identifikator().apply { identifikatorverdi = brukernavnId }
-                elevnummer = Identifikator().apply { identifikatorverdi = elevnummerId }
+                brukernavn = Identifikator().apply { identifikatorverdi = "abc123" }
+                elevnummer = Identifikator().apply { identifikatorverdi = "kafka123" }
+                addElevforhold(Link.with("http://alpha.felleskomponent.no/valid/link"))
             }
-
-        val resourceRef = ResourceRef("utdanning", "elev", "elev")
-
-        linkService.resetSelfLinks(resourceRef, resource)
-
-        assertTrue(resource.selfLinks.any { it.href.endsWith(brukernavnId) })
-        assertTrue(resource.selfLinks.any { it.href.endsWith(elevnummerId) })
-    }
-
-    @Test
-    fun `resetSelfLink sets an empty list of there are no identifiers`() {
-        val resource = ElevResource()
-
-        val resourceRef = ResourceRef("utdanning", "elev", "elev")
-
-        linkService.resetSelfLinks(resourceRef, resource)
-
-        assertTrue(resource.selfLinks.isEmpty())
-    }
-
-    @Test
-    fun `mapLinks set correct HATEOAS links`() {
-        val resource = ElevResource()
-
-        resource.brukernavn = Identifikator().apply { identifikatorverdi = "Test" }
-        resource.elevnummer = Identifikator().apply { identifikatorverdi = "456" }
-        resource.addPerson(Link.with("fodselsnummer/123"))
-        resource.addPerson(null)
-        resource.addPerson(Link(null))
-        resource.addPerson(Link(""))
-
-        val resourceRef = ResourceRef("utdanning", "elev", "elev")
-        val componentUrl = "$baseUrl/${resourceRef.toURI()}"
-
-        linkService.mapLinks(resourceRef, resource)
-
-        assertEquals("$componentUrl/fodselsnummer/123", resource.person.first().href)
-
-        assertEquals(2, resource.selfLinks.size) // Assert that both identificators got links
-        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/Test" })
-        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/elevnummer/456" })
-
-        assertEquals(1, resource.person.size) // Assert that invalid links are removed
-    }
-
-    @Test
-    fun `mapLinks keeps case in identifiers and lower cases in the rest of the link`() {
-        val resource = ElevResource()
-
-        resource.brukernavn = Identifikator().apply { identifikatorverdi = "Test" }
-        resource.elevnummer = Identifikator().apply { identifikatorverdi = "456" }
-        resource.addElevforhold(Link.with("SYstEmID/ABCdef")) // "https://.../systemid/ABCdef
-        resource.addPerson(Link.with("fodselsnummer/123"))
-
-        val resourceRef = ResourceRef("utdanning", "elev", "elev")
-        val componentUrl = "$baseUrl/${resourceRef.toURI()}"
-
-        linkService.mapLinks(resourceRef, resource)
-
-        assertEquals("$baseUrl/utdanning/elev/elevforhold/systemid/ABCdef", resource.elevforhold.first().href)
-        assertTrue(resource.selfLinks.any { it.href == "$componentUrl/brukernavn/Test" })
-    }
-
-    @Test
-    fun `Unknown resourceRef throws exception`() {
-        val resourceRef = ResourceRef("utdanning", "vurdering", "not-a-resource")
-        assertThrows<RuntimeException> { linkService.mapLinks(resourceRef, ElevResource()) }
+        linkService.mapLinks(resource)
+        assertEquals("valid/link", resource.links["elevforhold"]?.first().toString())
     }
 }

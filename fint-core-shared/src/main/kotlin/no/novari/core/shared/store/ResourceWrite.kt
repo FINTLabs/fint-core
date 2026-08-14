@@ -19,5 +19,5 @@ data class ResourceWrite(
     val resourceId: String,
     val collectionName: String,
     val resource: FintResource,
-    val timestamp: Instant,
+    val timestamp: Instant = Instant.now(),
 )
