@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.ComponentScan;
 
-@ComponentScan(basePackages = {"no.fintlabs", "no.novari.core.shared"})
+@ComponentScan(basePackages = {"no.fintlabs", "no.novari"})
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class Application {

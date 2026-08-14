@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 @SpringBootApplication
-@ComponentScan(basePackages = {"no.fintlabs", "no.novari.core.shared"})
+@ComponentScan(basePackages = {"no.fintlabs", "no.novari"})
 @ConfigurationPropertiesScan
 public class Application {
 
