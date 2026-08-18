@@ -1,6 +1,7 @@
 package no.fintlabs.consumer.resource.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import no.fintlabs.consumer.resource.wire.WireLink
 import org.springframework.web.util.UriComponentsBuilder
 import kotlin.math.max
 
@@ -15,10 +16,6 @@ class FintResourcesResponse(
     @get:JsonProperty("offset") val offset: Long,
     totalItems: Int,
 ) {
-    data class Link(
-        val href: String,
-    )
-
     data class Embedded(
         @get:JsonProperty("_entries") val entries: List<Any>,
     )
@@ -27,7 +24,7 @@ class FintResourcesResponse(
     val embedded: Embedded = Embedded(entries)
 
     @get:JsonProperty("_links")
-    val links: MutableMap<String, MutableList<Link>> = LinkedHashMap()
+    val links: MutableMap<String, MutableList<WireLink>> = LinkedHashMap()
 
     @get:JsonProperty("total_items")
     val totalItems: Int = max(entries.size, totalItems)
@@ -37,7 +34,7 @@ class FintResourcesResponse(
 
     fun addLink(
         relation: String,
-        link: Link,
+        link: WireLink,
     ) {
         links.getOrPut(relation) { mutableListOf() }.add(link)
     }
@@ -79,7 +76,7 @@ fun createFintResourcesResponse(
             if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size)))
             if (offset + size < this.totalItems) addLink("next", pageLink(builder, size, offset + size))
         } else {
-            addLink("self", FintResourcesResponse.Link(selfUrl))
+            addLink("self", WireLink(selfUrl))
         }
     }
 }
@@ -88,7 +85,7 @@ private fun pageLink(
     builder: UriComponentsBuilder,
     size: Int,
     offset: Long,
-) = FintResourcesResponse.Link(
+) = WireLink(
     builder
         .replaceQueryParam("offset", offset)
         .replaceQueryParam("size", size)

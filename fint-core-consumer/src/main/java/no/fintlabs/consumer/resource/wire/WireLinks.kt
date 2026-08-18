@@ -12,14 +12,22 @@ import no.novari.fint.core.model.Link
 
 const val WIRE_LINKS_FIELD = "_links"
 
-fun FintResource.toWireLinks(baseUrl: String): Map<String, List<Map<String, String>>> {
-    val wire = LinkedHashMap<String, List<Map<String, String>>>()
+/**
+ * A link as it appears on the wire. The stored [Link] keeps an id field and value; this is the
+ * rendered href the client receives.
+ */
+data class WireLink(
+    val href: String,
+)
+
+fun FintResource.toWireLinks(baseUrl: String): Map<String, List<WireLink>> {
+    val wire = LinkedHashMap<String, List<WireLink>>()
 
     metadata.path?.let { path ->
         val selfLinks =
             buildList {
                 visitIdentifikators { field, value ->
-                    add(mapOf("href" to Link(field.lowercase(), value).href(baseUrl, path)))
+                    add(WireLink(Link(field.lowercase(), value).href(baseUrl, path)))
                 }
             }
         if (selfLinks.isNotEmpty()) wire["self"] = selfLinks
@@ -37,7 +45,7 @@ fun FintResource.toWireLinks(baseUrl: String): Map<String, List<Map<String, Stri
                         targetPath != null -> link.href(baseUrl, targetPath)
                         else -> null
                     }
-                }.map { mapOf("href" to it) }
+                }.map { WireLink(it) }
 
         if (hrefs.isNotEmpty()) wire[relationName] = hrefs
     }
