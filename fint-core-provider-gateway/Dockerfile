@@ -1,4 +1,4 @@
-FROM gradle:9.4.0-jdk25 AS builder
+FROM gradle:9.7.0-jdk25 AS builder
 USER root
 COPY . .
 RUN ./gradlew --no-daemon assemble
