@@ -19,9 +19,14 @@ class ResourceConverter(
         resource: Any,
     ): FintResource =
         with(coords) {
-            metaModelService
-                .getResource(domainName, packageName, resourceName)
-                ?.let { objectMapper.convertValue(resource, it.resourceClass) }
-                ?: throw RuntimeException() // TODO create custom exception
+            val resourceClass =
+                metaModelService
+                    .getResource(domainName, packageName, resourceName)
+                    ?.resourceClass
+                    ?: throw RuntimeException() // TODO create custom exception
+            when (resource) {
+                is String -> objectMapper.readValue(resource, resourceClass)
+                else -> objectMapper.convertValue(resource, resourceClass)
+            }
         }
 }
