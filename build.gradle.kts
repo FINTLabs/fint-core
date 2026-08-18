@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.21" apply false
     id("org.jetbrains.kotlin.plugin.spring") version "2.3.21" apply false
     id("org.jetbrains.kotlin.plugin.lombok") version "2.3.21" apply false
-    id("org.jlleitschuh.gradle.ktlint") version "13.1.0" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
     id("com.github.ben-manes.versions") version "0.53.0" apply false
     id("se.patrikerdes.use-latest-versions") version "0.2.18" apply false
 }
