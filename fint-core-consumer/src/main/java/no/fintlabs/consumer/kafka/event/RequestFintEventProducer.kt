@@ -18,5 +18,4 @@ class RequestFintEventProducer(
         logger.info("Published RequestFintEvent to Kafka")
         return kafkaTemplate.send("fintlabs-no.fint-core.event.request-fint-even", requestFintEvent)
     }
-
 }

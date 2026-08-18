@@ -14,10 +14,14 @@ class ResourceConverter(
     /**
      * Converts POJO to FintResource
      */
-    fun convert(coords: ResourceCoordinate, resource: Any): FintResource = with(coords) {
-        metaModelService.getResource(domainName, packageName, resourceName)
-            ?.let { objectMapper.convertValue(resource, it.resourceClass) }
-            ?: throw RuntimeException() // TODO create custom exception
-    }
-
+    fun convert(
+        coords: ResourceCoordinate,
+        resource: Any,
+    ): FintResource =
+        with(coords) {
+            metaModelService
+                .getResource(domainName, packageName, resourceName)
+                ?.let { objectMapper.convertValue(resource, it.resourceClass) }
+                ?: throw RuntimeException() // TODO create custom exception
+        }
 }

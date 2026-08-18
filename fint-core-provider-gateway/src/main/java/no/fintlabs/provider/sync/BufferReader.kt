@@ -34,12 +34,13 @@ class BufferReader(
     fun readMessage(records: List<ConsumerRecord<String, String>>) {
         log.debug("Read {} records from Kafka buffer", records.size)
 
-        val writes = records.map { record ->
-            val coords = resourceCoordinate(record.headers())
-            val resource = resourceConverter.convert(coords, record.value())
-            linkService.mapLinks(resource)
-            ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
-        }
+        val writes =
+            records.map { record ->
+                val coords = resourceCoordinate(record.headers())
+                val resource = resourceConverter.convert(coords, record.value())
+                linkService.mapLinks(resource)
+                ResourceWrite(record.extractIdentifier(), coords.toCollectionName(), resource)
+            }
 
         resourceStore.saveAll(writes)
     }

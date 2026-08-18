@@ -17,7 +17,9 @@ class AdminController(
 ) {
     @GetMapping("/health")
     fun healthChecks(): ResponseEntity<*>? =
-        TODO("New implementation required, Event based health checks are no longer required. Perhaps lookup Health status in Status Service?")
+        TODO(
+            "New implementation required, Event based health checks are no longer required. Perhaps lookup Health status in Status Service?",
+        )
 
     @GetMapping("/organisations")
     @Deprecated("")
@@ -55,5 +57,4 @@ class AdminController(
         @RequestHeader(name = "x-client") client: String?,
         @PathVariable(required = false) model: String?,
     ): Nothing = TODO("Yet to be implemented")
-
 }
