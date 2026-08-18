@@ -1,8 +1,16 @@
 fint:
+  provider:
+    org-id: fintlabs.no
+    buffer:
+      topic: ${fint.provider.org-id}
+      consumer:
+        batch-size: 100
+        concurrency: 1
   metamodel:
     base-url: http://fint-core-consumer-metamodel:8080
   kafka:
     enable-ssl: true
+  base-url: https://api.felleskomponent.no
 
 novari:
   kafka:
@@ -15,10 +23,6 @@ novari:
       batch-size: 64KB
 
 spring:
-  data:
-    mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017}
-      database: fint
   jpa:
     properties:
       jdbc:
@@ -28,7 +32,7 @@ spring:
       dialect: org.hibernate.dialect.PostgreSQLDialect
       enable_lazy_load_no_trans: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
   datasource:
     url: ${fint.database.url}
     username: ${fint.database.username}
@@ -38,18 +42,22 @@ spring:
     import:
       - classpath:components.yaml
       - classpath:cleanup-topics.yaml
+      - classpath:shared-mongodb.yaml
   threads:
     virtual:
       enabled: true
   kafka:
     consumer:
       group-id: provider
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,prometheus
 
 logging:
   level:

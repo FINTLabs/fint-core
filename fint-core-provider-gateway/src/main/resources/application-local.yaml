@@ -15,9 +15,6 @@ novari:
     default-replicas: 1
 
 spring:
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/fint-provider
   jpa:
     properties:
       jdbc:
@@ -39,13 +36,16 @@ spring:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: provider
+      properties:
+        max.poll.records: 1500
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
 
 logging:
   level:
     root: INFO
+    "no.fintlabs.provider.sync.BufferReader": DEBUG

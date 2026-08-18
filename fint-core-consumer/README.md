@@ -19,18 +19,23 @@
 >
 > We use a specific tagging strategy to combine the **FINT-API** version with the **Information Model** version.
 
-Release tags follow `v<service>[-rc.N]-<imodel>` — e.g. **`v1.0.0-4.0.30`** (stable) or
-**`v1.0.0-rc.1-4.0.30`** (release candidate). `<service>` is the SemVer shared by both services and
-`<imodel>` is the FINT information-model version. The repo-root `README.md` is the authoritative
-versioning, CI and CD reference.
+Our release tags follow this format: `[API Version]_[Information Model Version]`
+
+### Format Breakdown
+
+| Release Type | Format | Example | Explanation |
+| :--- | :--- | :--- | :--- |
+| **Stable** | `X.Y.Z_A.B.C` | **1.0.0_3.21.10** | **1.0.0** is the FINT-API version.<br>**3.21.10** is the Information Model version. |
+| **Pre-Release** | `X.Y.Z-rc.N_A.B.C` | **1.0.0-rc.1_3.21.10** | Same as above, but includes `-rc.1` to indicate it is a Release Candidate. |
 
 ---
 
 ## 🧐 What is a Consumer?
 
 A **Consumer** acts as the bridge between the FINT system and client applications. Its primary responsibilities are:
-1.  **Serving Resources:** it exposes resources via a standard **HATEOAS REST API** (Spring MVC on virtual threads), **read-only** over the shared MongoDB resource store that `fint-core-provider-gateway` writes. It does **not** ingest resources from Kafka.
-2.  **Forwarding writes:** client `POST`/`PUT`s are published as request events to Kafka for the adapter and tracked by correlation id; no client write touches the cache directly.
+1.  **Consuming Resources:** It listens to Kafka topics to ingest data (resources).
+2.  **Caching:** It stores these resources locally to ensure fast access and high availability.
+3.  **Serving Data:** It exposes these resources via a standard **HATEOAS REST API**.
 
 **Components & The Information Model**
 In the FINT ecosystem, a Consumer belongs to a specific **Component**. A component is a logical grouping defined by the
@@ -41,10 +46,10 @@ In the FINT ecosystem, a Consumer belongs to a specific **Component**. A compone
 ---
 
 ## How It Works
+This project uses the provided configuration settings to **dynamically determine** the domain and package of the resources to be handled.
 
-1.  **Configuration:** the per-org `fint.org-id` plus domain/package settings determine which resources and topics this consumer serves.
-2.  **Reflection:** the FINT model classes are scanned at startup to map packages → resource types.
-3.  **Reads:** resources are served straight from the shared MongoDB resource store (written by `fint-core-provider-gateway`); back-links are merged in from the `backlinks` collection.
-4.  **Writes:** client mutations are forwarded to adapters as Kafka request events; the adapter's response is consumed back and exposed via the `…/status/{corrId}` endpoint.
-
-See the repo-root `CLAUDE.md` for the full architecture.
+1.  **Configuration:** The app reads the domain and package settings (e.g., `utdanning` / `vurdering`).
+2.  **Reflection:** Java Reflection is employed to scan and manage these resources automatically.
+4.  **Kafka Data Flow:** (Coming Soon - Explanation of how data flows from Kafka -> Cache)
+5.  **Eviction:** (Coming Soon - Explanation of cache eviction policies)
+5.  **API-documentation:** (Coming Soon - OpenAPI documentation)

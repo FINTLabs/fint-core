@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-ressurs-tilgang
+  namespace: agderfk-no
+spec:
+  url:
+    hostname: beta.felleskomponent.no
+  ingress:
+    basePaths:
+      - /ressurs/tilgang
+    headers:
+      x-org-id: agderfk.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'agderfk-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

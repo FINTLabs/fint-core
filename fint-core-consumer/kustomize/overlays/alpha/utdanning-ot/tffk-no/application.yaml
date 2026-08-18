@@ -1,0 +1,25 @@
+apiVersion: fintlabs.no/v1alpha1
+kind: Application
+metadata:
+  name: fint-core-consumer-utdanning-ot
+  namespace: tffk-no
+spec:
+  url:
+    hostname: alpha.felleskomponent.no
+  ingress:
+    basePaths:
+      - /utdanning/ot
+    headers:
+      x-org-id: tffk.no
+  kafka:
+    enabled: true
+    acls:
+      - topic: 'tffk-no.fint-core.*'
+        permission: admin
+  resources:
+    limits:
+      memory: "528Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "100m"

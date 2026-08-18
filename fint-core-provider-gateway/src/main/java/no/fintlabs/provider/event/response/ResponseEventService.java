@@ -1,0 +1,99 @@
+package no.fintlabs.provider.event.response;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import no.fintlabs.adapter.models.event.RequestFintEvent;
+import no.fintlabs.adapter.models.event.ResponseFintEvent;
+import no.fintlabs.adapter.operation.OperationType;
+import no.novari.core.shared.model.ResourceCoordinate;
+import no.novari.resource.server.authentication.CorePrincipal;
+import no.fintlabs.provider.sync.BufferWriter;
+import no.fintlabs.provider.event.request.RequestEventService;
+import no.fintlabs.provider.event.InvalidOrgIdException;
+import no.fintlabs.provider.event.InvalidResponseFintEventException;
+import no.fintlabs.provider.sync.InvalidSyncPageEntryException;
+import no.fintlabs.provider.event.NoRequestFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.Objects;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ResponseEventService {
+
+    private final ResponseFintEventProducer responseFintEventProducer;
+    private final RequestEventService requestEventService;
+    private final BufferWriter bufferWriter;
+
+    public void handleEvent(ResponseFintEvent responseFintEvent, CorePrincipal corePrincipal) throws NoRequestFoundException, InvalidOrgIdException {
+        RequestFintEvent requestEvent = requestEventService.getEvent(responseFintEvent.getCorrId())
+                .orElseThrow(() -> new NoRequestFoundException(responseFintEvent.getCorrId()));
+
+        ResourceCoordinate coords = new ResourceCoordinate(
+                requestEvent.getOrgId(),
+                requestEvent.getDomainName(),
+                requestEvent.getPackageName(),
+                requestEvent.getResourceName()
+        );
+
+        validateEvent(requestEvent, responseFintEvent, corePrincipal);
+
+        responseFintEventProducer.sendEvent(responseFintEvent, requestEvent);
+        requestEventService.removeEvent(responseFintEvent.getCorrId());
+
+        if (!createRequestFailed(responseFintEvent) && eventIsNotValidate(responseFintEvent)) {
+            bufferWriter.sendEventEntity(coords, responseFintEvent.getValue(), responseFintEvent.getHandledAt());
+        } else {
+            log.info("Not sending entity to Buffer because it is a validate event or create request failed");
+        }
+    }
+
+    /**
+     * Validates that the response event is valid.
+     * Sets handledAt to current time if not set.
+     */
+    private void validateEvent(RequestFintEvent request, ResponseFintEvent response, CorePrincipal corePrincipal) throws InvalidOrgIdException {
+        if (Objects.isNull(response.getOperationType())) {
+            log.error("Recieved event with no OperationType, returning BAD_REQUEST for {}", corePrincipal.getUsername());
+            throw new InvalidResponseFintEventException("OperationType is required but was not provided.");
+        }
+
+        if (!response.getOrgId().equals(request.getOrgId())) {
+            log.error("Recieved event response, did not match request org-id: {} for {}", response.getOrgId(), corePrincipal.getUsername());
+            throw new InvalidOrgIdException(response.getOrgId());
+        }
+
+        if (syncPageEntryIsNullWhenRequired(response)) {
+            log.error("Recieved a SyncPageEntry that is null for {}", corePrincipal.getUsername());
+            throw new InvalidSyncPageEntryException("SyncPageEntry is null");
+        }
+
+        if (response.getHandledAt() <= 0) {
+            log.error("Overriding handledAt for event: {}", response.getCorrId());
+            response.setHandledAt(System.currentTimeMillis());
+        }
+    }
+
+    private boolean createRequestFailed(ResponseFintEvent responseFintEvent) {
+        return responseFintEvent.getOperationType().equals(OperationType.CREATE) && (responseHasAnError(responseFintEvent));
+    }
+
+    private boolean responseHasAnError(ResponseFintEvent responseFintEvent) {
+        return responseFintEvent.isFailed() || responseFintEvent.isConflicted() || responseFintEvent.isRejected();
+    }
+
+    private boolean syncPageEntryIsNullWhenRequired(ResponseFintEvent responseFintEvent) {
+        if (Objects.nonNull(responseFintEvent.getOperationType()) && responseFintEvent.getOperationType().equals(OperationType.VALIDATE)) {
+            return responseFintEvent.isConflicted() && responseFintEvent.getValue() == null;
+        } else {
+            return responseFintEvent.getValue() == null;
+        }
+    }
+
+
+    private boolean eventIsNotValidate(ResponseFintEvent responseFintEvent) {
+        return !responseFintEvent.getOperationType().equals(OperationType.VALIDATE);
+    }
+
+}
