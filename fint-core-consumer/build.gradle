@@ -47,7 +47,7 @@ dependencies {
     implementation 'no.fintlabs:fint-core-status-models:1.0.0'
     implementation 'no.novari:fint-core-principal:4.1.0'
 
-    implementation 'com.google.guava:guava:33.5.0-jre'
+    implementation 'com.google.guava:guava:33.6.0-jre'
     implementation 'com.fasterxml.jackson.module:jackson-module-kotlin'
     implementation 'org.reflections:reflections:0.10.2'
 

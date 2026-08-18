@@ -15,13 +15,13 @@ subprojects {
             "implementation"("org.springframework.boot:spring-boot-starter-actuator")
             "implementation"("org.springframework.kafka:spring-kafka")
             "implementation"("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
-            "implementation"("com.github.ben-manes.caffeine:caffeine:3.2.3")
+            "implementation"("com.github.ben-manes.caffeine:caffeine:3.2.4")
             "implementation"("no.novari:fint-core-metamodel:3.0.0")
 
             "compileOnly"("org.projectlombok:lombok")
             "annotationProcessor"("org.projectlombok:lombok")
 
-            "testImplementation"("io.mockk:mockk:1.13.13")
+            "testImplementation"("io.mockk:mockk:1.14.11")
             "testImplementation"("org.springframework.boot:spring-boot-starter-test")
             "testImplementation"("org.springframework.kafka:spring-kafka-test")
             "testImplementation"("org.testcontainers:junit-jupiter")
