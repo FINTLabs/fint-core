@@ -7,27 +7,20 @@ import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter
 import com.fasterxml.jackson.databind.ser.BeanSerializerModifier
+import no.fintlabs.consumer.resource.dto.LinkResponse
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link
 
 const val WIRE_LINKS_FIELD = "_links"
 
-/**
- * A link as it appears on the wire. The stored [Link] keeps an id field and value; this is the
- * rendered href the client receives.
- */
-data class WireLink(
-    val href: String,
-)
-
-fun FintResource.toWireLinks(baseUrl: String): Map<String, List<WireLink>> {
-    val wire = LinkedHashMap<String, List<WireLink>>()
+fun FintResource.toWireLinks(baseUrl: String): Map<String, List<LinkResponse>> {
+    val wire = LinkedHashMap<String, List<LinkResponse>>()
 
     metadata.path?.let { path ->
         val selfLinks =
             buildList {
                 visitIdentifikators { field, value ->
-                    add(WireLink(Link(field.lowercase(), value).href(baseUrl, path)))
+                    add(LinkResponse(Link(field.lowercase(), value).href(baseUrl, path)))
                 }
             }
         if (selfLinks.isNotEmpty()) wire["self"] = selfLinks
@@ -45,7 +38,7 @@ fun FintResource.toWireLinks(baseUrl: String): Map<String, List<WireLink>> {
                         targetPath != null -> link.href(baseUrl, targetPath)
                         else -> null
                     }
-                }.map { WireLink(it) }
+                }.map { LinkResponse(it) }
 
         if (hrefs.isNotEmpty()) wire[relationName] = hrefs
     }

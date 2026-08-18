@@ -1,7 +1,6 @@
 package no.fintlabs.consumer.resource.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import no.fintlabs.consumer.resource.wire.WireLink
 import org.springframework.web.util.UriComponentsBuilder
 import kotlin.math.max
 
@@ -24,7 +23,7 @@ class FintResourcesResponse(
     val embedded: Embedded = Embedded(entries)
 
     @get:JsonProperty("_links")
-    val links: MutableMap<String, MutableList<WireLink>> = LinkedHashMap()
+    val links: MutableMap<String, MutableList<LinkResponse>> = LinkedHashMap()
 
     @get:JsonProperty("total_items")
     val totalItems: Int = max(entries.size, totalItems)
@@ -34,7 +33,7 @@ class FintResourcesResponse(
 
     fun addLink(
         relation: String,
-        link: WireLink,
+        link: LinkResponse,
     ) {
         links.getOrPut(relation) { mutableListOf() }.add(link)
     }
@@ -76,7 +75,7 @@ fun createFintResourcesResponse(
             if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size)))
             if (offset + size < this.totalItems) addLink("next", pageLink(builder, size, offset + size))
         } else {
-            addLink("self", WireLink(selfUrl))
+            addLink("self", LinkResponse(selfUrl))
         }
     }
 }
@@ -85,7 +84,7 @@ private fun pageLink(
     builder: UriComponentsBuilder,
     size: Int,
     offset: Long,
-) = WireLink(
+) = LinkResponse(
     builder
         .replaceQueryParam("offset", offset)
         .replaceQueryParam("size", size)
