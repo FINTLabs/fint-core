@@ -1,22 +1,12 @@
 package no.fintlabs.provider.register
 
-import io.mockk.every
-import io.mockk.impl.annotations.InjectMockKs
-import io.mockk.impl.annotations.MockK
-import io.mockk.junit5.MockKExtension
 import no.fintlabs.adapter.models.AdapterCapability
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.api.extension.ExtendWith
 
-@ExtendWith(MockKExtension::class)
 class AdapterRegistrationValidatorTest {
-    @MockK
-    lateinit var componentResourceRegistry: ComponentResourceRegistry
-
-    @InjectMockKs
-    lateinit var sut: AdapterRegistrationValidator
+    private val sut = AdapterRegistrationValidator()
 
     private val domainName = "utdanning"
     private val packageName = "vurdering"
@@ -28,28 +18,36 @@ class AdapterRegistrationValidatorTest {
     }
 
     @Test
-    fun `existing component-resource in registry is valid`() {
+    fun `a resource the model declares is valid`() {
         val capability = createCapability(domainName, packageName, resourceName)
-
-        every { componentResourceRegistry.containsResource(domainName, packageName, resourceName) } returns true
 
         assertDoesNotThrow { sut.validateCapabilities(listOf(capability)) }
     }
 
     @Test
-    fun `non-existing component-resource in registry is invalid`() {
-        val capability = createCapability(domainName, packageName, resourceName)
-
-        every { componentResourceRegistry.containsResource(domainName, packageName, resourceName) } returns false
+    fun `a resource the model does not declare is invalid`() {
+        val capability = createCapability(domainName, packageName, "finnesikke")
 
         assertThrows<InvalidAdapterCapabilityException> { sut.validateCapabilities(listOf(capability)) }
     }
 
     @Test
+    fun `a resource in the wrong component is invalid`() {
+        val capability = createCapability(domainName, "elev", resourceName)
+
+        assertThrows<InvalidAdapterCapabilityException> { sut.validateCapabilities(listOf(capability)) }
+    }
+
+    @Test
+    fun `resource lookup ignores case`() {
+        val capability = createCapability("Utdanning", "Vurdering", "Elevfravar")
+
+        assertDoesNotThrow { sut.validateCapabilities(listOf(capability)) }
+    }
+
+    @Test
     fun `fullSyncIntervalInDays between 1 and 7 is valid`() {
         val capabilities = (1..7).map { createCapability(fullSyncIntervalInDays = it) }
-
-        every { componentResourceRegistry.containsResource(domainName, packageName, resourceName) } returns true
 
         assertDoesNotThrow { sut.validateCapabilities(capabilities) }
     }
@@ -58,16 +56,12 @@ class AdapterRegistrationValidatorTest {
     fun `fullSyncIntervalInDays under 1 is invalid`() {
         val capability = createCapability(fullSyncIntervalInDays = 0)
 
-        every { componentResourceRegistry.containsResource(domainName, packageName, resourceName) } returns true
-
         assertThrows<InvalidAdapterCapabilityException> { sut.validateCapabilities(listOf(capability)) }
     }
 
     @Test
     fun `fullSyncIntervalInDays above 7 days is invalid`() {
         val capability = createCapability(fullSyncIntervalInDays = 8)
-
-        every { componentResourceRegistry.containsResource(domainName, packageName, resourceName) } returns true
 
         assertThrows<InvalidAdapterCapabilityException> { sut.validateCapabilities(listOf(capability)) }
     }
