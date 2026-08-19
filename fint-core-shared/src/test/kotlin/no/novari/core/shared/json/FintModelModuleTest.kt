@@ -30,7 +30,7 @@ class FintModelModuleTest {
     }
 
     @Test
-    fun `id field is located by the target's metadata, not by position`() {
+    fun `the last segment is the id value and the one before it the id field`() {
         val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/123" } ]""")
 
         assertEquals(Link("fodselsnummer", "123"), elev.relationLinks("person").single())
@@ -73,7 +73,7 @@ class FintModelModuleTest {
     }
 
     @Test
-    fun `relative hrefs resolve against the same id fields`() {
+    fun `relative hrefs are read the same way`() {
         val elev = elev(""""person": [ { "href": "fodselsnummer/123" } ]""")
 
         assertEquals(Link("fodselsnummer", "123"), elev.relationLinks("person").single())
@@ -137,7 +137,7 @@ class FintModelModuleTest {
     }
 
     @Test
-    fun `nested resources resolve against their own metadata`() {
+    fun `nested resources are read against their own relations`() {
         val payload =
             """
             {
