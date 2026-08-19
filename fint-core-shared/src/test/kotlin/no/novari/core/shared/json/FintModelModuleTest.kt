@@ -37,10 +37,32 @@ class FintModelModuleTest {
     }
 
     @Test
-    fun `id values containing slashes are kept whole`() {
-        val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/ABC/DEF/1" } ]""")
+    fun `an encoded id value is decoded and stored whole`() {
+        val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/ABC%2FDEF%2F1" } ]""")
 
         assertEquals(Link("fodselsnummer", "ABC/DEF/1"), elev.relationLinks("person").single())
+    }
+
+    @Test
+    fun `an encoded space is decoded, not turned into a plus`() {
+        val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/a%20b" } ]""")
+
+        assertEquals(Link("fodselsnummer", "a b"), elev.relationLinks("person").single())
+    }
+
+    @Test
+    fun `a raw unencoded value containing a slash no longer resolves`() {
+        val href = "https://api.felleskomponent.no/felles/person/fodselsnummer/ABC/DEF/1"
+        val elev = elev(""""person": [ { "href": "$href" } ]""")
+
+        assertEquals(Link(unresolved = href), elev.relationLinks("person").single())
+    }
+
+    @Test
+    fun `a raw value with a stray percent is kept verbatim rather than failing the page`() {
+        val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/100%" } ]""")
+
+        assertEquals(Link("fodselsnummer", "100%"), elev.relationLinks("person").single())
     }
 
     @Test

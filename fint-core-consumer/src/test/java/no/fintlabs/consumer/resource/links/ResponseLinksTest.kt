@@ -1,4 +1,4 @@
-package no.fintlabs.consumer.resource.wire
+package no.fintlabs.consumer.resource.links
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.JsonNode
@@ -17,7 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class WireLinksTest {
+class ResponseLinksTest {
     private val baseUrl = "https://api.felleskomponent.no"
 
     private val mapper =
@@ -29,7 +29,7 @@ class WireLinksTest {
                 JavaTimeModule(),
                 KotlinModule.Builder().build(),
                 FintModelModule(),
-                WireLinksModule(baseUrl),
+                ResponseLinksModule(baseUrl),
             ).dateFormat(ISO8601DateFormat())
             .build<com.fasterxml.jackson.databind.ObjectMapper>()
 

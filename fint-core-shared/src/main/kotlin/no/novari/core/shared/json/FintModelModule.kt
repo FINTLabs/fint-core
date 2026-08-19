@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer
 import com.fasterxml.jackson.databind.module.SimpleModule
+import no.novari.core.shared.uri.LinkCodec
 import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintObject
 import no.novari.fint.core.model.FintRelation
@@ -77,7 +78,11 @@ class FintLinksDeserializer private constructor(
     private fun resolve(
         href: String,
         relation: FintRelation?,
-    ): Link = relation?.resolveLink(href) ?: Link(unresolved = href)
+    ): Link {
+        val link = relation?.resolveLink(href) ?: return Link(unresolved = href)
+        val idValue = link.idValue ?: return link
+        return link.copy(idValue = LinkCodec.decodeIdValue(idValue))
+    }
 
     private fun JsonNode.textOrNull(field: String): String? = get(field)?.takeIf { it.isTextual }?.asText()
 }

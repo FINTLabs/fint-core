@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.util.ISO8601DateFormat
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import no.fintlabs.consumer.resource.wire.WireLinksModule
+import no.fintlabs.consumer.resource.links.ResponseLinksModule
 import no.novari.core.shared.json.FintModelModule
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -30,7 +30,7 @@ open class JacksonConfiguration {
                 JavaTimeModule(),
                 KotlinModule.Builder().build(),
                 FintModelModule(),
-                WireLinksModule(consumerConfiguration.baseUrl),
+                ResponseLinksModule(consumerConfiguration.baseUrl),
             ).dateFormat(ISO8601DateFormat())
 
     @Bean
