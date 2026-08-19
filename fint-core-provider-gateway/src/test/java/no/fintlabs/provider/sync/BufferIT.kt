@@ -7,8 +7,6 @@ import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
-import no.novari.fint.core.model.utdanning.elev.Elev
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.config.ConfigResource
@@ -123,5 +121,5 @@ class BufferIT(
             .readMessage(any())
     }
 
-    fun createElev() = Elev(systemId = Identifikator(identifikatorverdi = "123"))
+    fun createElev(): Map<String, Any> = mapOf("systemId" to mapOf("identifikatorverdi" to "123"))
 }
