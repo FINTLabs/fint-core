@@ -1,7 +1,5 @@
 package no.fintlabs.provider.sync
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
@@ -9,8 +7,6 @@ import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
-import no.novari.fint.core.model.utdanning.elev.Elev
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.config.ConfigResource
@@ -29,7 +25,6 @@ import kotlin.test.assertTrue
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [Application::class])
 class BufferIT(
     @Autowired private val writer: BufferWriter,
-    @Autowired private val objectMapper: ObjectMapper,
 ) : KafkaContainerBaseIT() {
     @MockitoSpyBean
     private lateinit var reader: BufferReader
@@ -126,9 +121,5 @@ class BufferIT(
             .readMessage(any())
     }
 
-    fun createElev(): Map<String, Any> =
-        objectMapper.convertValue(
-            Elev(systemId = Identifikator(identifikatorverdi = "123")),
-            object : TypeReference<Map<String, Any>>() {},
-        )
+    fun createElev(): Map<String, Any> = mapOf("systemId" to mapOf("identifikatorverdi" to "123"))
 }
