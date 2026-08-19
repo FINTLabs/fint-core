@@ -73,11 +73,6 @@ class PersistanseIT(
         }
     }
 
-    /**
-     * Built as an Elev so the payload stays tied to the model, then converted because that is what
-     * the buffer actually carries: `SyncPageEntry.resource` is declared `Object`, so an adapter's
-     * JSON binds to a map and only becomes a FintResource downstream, in ResourceConverter.
-     */
     fun createElev(): Map<String, Any> =
         objectMapper.convertValue(
             Elev(
