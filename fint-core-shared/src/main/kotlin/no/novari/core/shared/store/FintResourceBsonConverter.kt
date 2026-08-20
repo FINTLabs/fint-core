@@ -1,8 +1,6 @@
 package no.novari.core.shared.store
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
-import no.novari.core.shared.json.FintModelModule
+import no.novari.core.shared.json.FintJson
 import no.novari.fint.core.model.FintResource
 import org.bson.Document
 import org.springframework.stereotype.Service
@@ -14,14 +12,8 @@ import org.springframework.stereotype.Service
  * resource's own metadata, so a change of base URL does not require rewriting stored documents.
  */
 @Service
-class FintResourceBsonConverter(
-    objectMapper: ObjectMapper,
-) {
-    private val mapper =
-        objectMapper
-            .copy()
-            .registerModule(FintModelModule())
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+class FintResourceBsonConverter {
+    private val mapper = FintJson.storageMapper()
 
     fun toDocument(resource: FintResource): Document = Document.parse(mapper.writeValueAsString(resource))
 }

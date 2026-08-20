@@ -1,6 +1,7 @@
 package no.fintlabs.consumer.resource.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import no.novari.core.shared.json.LinkResponse
 import org.springframework.web.util.UriComponentsBuilder
 import kotlin.math.max
 

@@ -1,7 +1,6 @@
 package no.fintlabs.consumer.resource.dto
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import no.novari.core.shared.json.FintJson
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,7 +8,7 @@ import kotlin.test.assertNotNull
 class FintResourcesResponseTest {
     private val baseUrl = "https://test.felleskomponent.no"
     private val resourceUri = "utdanning/elev/elev"
-    private val mapper = ObjectMapper().registerKotlinModule()
+    private val mapper = FintJson.responseMapper(baseUrl)
 
     private fun page(
         entryCount: Int,

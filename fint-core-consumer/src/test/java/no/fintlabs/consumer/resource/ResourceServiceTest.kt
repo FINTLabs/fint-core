@@ -1,12 +1,9 @@
 package no.fintlabs.consumer.resource
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.consumer.config.ConsumerConfiguration
-import no.novari.core.shared.json.FintModelModule
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceEntry
@@ -33,7 +30,6 @@ class ResourceServiceTest {
                     podUrl = "http://localhost",
                 ),
             resourceStore = resourceStore,
-            objectMapper = ObjectMapper().registerKotlinModule().registerModule(FintModelModule()),
         )
 
     val resourceCoordinate =

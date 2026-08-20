@@ -1,4 +1,4 @@
-package no.fintlabs.consumer.resource.links
+package no.novari.core.shared.json
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.databind.BeanDescription
@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter
 import com.fasterxml.jackson.databind.ser.BeanSerializerModifier
-import no.fintlabs.consumer.resource.dto.LinkResponse
 import no.novari.core.shared.uri.LinkCodec
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link

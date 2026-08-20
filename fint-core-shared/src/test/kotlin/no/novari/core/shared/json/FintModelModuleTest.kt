@@ -1,8 +1,6 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -13,11 +11,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FintModelModuleTest {
-    private val mapper: ObjectMapper =
-        ObjectMapper()
-            .registerKotlinModule()
-            .registerModule(FintModelModule())
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+    private val mapper: ObjectMapper = FintJson.storageMapper()
 
     private fun elev(links: String) = mapper.readValue("""{ "_links": { $links } }""", Elev::class.java)
 

@@ -1,9 +1,9 @@
 package no.fintlabs.consumer.resource
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.resource.dto.FintResourcesResponse
 import no.fintlabs.consumer.resource.dto.createFintResourcesResponse
+import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
 import no.novari.core.shared.store.ResourceEntry
@@ -17,8 +17,9 @@ import java.time.Instant
 class ResourceService(
     private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
-    private val objectMapper: ObjectMapper,
 ) {
+    private val storageMapper = FintJson.storageMapper()
+
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
         size: Int,
@@ -52,7 +53,7 @@ class ResourceService(
     private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> {
         val resourceClass = resourceCoordinate.toResourceClass()
         return map { entry ->
-            objectMapper.convertValue(entry.data, resourceClass)
+            storageMapper.convertValue(entry.data, resourceClass)
         }
     }
 

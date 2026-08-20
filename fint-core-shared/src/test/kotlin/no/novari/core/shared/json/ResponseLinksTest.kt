@@ -1,18 +1,11 @@
-package no.fintlabs.consumer.resource.links
+package no.novari.core.shared.json
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.databind.util.ISO8601DateFormat
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import no.novari.core.shared.json.FintModelModule
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Adresse
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.junit.jupiter.api.Test
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -20,18 +13,7 @@ import kotlin.test.assertTrue
 class ResponseLinksTest {
     private val baseUrl = "https://api.felleskomponent.no"
 
-    private val mapper =
-        Jackson2ObjectMapperBuilder()
-            .failOnUnknownProperties(false)
-            .serializationInclusion(JsonInclude.Include.NON_NULL)
-            .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .modules(
-                JavaTimeModule(),
-                KotlinModule.Builder().build(),
-                FintModelModule(),
-                ResponseLinksModule(baseUrl),
-            ).dateFormat(ISO8601DateFormat())
-            .build<com.fasterxml.jackson.databind.ObjectMapper>()
+    private val mapper = FintJson.responseMapper(baseUrl)
 
     private fun wire(resource: Any): JsonNode = mapper.readTree(mapper.writeValueAsString(resource))
 

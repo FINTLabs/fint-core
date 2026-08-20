@@ -1,9 +1,5 @@
 package no.fintlabs.provider.sync
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import no.novari.core.shared.json.FintModelModule
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.junit.jupiter.api.Test
@@ -19,13 +15,7 @@ class ResourceConverterTest {
             resourceName = "elev",
         )
 
-    private val mapper =
-        ObjectMapper()
-            .registerKotlinModule()
-            .registerModule(FintModelModule())
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-
-    private val converter = ResourceConverter(mapper)
+    private val converter = ResourceConverter()
 
     @Test
     fun `converts JSON string payload to FintResource`() {

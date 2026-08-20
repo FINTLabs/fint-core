@@ -1,4 +1,4 @@
-package no.fintlabs.consumer.resource.dto
+package no.novari.core.shared.json
 
 /**
  * A link as the client receives it. The stored `Link` keeps an id field and value; this is the
