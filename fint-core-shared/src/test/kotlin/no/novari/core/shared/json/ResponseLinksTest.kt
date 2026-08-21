@@ -1,7 +1,9 @@
 package no.novari.core.shared.json
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import no.novari.fint.core.model.Link
+import no.novari.fint.core.model.felles.Person
 import no.novari.fint.core.model.felles.kompleksedatatyper.Adresse
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -15,7 +17,12 @@ class ResponseLinksTest {
 
     private val mapper = FintJson.responseMapper(baseUrl)
 
-    private fun wire(resource: Any): JsonNode = mapper.readTree(mapper.writeValueAsString(resource))
+    private val servedMapper = FintJson.responseMapper(baseUrl) { "utdanning/elev" }
+
+    private fun wire(
+        resource: Any,
+        with: ObjectMapper = mapper,
+    ): JsonNode = with.readTree(with.writeValueAsString(resource))
 
     private fun hrefs(
         node: JsonNode,
@@ -124,5 +131,69 @@ class ResponseLinksTest {
         assertTrue("metadata" !in json, "metadata leaked into $json")
         assertTrue("idField" !in json, "raw link form leaked into $json")
         assertTrue("\"links\"" !in json, "unrenamed links property leaked into $json")
+    }
+
+    @Test
+    fun `a served common resource gets self links under the component it was reached through`() {
+        val person = Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345"))
+
+        assertEquals(
+            listOf("$baseUrl/utdanning/elev/person/fodselsnummer/01010112345"),
+            hrefs(wire(person, servedMapper), "self"),
+        )
+        assertEquals(
+            listOf("$baseUrl/administrasjon/personal/person/fodselsnummer/01010112345"),
+            hrefs(wire(person, FintJson.responseMapper(baseUrl) { "administrasjon/personal" }), "self"),
+        )
+    }
+
+    @Test
+    fun `a common resource with no component in scope gets no self link`() {
+        val person = Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345"))
+
+        assertNull(wire(person).get("_links"))
+    }
+
+    @Test
+    fun `a served common resource's links to common targets resolve against the same component`() {
+        val person =
+            Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345")).apply {
+                addLink("foreldreansvar", Link("fodselsnummer", "02020254321"))
+            }
+
+        assertEquals(
+            listOf("$baseUrl/utdanning/elev/person/fodselsnummer/02020254321"),
+            hrefs(wire(person, servedMapper), "foreldreansvar"),
+        )
+    }
+
+    @Test
+    fun `a served common resource's links to fixed-path targets ignore the component`() {
+        val person =
+            Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345")).apply {
+                addLink("kommune", Link("systemid", "3201"))
+            }
+
+        assertEquals(
+            listOf("$baseUrl/felles/kodeverk/kommune/systemid/3201"),
+            hrefs(wire(person, servedMapper), "kommune"),
+        )
+    }
+
+    @Test
+    fun `a common resource's links to common targets are dropped when no component is in scope`() {
+        val person =
+            Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345")).apply {
+                addLink("foreldreansvar", Link("fodselsnummer", "02020254321"))
+            }
+
+        assertNull(wire(person).get("_links"))
+    }
+
+    @Test
+    fun `nested resources stay linkless even when a component is in scope`() {
+        val adresse = Adresse(postnummer = "0150")
+
+        assertNull(wire(adresse, servedMapper).get("_links"))
     }
 }

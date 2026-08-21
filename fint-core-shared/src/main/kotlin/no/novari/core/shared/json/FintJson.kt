@@ -33,12 +33,18 @@ object FintJson {
     /**
      * The county-facing wire form: everything in the storage form, plus `_links` rendered as
      * absolute hrefs against [baseUrl] and `self` regenerated from the resource's id fields.
+     * A common resource has no path of its own, so its hrefs render against the component
+     * supplied by [componentResolver] — the consumer reads it from the request being served,
+     * and the default renders such resources without the links that need one.
      * This is the consumer's primary (HTTP) mapper and nothing else — persisting through it
      * would store hrefs and defeat the id-based storage form.
      */
     @Suppress("DEPRECATION")
-    fun responseMapper(baseUrl: String): ObjectMapper =
+    fun responseMapper(
+        baseUrl: String,
+        componentResolver: ComponentResolver = { null },
+    ): ObjectMapper =
         storageMapper()
-            .registerModule(ResponseLinksModule(baseUrl))
+            .registerModule(ResponseLinksModule(baseUrl, componentResolver))
             .setDateFormat(ISO8601DateFormat())
 }
