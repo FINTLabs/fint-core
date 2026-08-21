@@ -90,6 +90,22 @@ class ResponseLinksTest {
     }
 
     @Test
+    fun `nested resources render their own links as hrefs`() {
+        val elev =
+            Elev(
+                systemId = Identifikator(identifikatorverdi = "123"),
+                hybeladresse =
+                    Adresse(postnummer = "0150").apply {
+                        addLink("land", Link("systemid", "NO"))
+                    },
+            )
+
+        val nested = wire(elev).get("hybeladresse")
+
+        assertEquals(listOf("$baseUrl/felles/kodeverk/iso/landkode/systemid/NO"), hrefs(nested, "land"))
+    }
+
+    @Test
     fun `nested resources without their own path get no self link`() {
         val adresse = Adresse(postnummer = "0150")
 
