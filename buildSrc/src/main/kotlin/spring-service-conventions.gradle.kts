@@ -39,7 +39,7 @@ dependencies {
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
-    implementation("no.novari:fint-core-information-model:0.1.0")
+    implementation("no.novari:fint-core-information-model:0.2.0")
     implementation("no.novari:kafka:6.0.0")
 }
 
