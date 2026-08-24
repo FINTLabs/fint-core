@@ -6,27 +6,40 @@ import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
+import no.fintlabs.provider.TestcontainersConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.relation.StoredRelation
 import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
+import no.novari.fint.model.resource.Link
 import no.novari.fint.model.resource.utdanning.elev.ElevResource
+import no.novari.fint.model.resource.utdanning.elev.ElevforholdResource
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.TopicConfig
+import org.awaitility.kotlin.await
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
 import org.mockito.kotlin.any
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
+import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.query.Criteria
+import org.springframework.data.mongodb.core.query.Query
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import java.time.Duration
+import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [Application::class])
+@Import(TestcontainersConfiguration::class)
 class BufferIT(
     @Autowired private val writer: BufferWriter,
+    @Autowired private val mongoTemplate: MongoTemplate,
 ) : KafkaContainerBaseIT() {
     @MockitoSpyBean
     private lateinit var reader: BufferReader
@@ -121,6 +134,82 @@ class BufferIT(
         writer.sendSyncEntity(sync, resource, resourceCoordinate)
         verify(reader, timeout(5000).times(1))
             .readMessage(any())
+    }
+
+    @Test
+    fun `stores relation edge for relation with inverse`() {
+        val sourceId = "EF-${UUID.randomUUID()}"
+        val targetId = "E-${UUID.randomUUID()}"
+
+        val sourceCoordinate =
+            ResourceCoordinate(
+                "fintlabs.no",
+                "utdanning",
+                "elev",
+                "elevforhold",
+            )
+
+        val entry =
+            SyncPageEntry.of(
+                sourceId,
+                ElevforholdResource().apply {
+                    systemId = Identifikator().apply { identifikatorverdi = sourceId }
+                    addElev(
+                        Link.with(
+                            "https://api.felleskomponent.no/utdanning/elev/elev/elevnummer/$targetId",
+                        ),
+                    )
+                },
+            )
+
+        val sync =
+            SyncPage(
+                SyncPageMetadata(
+                    "test",
+                    "corr-${UUID.randomUUID()}",
+                    "fintlabs-no",
+                    1L,
+                    1L,
+                    1L,
+                    1L,
+                    "beta.felleskomponent.no/utdanning/elev",
+                    1782300748715L,
+                ),
+                listOf(entry),
+                SyncType.FULL,
+            )
+
+        writer.sendSyncEntity(sync, entry, sourceCoordinate).get()
+
+        val query =
+            Query.query(
+                Criteria.where("source.identifier.value").`is`(sourceId),
+            )
+
+        await.atMost(Duration.ofSeconds(5)).untilAsserted {
+            val edge =
+                assertNotNull(
+                    mongoTemplate.findOne(query, StoredRelation::class.java),
+                )
+
+            assertEquals(sourceCoordinate, edge.source.coordinate)
+            assertEquals("systemid", edge.source.identifier.field)
+            assertEquals(sourceId, edge.source.identifier.value)
+            assertEquals("elev", edge.source.relationName)
+
+            assertEquals(
+                ResourceCoordinate(
+                    "fintlabs.no",
+                    "utdanning",
+                    "elev",
+                    "elev",
+                ),
+                edge.target.coordinate,
+            )
+            assertEquals("elevnummer", edge.target.identifier.field)
+            assertEquals(targetId, edge.target.identifier.value)
+            assertEquals("elevforhold", edge.target.relationName)
+        }
     }
 
     fun createElev() =
