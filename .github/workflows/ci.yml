@@ -11,6 +11,7 @@ jobs:
     outputs:
       consumer: ${{ steps.filter.outputs.consumer }}
       provider: ${{ steps.filter.outputs.provider }}
+      shared: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v3
@@ -18,7 +19,7 @@ jobs:
         with:
           filters: |
             shared: &shared
-              - 'fint-core-resource-store/**'
+              - 'fint-core-shared/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - 'gradle.properties'
@@ -73,12 +74,12 @@ jobs:
 
   # Single gate for branch protection: green when nothing failed (skipped == ok).
   ci-ok:
-    needs: [consumer, provider]
+    needs: [consumer, provider, shared]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ]; then
+          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ] || [ "${{ needs.shared.result }}" = "failure" ]; then
             echo "a module check failed"
             exit 1
           fi

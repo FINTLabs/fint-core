@@ -23,7 +23,6 @@ configurations {
     }
 }
 
-val fintVersion = "4.0.30"
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -31,8 +30,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")
-    implementation("no.novari:fint-core-metamodel:3.0.0")
     implementation("no.fintlabs:fint-core-infra-models:2.1.0")
 
     compileOnly("org.projectlombok:lombok")
@@ -40,15 +39,8 @@ dependencies {
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
-    implementation("no.novari:fint-utdanning-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-administrasjon-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-personvern-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-okonomi-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-ressurs-resource-model-java:$fintVersion")
-    implementation("no.novari:fint-arkiv-resource-model-java:$fintVersion")
+    implementation("no.novari:fint-core-information-model:0.2.0")
     implementation("no.novari:kafka:6.0.0")
-
-
 }
 
 testing {

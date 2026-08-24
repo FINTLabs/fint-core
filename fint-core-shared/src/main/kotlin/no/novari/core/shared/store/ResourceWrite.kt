@@ -1,6 +1,6 @@
 package no.novari.core.shared.store
 
-import no.novari.fint.model.resource.FintResource
+import no.novari.fint.core.model.FintResource
 import java.time.Instant
 
 /**

@@ -14,7 +14,6 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.SyncMetadata
 import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.model.ResourceRef
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier

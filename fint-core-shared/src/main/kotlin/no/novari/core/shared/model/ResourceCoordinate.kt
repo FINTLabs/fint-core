@@ -1,5 +1,8 @@
 package no.novari.core.shared.model
 
+import no.novari.fint.core.model.FintModel
+import no.novari.fint.core.model.FintResource
+
 /**
  * ResourceCoordinate is mostly used to keep information needed to generate the CollectionName when we
  * are retrieving from the database. It is usally created with the parameters that we receive in the controllers.
@@ -29,3 +32,10 @@ data class ResourceCoordinate(
 
     fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
 }
+
+fun ResourceCoordinate.toResourceClass(): Class<out FintResource> =
+    FintModel
+        .byPath(domainName, packageName, resourceName)
+        ?.type
+        ?.java
+        ?: throw IllegalArgumentException("Unknown resource: $this")
