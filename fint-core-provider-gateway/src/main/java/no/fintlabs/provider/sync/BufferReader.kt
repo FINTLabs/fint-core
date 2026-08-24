@@ -1,6 +1,5 @@
 package no.fintlabs.provider.sync
 
-import no.fintlabs.provider.links.LinkService
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
@@ -13,7 +12,9 @@ import no.novari.core.shared.relation.StoredRelation
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
-import no.novari.metamodel.MetamodelService
+import no.novari.fint.core.model.FintModel
+import no.novari.fint.core.model.FintRelation
+import no.novari.fint.core.model.targetName
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
 import org.slf4j.LoggerFactory
@@ -26,8 +27,6 @@ import java.time.Instant
 class BufferReader(
     private val resourceStore: ResourceStore,
     private val resourceConverter: ResourceConverter,
-    private val linkService: LinkService,
-    private val metamodelService: MetamodelService,
     private val relationEdgeStore: RelationEdgeStore,
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
@@ -51,7 +50,7 @@ class BufferReader(
 
             val resourceModel =
                 checkNotNull(
-                    metamodelService.getResource(
+                    FintModel.byPath(
                         coords.domainName,
                         coords.packageName,
                         coords.resourceName,
@@ -61,46 +60,49 @@ class BufferReader(
                 }
             // We assume any of the entries in _links never has a size bigger than 1
             resource.links.entries.forEach { (relationName, links) ->
-                val relation = resourceModel.relations.first { it.name == relationName }
-                val inverseName = relation.inverseName ?: return@forEach
+                // Get the relation between A and B
+                val relation: FintRelation = resourceModel.relation(relationName) ?: return@forEach
+
+                val pathParts =
+                    relation.targetPath
+                        ?.split("/")
+                        ?.takeLast(3)
+                        ?.takeIf { it.size == 3 }
 
                 val (domainName, packageName, resourceName) =
-                    relation.packageName.split(".").takeLast(3)
+                    pathParts ?: listOf(
+                        requireNotNull(coords.domainName) { "coords.domainName is required" },
+                        requireNotNull(coords.packageName) { "coords.packageName is required" },
+                        requireNotNull(relation.targetName) { "relation.targetName is required" },
+                    )
 
-                val idEntry =
-                    resource.identifikators.entries.first { (_, identifier) ->
-                        identifier.identifikatorverdi == resourceId
-                    }
-
-                edges.add(
-                    StoredRelation(
-                        source =
-                            RelationEndpoint(
-                                coords,
-                                IdentifierRef(idEntry.key.lowercase(), idEntry.value.identifikatorverdi), // Not totally sure if idEntry.key should be lowercase here.
-                                relation.name,
-                            ),
-                        target =
-                            RelationEndpoint(
-                                ResourceCoordinate(
-                                    coords.orgId,
-                                    domainName.lowercase(),
-                                    packageName.lowercase(),
-                                    resourceName.lowercase(),
+                val idEntry = resource.idFor(resourceId) ?: return@forEach // håndter null!
+                links.forEach { link ->
+                    edges.add(
+                        StoredRelation(
+                            source =
+                                RelationEndpoint(
+                                    coords,
+                                    IdentifierRef(idEntry.first.lowercase(), idEntry.second), // Not totally sure if idEntry.key should be lowercase here.
+                                    relation.name,
                                 ),
-                                IdentifierRef(
-                                    links
-                                        .first()
-                                        .href
-                                        .split("/")
-                                        .first()
-                                        .lowercase(),
-                                    links.first().href.split("/")[1],
+                            target =
+                                RelationEndpoint(
+                                    ResourceCoordinate(
+                                        coords.orgId,
+                                        domainName.lowercase(),
+                                        packageName.lowercase(),
+                                        resourceName.lowercase(),
+                                    ),
+                                    IdentifierRef(
+                                        requireNotNull(link.idField),
+                                        requireNotNull(link.idValue),
+                                    ),
+                                    resourceName,
                                 ),
-                                inverseName,
-                            ),
-                    ),
-                )
+                        ),
+                    )
+                }
             }
 
             resourceWrites.add(ResourceWrite(resourceId, coords.toCollectionName(), resource))
