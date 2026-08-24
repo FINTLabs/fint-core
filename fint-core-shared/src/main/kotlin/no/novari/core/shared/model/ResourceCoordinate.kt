@@ -2,6 +2,7 @@ package no.novari.core.shared.model
 
 import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintResource
+import no.novari.fint.core.model.FintResourceRef
 
 /**
  * ResourceCoordinate is mostly used to keep information needed to generate the CollectionName when we
@@ -31,6 +32,8 @@ data class ResourceCoordinate(
     fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
 
     fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
+
+    fun toRescourceRef(): FintResourceRef = FintResourceRef(domainName, packageName, resourceName)
 }
 
 fun ResourceCoordinate.toResourceClass(): Class<out FintResource> =

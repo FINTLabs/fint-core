@@ -14,13 +14,16 @@ import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
 import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintRelation
+import no.novari.fint.core.model.FintResource
+import no.novari.fint.core.model.FintResourceMetadata
+import no.novari.fint.core.model.FintResourceRef
+import no.novari.fint.core.model.targetIn
 import no.novari.fint.core.model.targetName
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
-import java.time.Instant
 
 // READs Kafka buffer, and writes to database.
 @Component
@@ -40,7 +43,6 @@ class BufferReader(
         log.debug("Read {} records from Kafka buffer", records.size)
 
         val resourceWrites = mutableListOf<ResourceWrite>()
-        val edges = mutableListOf<StoredRelation>()
 
         records.forEach { record ->
             val coords = resourceCoordinate(record.headers())
@@ -48,67 +50,55 @@ class BufferReader(
             val resource = resourceConverter.convert(coords, record.value())
             resource.removeSelfLinks()
 
-            val resourceModel =
-                checkNotNull(
-                    FintModel.byPath(
-                        coords.domainName,
-                        coords.packageName,
-                        coords.resourceName,
-                    ),
-                ) {
-                    "Resource model not found for $coords"
-                }
+            val resourceMetaData = FintModel.byPath(coords.domainName, coords.packageName, coords.resourceName)
+                ?: throw IllegalArgumentException("Resource model not found for $coords")
+
             // We assume any of the entries in _links never has a size bigger than 1
-            resource.links.entries.forEach { (relationName, links) ->
-                // Get the relation between A and B
-                val relation: FintRelation = resourceModel.relation(relationName) ?: return@forEach
-
-                val pathParts =
-                    relation.targetPath
-                        ?.split("/")
-                        ?.takeLast(3)
-                        ?.takeIf { it.size == 3 }
-
-                val (domainName, packageName, resourceName) =
-                    pathParts ?: listOf(
-                        requireNotNull(coords.domainName) { "coords.domainName is required" },
-                        requireNotNull(coords.packageName) { "coords.packageName is required" },
-                        requireNotNull(relation.targetName) { "relation.targetName is required" },
-                    )
-
-                val idEntry = resource.idFor(resourceId) ?: return@forEach // håndter null!
-                links.forEach { link ->
-                    edges.add(
-                        StoredRelation(
-                            source =
-                                RelationEndpoint(
-                                    coords,
-                                    IdentifierRef(idEntry.first.lowercase(), idEntry.second), // Not totally sure if idEntry.key should be lowercase here.
-                                    relation.name,
-                                ),
-                            target =
-                                RelationEndpoint(
-                                    ResourceCoordinate(
-                                        coords.orgId,
-                                        domainName.lowercase(),
-                                        packageName.lowercase(),
-                                        resourceName.lowercase(),
-                                    ),
-                                    IdentifierRef(
-                                        requireNotNull(link.idField),
-                                        requireNotNull(link.idValue),
-                                    ),
-                                    resourceName,
-                                ),
-                        ),
-                    )
-                }
-            }
+            createRelationEdges(resource, resourceMetaData, coords, resourceId, coords.toRescourceRef())
 
             resourceWrites.add(ResourceWrite(resourceId, coords.toCollectionName(), resource))
         }
         resourceStore.saveAll(resourceWrites)
-        relationEdgeStore.saveAll(edges)
+        relationEdgeStore.saveAll(storedRelations)
+    }
+
+    private fun createRelationEdges(
+        resource: FintResource,
+        resourceModel: FintResourceMetadata,
+        coords: ResourceCoordinate,
+        resourceId: String,
+        resourceRef: FintResourceRef
+    ): List<StoredRelation> {
+        resource.links.entries.forEach { (relationName, links) ->
+            // Get the relation between A and B
+            val relation: FintRelation = resourceModel.relation(relationName) ?: return@forEach
+
+            val targetRef = relation.targetIn(resourceRef)
+
+            val idEntry = resource.idFor(resourceId) ?: return@forEach // håndter null!
+            return links.map { link ->
+                    StoredRelation(
+                        source =
+                            RelationEndpoint(
+                                coords,
+                                IdentifierRef(
+                                    idEntry.first.lowercase(),
+                                    idEntry.second
+                                ), // Not totally sure if idEntry.key should be lowercase here.
+                                relation.name,
+                            ),
+                        target =
+                            RelationEndpoint(
+                                targetRef,
+                                IdentifierRef(
+                                    requireNotNull(link.idField),
+                                    requireNotNull(link.idValue),
+                                ),
+                                resourceName,
+                            ),
+                    )
+            }
+        }
     }
 
     private fun resourceCoordinate(headers: Headers): ResourceCoordinate =

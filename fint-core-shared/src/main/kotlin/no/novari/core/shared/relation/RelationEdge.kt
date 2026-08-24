@@ -2,6 +2,7 @@ package no.novari.core.shared.relation
 
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.IdentifierRef
+import no.novari.fint.core.model.FintResourceRef
 import org.bson.types.ObjectId
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.mapping.Document
@@ -21,7 +22,7 @@ import java.time.Instant
 // )
 
 data class RelationEndpoint(
-    val coordinate: ResourceCoordinate,
+    val coordinate: FintResourceRef,
     val identifier: IdentifierRef, // exactly one field/value pair
     val relationName: String, // relation exposed from this endpoint
 )
