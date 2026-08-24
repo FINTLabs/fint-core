@@ -12,9 +12,9 @@ import org.springframework.web.servlet.HandlerMapping
 /**
  * The consumer's primary mapper speaks the response contract: outbound `_links` as full hrefs
  * with a regenerated `self`. A common resource renders against the component of the request
- * being served — read from the `{domainName}/{packageName}` path variables, never from
+ * being served, read from the `{domainName}/{packageName}` path variables and never from
  * configuration, since one deployment serves every component. Storage-form conversion never
- * goes through this bean — those sites build `FintJson.storageMapper()` themselves.
+ * goes through this bean; those sites build `FintJson.storageMapper()` themselves.
  */
 @Configuration
 open class JacksonConfiguration {

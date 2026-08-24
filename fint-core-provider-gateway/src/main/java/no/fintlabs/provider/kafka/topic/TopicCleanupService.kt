@@ -53,7 +53,7 @@ class TopicCleanupService(
     /**
      * Startup hook: launches the cleanup pass in a coroutine on the IO dispatcher so it
      * does not hold up Spring's event-publishing thread. The coroutine is tied to [scope],
-     * which is cancelled in [shutdown] on pod shutdown — this cancels any in-flight
+     * which is cancelled in [shutdown] on pod shutdown; this cancels any in-flight
      * inter-batch `delay` and stops the loop cleanly. Because the pass is idempotent
      * (it relists topics and recomputes orphans on every start), a cancelled run is
      * simply resumed by the next pod startup.
@@ -71,12 +71,12 @@ class TopicCleanupService(
 
     @PreDestroy
     fun shutdown() {
-        scope.cancel("Application shutting down — topic cleanup will resume on next startup")
+        scope.cancel("Application shutting down; topic cleanup will resume on next startup")
     }
 
     /**
      * Runs one cleanup pass against [adminClient]:
-     *  1. Derives the orgs to scan from the distinct orgIds in `components.yaml` — returns
+     *  1. Derives the orgs to scan from the distinct orgIds in `components.yaml`, returning
      *     early when no components are configured.
      *  2. Builds the "keep" set via [computeExpectedTopicNames].
      *  3. Lists every topic currently on the broker.
@@ -88,7 +88,7 @@ class TopicCleanupService(
     suspend fun cleanup(adminClient: AdminClient): Set<String> {
         val scopedOrgIds = providerProperties.components.flatMap { it.orgIds }.toSet()
         if (scopedOrgIds.isEmpty()) {
-            logger.info("No orgIds derived from components.yaml — nothing to do")
+            logger.info("No orgIds derived from components.yaml; nothing to do")
             return emptySet()
         }
 
@@ -149,7 +149,7 @@ class TopicCleanupService(
      * Splits [toDelete] into chunks of `batchSize` and issues one `deleteTopics` call per
      * chunk, pausing [CleanupTopicsProperties.batchDelay] between chunks so the broker is
      * never overwhelmed. No pause follows the final batch. Checks for coroutine
-     * cancellation before each batch — if the scope is cancelled (e.g. on pod shutdown),
+     * cancellation before each batch: if the scope is cancelled (e.g. on pod shutdown),
      * a [CancellationException] propagates up and the loop exits cleanly.
      */
     private suspend fun deleteInBatches(
@@ -165,7 +165,7 @@ class TopicCleanupService(
             adminClient.deleteTopics(batch).all().get()
             deleted += batch.size
             logger.info(
-                "Batch {}/{} done — {}/{} topic(s) deleted",
+                "Batch {}/{} done: {}/{} topic(s) deleted",
                 index + 1,
                 batches.size,
                 deleted,
@@ -188,7 +188,7 @@ class TopicCleanupService(
      *  - the entity topic (`<orgId>.fint-core.entity.<domainName>-<packageName>`)
      *  - the request event topic (`<orgId>.fint-core.event.<domainName>-<packageName>-request`)
      *  - the response event topic (`<orgId>.fint-core.event.<domainName>-<packageName>-response`)
-     *  - the relation-update topic — only when the component has `relation-update: true`
+     *  - the relation-update topic, only when the component has `relation-update: true`
      *
      * It also contains the eight global event topics under the application-default orgId:
      * `adapter-health`, `adapter-register`, `adapter-full-sync`, `adapter-delta-sync`,

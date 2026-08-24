@@ -74,7 +74,7 @@ class FintResourcesResponseTest {
     }
 
     @Test
-    fun `wire contract keeps snake case total_items, computed size and _embedded entries`() {
+    fun `response contract keeps snake case total_items, computed size and _embedded entries`() {
         val json = mapper.readTree(mapper.writeValueAsString(page(4, offset = 4, size = 4, totalItems = 12)))
 
         assertEquals(12, json.get("total_items").asInt())

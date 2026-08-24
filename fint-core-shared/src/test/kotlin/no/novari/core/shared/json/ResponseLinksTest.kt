@@ -19,7 +19,7 @@ class ResponseLinksTest {
 
     private val servedMapper = FintJson.responseMapper(baseUrl) { "utdanning/elev" }
 
-    private fun wire(
+    private fun response(
         resource: Any,
         with: ObjectMapper = mapper,
     ): JsonNode = with.readTree(with.writeValueAsString(resource))
@@ -42,7 +42,7 @@ class ResponseLinksTest {
                 "$baseUrl/utdanning/elev/elev/elevnummer/ELEV-1",
                 "$baseUrl/utdanning/elev/elev/systemid/123",
             ),
-            hrefs(wire(elev), "self").sorted(),
+            hrefs(response(elev), "self").sorted(),
         )
     }
 
@@ -54,15 +54,15 @@ class ResponseLinksTest {
                 addLink("elevforhold", Link("systemid", "EF-1"))
             }
 
-        val wire = wire(elev)
+        val response = response(elev)
 
         assertEquals(
             listOf("$baseUrl/utdanning/elev/person/fodselsnummer/01010112345"),
-            hrefs(wire, "person"),
+            hrefs(response, "person"),
         )
         assertEquals(
             listOf("$baseUrl/utdanning/elev/elevforhold/systemid/EF-1"),
-            hrefs(wire, "elevforhold"),
+            hrefs(response, "elevforhold"),
         )
     }
 
@@ -73,7 +73,7 @@ class ResponseLinksTest {
                 addLink("person", Link(unresolved = "https://data.udir.no/whatever"))
             }
 
-        assertEquals(listOf("https://data.udir.no/whatever"), hrefs(wire(elev), "person"))
+        assertEquals(listOf("https://data.udir.no/whatever"), hrefs(response(elev), "person"))
     }
 
     @Test
@@ -82,7 +82,7 @@ class ResponseLinksTest {
 
         assertEquals(
             listOf("$baseUrl/utdanning/elev/elev/systemid/a%20b%2Fc"),
-            hrefs(wire(elev), "self"),
+            hrefs(response(elev), "self"),
         )
     }
 
@@ -93,7 +93,7 @@ class ResponseLinksTest {
                 addLink("self", Link(unresolved = "https://stale.example.no/old"))
             }
 
-        assertEquals(listOf("$baseUrl/utdanning/elev/elev/systemid/123"), hrefs(wire(elev), "self"))
+        assertEquals(listOf("$baseUrl/utdanning/elev/elev/systemid/123"), hrefs(response(elev), "self"))
     }
 
     @Test
@@ -107,7 +107,7 @@ class ResponseLinksTest {
                     },
             )
 
-        val nested = wire(elev).get("hybeladresse")
+        val nested = response(elev).get("hybeladresse")
 
         assertEquals(listOf("$baseUrl/felles/kodeverk/iso/landkode/systemid/NO"), hrefs(nested, "land"))
     }
@@ -116,11 +116,11 @@ class ResponseLinksTest {
     fun `nested resources without their own path get no self link`() {
         val adresse = Adresse(postnummer = "0150")
 
-        assertNull(wire(adresse).get("_links"))
+        assertNull(response(adresse).get("_links"))
     }
 
     @Test
-    fun `metadata and the raw link form never reach the wire`() {
+    fun `metadata and the raw link form never reach the response`() {
         val json =
             mapper.writeValueAsString(
                 Elev(systemId = Identifikator(identifikatorverdi = "123")).apply {
@@ -139,11 +139,11 @@ class ResponseLinksTest {
 
         assertEquals(
             listOf("$baseUrl/utdanning/elev/person/fodselsnummer/01010112345"),
-            hrefs(wire(person, servedMapper), "self"),
+            hrefs(response(person, servedMapper), "self"),
         )
         assertEquals(
             listOf("$baseUrl/administrasjon/personal/person/fodselsnummer/01010112345"),
-            hrefs(wire(person, FintJson.responseMapper(baseUrl) { "administrasjon/personal" }), "self"),
+            hrefs(response(person, FintJson.responseMapper(baseUrl) { "administrasjon/personal" }), "self"),
         )
     }
 
@@ -151,7 +151,7 @@ class ResponseLinksTest {
     fun `a common resource with no component in scope gets no self link`() {
         val person = Person(fodselsnummer = Identifikator(identifikatorverdi = "01010112345"))
 
-        assertNull(wire(person).get("_links"))
+        assertNull(response(person).get("_links"))
     }
 
     @Test
@@ -163,7 +163,7 @@ class ResponseLinksTest {
 
         assertEquals(
             listOf("$baseUrl/utdanning/elev/person/fodselsnummer/02020254321"),
-            hrefs(wire(person, servedMapper), "foreldreansvar"),
+            hrefs(response(person, servedMapper), "foreldreansvar"),
         )
     }
 
@@ -176,7 +176,7 @@ class ResponseLinksTest {
 
         assertEquals(
             listOf("$baseUrl/felles/kodeverk/kommune/systemid/3201"),
-            hrefs(wire(person, servedMapper), "kommune"),
+            hrefs(response(person, servedMapper), "kommune"),
         )
     }
 
@@ -187,13 +187,13 @@ class ResponseLinksTest {
                 addLink("foreldreansvar", Link("fodselsnummer", "02020254321"))
             }
 
-        assertNull(wire(person).get("_links"))
+        assertNull(response(person).get("_links"))
     }
 
     @Test
     fun `nested resources stay linkless even when a component is in scope`() {
         val adresse = Adresse(postnummer = "0150")
 
-        assertNull(wire(adresse, servedMapper).get("_links"))
+        assertNull(response(adresse, servedMapper).get("_links"))
     }
 }
