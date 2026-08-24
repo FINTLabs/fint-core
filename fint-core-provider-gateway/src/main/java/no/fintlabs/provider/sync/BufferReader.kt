@@ -42,51 +42,63 @@ class BufferReader(
 
         val resourceWrites = mutableListOf<ResourceWrite>()
         val edges = mutableListOf<StoredRelation>()
+
         records.forEach { record ->
             val coords = resourceCoordinate(record.headers())
             val resourceId = record.extractIdentifier() //
             val resource = resourceConverter.convert(coords, record.value())
             linkService.mapLinks(resource)
 
-            val resourceModel = metamodelService.getResource(coords.domainName, coords.packageName, coords.resourceName)
-            // _links.noe er et array. Er _links.noe.size > 0 noen gang? Antar nei
-            resource.links.entries.forEach { (relationName, links) ->
-                val relation = resourceModel?.relations?.first { it.name == relationName } // Find which identifikator to use
-                if (relation?.inverseName == null) {
-                    return@forEach // If inversename is null, then we should not care about the link
+            val resourceModel =
+                checkNotNull(
+                    metamodelService.getResource(
+                        coords.domainName,
+                        coords.packageName,
+                        coords.resourceName,
+                    ),
+                ) {
+                    "Resource model not found for $coords"
                 }
+            // We assume any of the entries in _links never has a size bigger than 1
+            resource.links.entries.forEach { (relationName, links) ->
+                val relation = resourceModel.relations.first { it.name == relationName }
+                val inverseName = relation.inverseName ?: return@forEach
 
-                val (domainName, packageName, resourceName) = // get coordinates of the target
-                    relation!!.packageName.split(".").takeLast(3) // get domain and package // TODO: håndter felles
-                val idEntry = // identifikator key and value for the source
-                    resource.identifikators.entries.first { (_, identifikator) ->
-                        identifikator.identifikatorverdi ==
-                            resourceId
+                val (domainName, packageName, resourceName) =
+                    relation.packageName.split(".").takeLast(3)
+
+                val idEntry =
+                    resource.identifikators.entries.first { (_, identifier) ->
+                        identifier.identifikatorverdi == resourceId
                     }
+
                 edges.add(
                     StoredRelation(
-                        RelationEndpoint(
-                            coords,
-                            IdentifierRef(idEntry.key, idEntry.value.identifikatorverdi),
-                            relation.inverseName,
-                        ),
-                        RelationEndpoint(
-                            ResourceCoordinate(
-                                record.headers().requiredStringValue(ORG_ID),
-                                domainName.lowercase(),
-                                packageName.lowercase(),
-                                resourceName.lowercase(),
+                        source =
+                            RelationEndpoint(
+                                coords,
+                                IdentifierRef(idEntry.key.lowercase(), idEntry.value.identifikatorverdi), // Not totally sure if idEntry.key should be lowercase here.
+                                relation.name,
                             ),
-                            IdentifierRef(
-                                links
-                                    .first()
-                                    .href
-                                    .split("/")
-                                    .first(),
-                                links.first().href.split("/")[1],
-                            ), // Hva er id value og id for target?
-                            relation.name,
-                        ),
+                        target =
+                            RelationEndpoint(
+                                ResourceCoordinate(
+                                    coords.orgId,
+                                    domainName.lowercase(),
+                                    packageName.lowercase(),
+                                    resourceName.lowercase(),
+                                ),
+                                IdentifierRef(
+                                    links
+                                        .first()
+                                        .href
+                                        .split("/")
+                                        .first()
+                                        .lowercase(),
+                                    links.first().href.split("/")[1],
+                                ),
+                                inverseName,
+                            ),
                     ),
                 )
             }
@@ -95,18 +107,6 @@ class BufferReader(
         }
         resourceStore.saveAll(resourceWrites)
         relationEdgeStore.saveAll(edges)
-        // TODO: save edges
-        /*
-        Edge(
-            sourceIdentifierType = record.extractIdentifier().split("-").first() // This is used to decide which type of identifier the backlink should use.
-            sourceId = record.extractIdentifier().substringAfter("-")
-            targetId = ... // Get from Resource somehow
-            sourceCoordinate = ... // for example is it in utdanning-vurdering?
-            targetCoordinate = ... // For example is it in utdanning-elev?
-
-        )
-         */
-        // When we construct back link, it should be the same field as specified in record.extractIdentifier()
     }
 
     private fun resourceCoordinate(headers: Headers): ResourceCoordinate =
