@@ -106,7 +106,10 @@ class CommonResourceLinksIT {
 
         val viaPersonal = get("/administrasjon/personal/person/fodselsnummer/01010112345")
         assertEquals("$baseUrl/administrasjon/personal/person/fodselsnummer/01010112345", href(viaPersonal, "self"))
-        assertEquals("$baseUrl/administrasjon/personal/person/fodselsnummer/02020254321", href(viaPersonal, "foreldreansvar"))
+        assertEquals(
+            "$baseUrl/administrasjon/personal/person/fodselsnummer/02020254321",
+            href(viaPersonal, "foreldreansvar"),
+        )
     }
 
     @Test

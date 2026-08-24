@@ -93,5 +93,4 @@ class FintLinksDeserializer private constructor(
     private fun JsonNode.textOrNull(field: String): String? = get(field)?.takeIf { it.isTextual }?.asText()
 }
 
-private fun resourceMetadataOf(type: Class<*>): FintResourceMetadata? =
-    FintModel.byType(type.kotlin) as? FintResourceMetadata
+private fun resourceMetadataOf(type: Class<*>): FintResourceMetadata? = FintModel.byType(type.kotlin) as? FintResourceMetadata
