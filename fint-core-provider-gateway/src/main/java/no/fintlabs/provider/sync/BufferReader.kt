@@ -19,6 +19,7 @@ import org.apache.kafka.common.header.Headers
 import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
+import java.time.Instant
 
 // READs Kafka buffer, and writes to database.
 @Component
@@ -31,7 +32,6 @@ class BufferReader(
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
 
-    @Suppress("ktlint:standard:no-consecutive-comments") // TODO: remove
     @KafkaListener(
         topics = ["#{topicBufferName}"],
         groupId = "consumer-service-group",
@@ -47,7 +47,7 @@ class BufferReader(
             val coords = resourceCoordinate(record.headers())
             val resourceId = record.extractIdentifier() //
             val resource = resourceConverter.convert(coords, record.value())
-            linkService.mapLinks(resource)
+            resource.removeSelfLinks()
 
             val resourceModel =
                 checkNotNull(

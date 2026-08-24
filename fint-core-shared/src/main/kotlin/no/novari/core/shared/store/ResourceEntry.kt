@@ -1,7 +1,6 @@
 package no.novari.core.shared.store
 
-import no.novari.core.shared.nonNullIdentifikators
-import no.novari.fint.model.resource.FintResource
+import no.novari.fint.core.model.FintResource
 import org.bson.Document
 import org.springframework.data.annotation.Id
 import java.time.Instant
@@ -29,4 +28,6 @@ data class ResourceEntry(
 )
 
 fun FintResource.toIdentifierRefs(): List<IdentifierRef> =
-    nonNullIdentifikators().map { (field, identifier) -> IdentifierRef(field.lowercase(), identifier.identifikatorverdi) }
+    buildList {
+        visitIdentifikators { field, value -> add(IdentifierRef(field.lowercase(), value)) }
+    }

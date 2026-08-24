@@ -5,12 +5,12 @@ Monorepo for the FINT core platform that brokers FINT resources between adapters
 
 | Module | Role |
 |---|---|
-| `fint-core-provider-gateway` | Adapter-facing service. **Sole writer** of FINT resources — handles sync ingest, autorelation, and eviction into MongoDB. |
+| `fint-core-provider-gateway` | Adapter-facing service. **Sole writer** of FINT resources: handles sync ingest, autorelation, and eviction into MongoDB. |
 | `fint-core-consumer` | Client-facing service. **Read-only** over the resource store. |
-| `fint-core-resource-store` | Shared library (the "resource engine"): cache/Mongo layer, autorelation, link mapping. Depended on by both services. |
+| `fint-core-shared` | Shared library: the JSON contracts and all `_links` handling, the Mongo resource store, Kafka header codecs. Depended on by both services; see [its README](fint-core-shared/README.md). |
 
-The platform runs **per org** — one provider + one consumer per org, each with its
-own MongoDB — so deployments are scaled and isolated per org.
+The platform runs **per org** (one provider + one consumer per org, each with its
+own MongoDB), so deployments are scaled and isolated per org.
 
 ---
 
@@ -52,10 +52,10 @@ that ends exactly at the imodel is a *clean* release; anything trailing the imod
 | `v1.0.0-4.0.30` | stable | ✅ | **beta + api** | yes |
 | `v1.0.0-rc.1-4.0.30-<branch>` | branch build | ✅ | **nothing** (manual only) | no |
 
-- **rc** is the one to watch — it ships to beta automatically.
+- **rc** is the one to watch: it ships to beta automatically.
 - **stable** (no `-rc.`) ships to beta **and** api, and updates `:latest`.
 - **branch builds** still build and push an image (tagged with the full version,
-  branch suffix included) but never deploy automatically — deploy them by hand.
+  branch suffix included) but never deploy automatically; deploy them by hand.
 - **alpha is never automatic.** It is reached only through a manual run.
 
 ### Manual deploys
@@ -74,12 +74,12 @@ This is how alpha and branch builds reach a cluster.
 
 - A change under `fint-core-consumer/**` tests only the consumer.
 - A change under `fint-core-provider-gateway/**` tests only the provider.
-- A change to the shared module (`fint-core-resource-store/**`) or root Gradle
-  files tests **both**.
+- A change to the shared module (`fint-core-shared/**`) or root Gradle
+  files tests **all three** (both services plus the shared module's own job).
 
 Each module job runs `./gradlew :<module>:check` (unit + Testcontainers integration
 tests; Docker is available on the runner). The `ci-ok` job is a single gate that is
-green when nothing failed — make it the required status check for branch protection
+green when nothing failed; make it the required status check for branch protection
 (skipped module jobs count as ok).
 
 ---
@@ -88,10 +88,10 @@ green when nothing failed — make it the required status check for branch prote
 
 `.github/workflows/cd.yml` builds and deploys (see the tag table above).
 
-1. **build-and-push** — matrix over the two services; `docker/metadata-action`
+1. **build-and-push**: matrix over the two services; `docker/metadata-action`
    tags each image with the version, a `sha-<short>` tag, and `:latest` (clean
    stable tags only); pushes to GHCR via the built-in `GITHUB_TOKEN`.
-2. **deploy** — matrix over the target environments. Per env it logs into Azure,
+2. **deploy**: matrix over the target environments. Per env it logs into Azure,
    sets the AKS context, then for every org under `kustomize/overlays/<env>/*`:
    ensures the namespace, renders the overlay, swaps in the release image tag, and
    `kubectl apply`s both Applications.
@@ -144,7 +144,7 @@ data:
   onepassword-itempath: vaults/aks-beta-vault/items/<item>
 ```
 
-The Mongo connection string is **not** in config — it comes from the
+The Mongo connection string is **not** in config; it comes from the
 `onePassword.itemPath` secret, which the FLAIS operator injects.
 
 ---

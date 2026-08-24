@@ -8,10 +8,6 @@ import no.fintlabs.provider.Application
 import no.fintlabs.provider.KafkaContainerBaseIT
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.ResourceStore
-import no.novari.fint.model.felles.kompleksedatatyper.Identifikator
-import no.novari.fint.model.felles.kompleksedatatyper.Kontaktinformasjon
-import no.novari.fint.model.resource.felles.kompleksedatatyper.AdresseResource
-import no.novari.fint.model.resource.utdanning.elev.ElevResource
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -70,30 +66,27 @@ class PersistanseIT(
         }
     }
 
-    fun createElev() =
-        ElevResource().apply {
-            systemId = identifikator("123")
-            elevnummer = identifikator("ELEV-123")
-            brukernavn = identifikator("ola.nordmann")
-            feidenavn = identifikator("ola.nordmann@fintlabs.no")
-            gjest = false
-            hybeladresse =
-                AdresseResource().apply {
-                    adresselinje = listOf("Skoleveien 1", "Hybel 204")
-                    postnummer = "0123"
-                    poststed = "Oslo"
-                }
-            kontaktinformasjon =
-                Kontaktinformasjon().apply {
-                    epostadresse = "ola.nordmann@example.no"
-                    mobiltelefonnummer = "40000000"
-                    telefonnummer = "22000000"
-                    nettsted = "https://example.no/elev/123"
-                }
-        }
+    fun createElev(): Map<String, Any> =
+        mapOf(
+            "systemId" to identifikator("123"),
+            "elevnummer" to identifikator("ELEV-123"),
+            "brukernavn" to identifikator("ola.nordmann"),
+            "feidenavn" to identifikator("ola.nordmann@fintlabs.no"),
+            "gjest" to false,
+            "hybeladresse" to
+                mapOf(
+                    "adresselinje" to listOf("Skoleveien 1", "Hybel 204"),
+                    "postnummer" to "0123",
+                    "poststed" to "Oslo",
+                ),
+            "kontaktinformasjon" to
+                mapOf(
+                    "epostadresse" to "ola.nordmann@example.no",
+                    "mobiltelefonnummer" to "40000000",
+                    "telefonnummer" to "22000000",
+                    "nettsted" to "https://example.no/elev/123",
+                ),
+        )
 
-    private fun identifikator(value: String) =
-        Identifikator().apply {
-            identifikatorverdi = value
-        }
+    private fun identifikator(value: String) = mapOf("identifikatorverdi" to value)
 }

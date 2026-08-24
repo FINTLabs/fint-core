@@ -2,6 +2,7 @@ package no.fintlabs.provider.event.response
 
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.provider.config.KafkaConfig
+import no.fintlabs.provider.event.FintComponents
 import no.fintlabs.provider.event.request.RequestEventService
 import no.novari.kafka.consuming.ErrorHandlerConfiguration
 import no.novari.kafka.consuming.ErrorHandlerFactory
@@ -10,7 +11,6 @@ import no.novari.kafka.consuming.ParameterizedListenerContainerFactoryService
 import no.novari.kafka.topic.name.EventTopicNamePatternParameters
 import no.novari.kafka.topic.name.TopicNamePatternParameterPattern
 import no.novari.kafka.topic.name.TopicNamePatternPrefixParameters
-import no.novari.metamodel.MetamodelService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
@@ -22,7 +22,6 @@ class ResponseFintEventConsumer(
     private val parameterizedListenerContainerFactoryService: ParameterizedListenerContainerFactoryService,
     private val errorHandlerFactory: ErrorHandlerFactory,
     private val requestEventService: RequestEventService,
-    private val metamodelService: MetamodelService,
     private val kafkaConfig: KafkaConfig,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -60,12 +59,7 @@ class ResponseFintEventConsumer(
                     .build(),
             )
 
-    // Example topic: utdanning-vurdering-response
-    private fun createEventNames(): Array<String> =
-        metamodelService
-            .getComponents()
-            .map { component -> "${component.domainName}-${component.packageName}-response" }
-            .toTypedArray()
+    private fun createEventNames(): Array<String> = FintComponents.eventNames("response")
 
     private fun processEvent(consumerRecord: ConsumerRecord<String?, ResponseFintEvent>) {
         logger.info("ResponseFintEvent received: {} - {}", consumerRecord.value().orgId, consumerRecord.value().corrId)
