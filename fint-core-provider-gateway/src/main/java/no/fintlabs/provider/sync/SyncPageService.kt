@@ -71,6 +71,7 @@ class SyncPageService(
     }
 
     private inline fun SyncPage.logSync(action: () -> Unit) {
+        // TODO: Continue should be log.debug
         val startOrContinue = if (metadata.page != 0L) "Continuing" else "Starting"
         log.info(
             "{} {} sync: {}({}), {}, total size: {}, page size: {}, page: {}, total pages: {}",

@@ -35,11 +35,11 @@ class LinkService {
      * from the `href` (assumed to represent an identifier field and value) and updates the link to use
      * a relative format with the structure `idField/idValue`.
      *
-     * For example, a link with `href` value `https://example.com/fodselsnummer/123` will be updated to `fodselsnummer/123`.
+     * For example, a link with `href` value `https://example.com/utdanning/elev/fodselsnummer/123` will be updated to `fodselsnummer/123`.
      */
     fun FintResource.formatLinksToRelativeURI() =
         links.values.flatten().forEach { link ->
-            val (idField, idValue) = link.href.split("/").takeLast(2)
+            val (idField, idValue) = link.href.split("/").takeLast(2) // TODO: ids can contain "/", need to handle this.
             link.setVerdi("$idField/$idValue")
         }
 
