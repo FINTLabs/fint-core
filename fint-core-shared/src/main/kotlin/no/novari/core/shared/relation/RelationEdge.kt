@@ -17,18 +17,15 @@ import java.time.Instant
 data class RelationEdge(
     @field:Id
     val id: String,
-
     // Fields that are used to generate back-link uri for example systemid/123
     val sourceIdField: String, // systemid
     val sourceIdValue: String, // 123
     val inverseName: String, // Relasjonen fra target til source (elevforhold)
-
     // TODO: Answer how we handle /utdanning/kodeverk/iso elements
     // Fields to query back-links
     val targetType: String, // targetPath == null (bruk coordinates fra elev istedenfor)
     val targetIdField: String,
     val targetIdValue: String,
-
     // Fields below are part of the design but not stored until the delete phase needs them.
     // They are already baked into [id], so enabling them later self-heals on the next sync:
     // the upsert matches the same _id and $set adds the missing fields.

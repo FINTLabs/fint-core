@@ -67,7 +67,6 @@ object RelationEdgeFactory {
                     sourceIdField = sourceIdField.lowercase(),
                     sourceIdValue = sourceIdValue,
                     inverseName = inverseName,
-
                     targetType = targetType,
                     targetIdField = targetIdField,
                     targetIdValue = targetIdValue,
