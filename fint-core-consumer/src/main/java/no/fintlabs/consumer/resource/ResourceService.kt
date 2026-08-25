@@ -6,6 +6,8 @@ import no.fintlabs.consumer.resource.dto.createFintResourcesResponse
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
+import no.novari.core.shared.relation.RelationEdgeStore
+import no.novari.core.shared.relation.mergeInto
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintResource
@@ -17,6 +19,7 @@ import java.time.Instant
 class ResourceService(
     private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
+    private val relationEdgeStore: RelationEdgeStore,
 ) {
     private val storageMapper = FintJson.storageMapper()
 
@@ -30,16 +33,16 @@ class ResourceService(
         val criteria = sinceTimeStamp.toCriteria()
         val entries: List<ResourceEntry> =
             if (size == 0) {
-                // find all resources in a collection
-                // This should not be allowed, but since our customers already uses it, we have to implement it
-                // to not break the contract.
-
+                // TODO: can be removed in the future once we force pagination in the API
                 resourceStore.findAll(criteria, resourceCoordinate.toCollectionName())
             } else {
                 resourceStore.findPage(criteria, size, offset, resourceCoordinate.toCollectionName())
             }
 
         val resources = entries.toFintResources(resourceCoordinate)
+        val fullDump = size == 0 && (sinceTimeStamp == null || sinceTimeStamp == 0L)
+        mergeRelationEdges(resourceCoordinate, entries, resources, fullDump)
+
         return createFintResourcesResponse(
             consumerConfiguration.baseUrl,
             resourceCoordinate.toResourceUri(),
@@ -49,18 +52,6 @@ class ResourceService(
             resources.size,
         )
     }
-
-    private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> {
-        val resourceClass = resourceCoordinate.toResourceClass()
-        return map { entry ->
-            storageMapper.convertValue(entry.data, resourceClass)
-        }
-    }
-
-    fun Long?.toCriteria() =
-        this?.let {
-            Criteria.where("lastModified").gte(Instant.ofEpochMilli(this))
-        }
 
     /**
      * Retrieves a single resource based on its identifier from a specific collection.
@@ -81,11 +72,56 @@ class ResourceService(
     ): FintResource? {
         val collectionName = resourceCoordinate.toCollectionName()
         val entry = resourceStore.findByIdentifier(idField, idValue, collectionName) ?: return null
-        return listOf(entry).toFintResources(resourceCoordinate).single()
+        val resource = entry.toFintResource(resourceCoordinate)
+        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), fullDump = false)
+        return resource
     }
 
     fun getLastUpdated(resourceCoordinate: ResourceCoordinate): Long =
         TODO("Get lastUpdated of resource coordinate in MongoDB")
 
     fun getCacheSize(resourceCoordinate: ResourceCoordinate): Int = TODO("Get size of resource coordinate in MongoDB")
+
+    /**
+     * Attaches the back-links autorelation supplies onto the resources of a response, before the
+     * response form renders `_links`: one query fetches the relation edges pointing at any of the
+     * response's identifiers, and each edge becomes an ordinary id-based link on the resource it
+     * points at, for example `elevforhold` on an Elev. A full dump covers the whole collection,
+     * so its identifier filter would narrow nothing and only bloat the query; there the read
+     * fetches every edge for the type in one range scan and lets the in-memory join route them.
+     */
+    private fun mergeRelationEdges(
+        resourceCoordinate: ResourceCoordinate,
+        entries: List<ResourceEntry>,
+        resources: List<FintResource>,
+        fullDump: Boolean,
+    ) {
+        // TODO: the fetch-everything branch can be removed once the API forces pagination
+        if (!consumerConfiguration.autorelation.enabled || entries.isEmpty()) return
+
+        val edges =
+            if (fullDump) {
+                relationEdgeStore.findAllByTargetType(
+                    resourceCoordinate.toEdgeCollectionName(),
+                    resourceCoordinate.toResourceUri(),
+                )
+            } else {
+                relationEdgeStore.findByTargets(
+                    resourceCoordinate.toEdgeCollectionName(),
+                    resourceCoordinate.toResourceUri(),
+                    entries.flatMap { it.identifiers },
+                )
+            }
+
+        edges.mergeInto(entries.zip(resources))
+    }
+
+    private fun ResourceEntry.toFintResource(resourceCoordinate: ResourceCoordinate): FintResource =
+        storageMapper.convertValue(data, resourceCoordinate.toResourceClass())
+
+    private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
+        map { it.toFintResource(resourceCoordinate) }
+
+    private fun Long?.toCriteria() =
+        this?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(this)) }
 }

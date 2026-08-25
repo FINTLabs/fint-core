@@ -36,9 +36,15 @@ abstract class FintObjectMixin {
 /**
  * `links` crosses every boundary as `_links`, and everything inbound funnels through
  * [FintLinksDeserializer] so hrefs and stored id-forms alike land as the same [Link] shape.
+ * `nestedResources` is a derived traversal view over attribute fields, not data: serializing it
+ * would duplicate every nested resource in the document, and reading it back fails on the
+ * setterless getter.
  */
 abstract class FintResourceMixin {
     @get:JsonProperty("_links")
     @get:JsonDeserialize(using = FintLinksDeserializer::class)
     abstract val links: MutableMap<String, MutableList<Link>>
+
+    @get:JsonIgnore
+    abstract val nestedResources: List<FintResource>
 }

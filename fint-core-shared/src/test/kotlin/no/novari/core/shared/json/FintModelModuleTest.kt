@@ -146,4 +146,29 @@ class FintModelModuleTest {
 
         assertEquals(Link("systemid", "NO"), elev.hybeladresse?.relationLinks("land")?.single())
     }
+
+    @Test
+    fun `nestedResources is never serialized`() {
+        val elev =
+            Elev(elevnummer = Identifikator(identifikatorverdi = "456")).apply {
+                addLink("person", Link("fodselsnummer", "123"))
+            }
+
+        val json = mapper.writeValueAsString(elev)
+
+        assertTrue("nestedResources" !in json, "derived view leaked into $json")
+    }
+
+    @Test
+    fun `a serialized resource deserializes back to the same content`() {
+        val elev =
+            Elev(elevnummer = Identifikator(identifikatorverdi = "456")).apply {
+                addLink("person", Link("fodselsnummer", "123"))
+            }
+
+        val roundTripped = mapper.readValue(mapper.writeValueAsString(elev), Elev::class.java)
+
+        assertEquals("456", roundTripped.elevnummer?.identifikatorverdi)
+        assertEquals(elev.links, roundTripped.links)
+    }
 }

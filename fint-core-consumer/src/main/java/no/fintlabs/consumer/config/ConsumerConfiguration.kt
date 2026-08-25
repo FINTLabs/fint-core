@@ -68,10 +68,4 @@ data class KafkaConfiguration(
 
 data class AutorelationConfig(
     val enabled: Boolean = true,
-    val buffer: BufferConfig = BufferConfig(),
-) {
-    data class BufferConfig(
-        /** Duration to retain unresolved relation links before eviction. Default: 30 days. */
-        val ttl: Duration = Duration.ofDays(30),
-    )
-}
+)

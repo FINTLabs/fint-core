@@ -4,8 +4,7 @@ import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.fintlabs.adapter.models.sync.SyncType
-import no.fintlabs.provider.Application
-import no.fintlabs.provider.KafkaContainerBaseIT
+import no.fintlabs.provider.ProviderAppIT
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.ResourceStore
 import org.awaitility.kotlin.await
@@ -13,20 +12,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import java.time.Duration
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = [Application::class])
 class PersistanseIT(
     @Autowired private val writer: BufferWriter,
     @Autowired private val resourceStore: ResourceStore,
-    @Autowired private val mongoTemplate: MongoTemplate,
-) : KafkaContainerBaseIT() {
-    @MockitoSpyBean
-    private lateinit var reader: BufferReader
-
+) : ProviderAppIT() {
     @Test
     fun `When BufferReader receives data, it saves to database`() {
         // Write to Buffer

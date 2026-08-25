@@ -1,24 +1,18 @@
 package no.fintlabs.provider.sync
 
+import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.stringValue
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.model.toResourceClass
+import no.novari.core.shared.relation.RelationEdge
+import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
-import no.novari.core.shared.relation.RelationEndpoint
-import no.novari.core.shared.relation.StoredRelation
-import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
-import no.novari.fint.core.model.FintModel
-import no.novari.fint.core.model.FintRelation
-import no.novari.fint.core.model.FintResource
-import no.novari.fint.core.model.FintResourceMetadata
-import no.novari.fint.core.model.FintResourceRef
-import no.novari.fint.core.model.targetIn
-import no.novari.fint.core.model.targetName
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Headers
 import org.slf4j.LoggerFactory
@@ -29,10 +23,11 @@ import org.springframework.stereotype.Component
 @Component
 class BufferReader(
     private val resourceStore: ResourceStore,
-    private val resourceConverter: ResourceConverter,
     private val relationEdgeStore: RelationEdgeStore,
 ) {
     val log = LoggerFactory.getLogger(BufferReader::class.java)
+
+    private val objectMapper = FintJson.storageMapper()
 
     @KafkaListener(
         topics = ["#{topicBufferName}"],
@@ -43,61 +38,31 @@ class BufferReader(
         log.debug("Read {} records from Kafka buffer", records.size)
 
         val resourceWrites = mutableListOf<ResourceWrite>()
+        val edgesByCollection = mutableMapOf<String, MutableList<RelationEdge>>()
 
         records.forEach { record ->
+            val json = record.value()
+            if (json == null) {
+                // TODO: Since json is null we should delete it (tombstone)
+                log.warn("Skipping delition for key '{}' until the delete phase lands", record.key())
+                return@forEach
+            }
+
             val coords = resourceCoordinate(record.headers())
-            val resourceId = record.extractIdentifier() //
-            val resource = resourceConverter.convert(coords, record.value())
+            val resourceId = record.extractIdentifier()
+            val resource = objectMapper.readValue(json, coords.toResourceClass())
             resource.removeSelfLinks()
 
-            val resourceMetaData = FintModel.byPath(coords.domainName, coords.packageName, coords.resourceName)
-                ?: throw IllegalArgumentException("Resource model not found for $coords")
-
-            // We assume any of the entries in _links never has a size bigger than 1
-            createRelationEdges(resource, resourceMetaData, coords, resourceId, coords.toRescourceRef())
+            edgesByCollection
+                .getOrPut(coords.toEdgeCollectionName()) { mutableListOf() }
+                .addAll(RelationEdgeFactory.createRelationEdges(coords, resourceId, resource))
 
             resourceWrites.add(ResourceWrite(resourceId, coords.toCollectionName(), resource))
         }
+
         resourceStore.saveAll(resourceWrites)
-        relationEdgeStore.saveAll(storedRelations)
-    }
-
-    private fun createRelationEdges(
-        resource: FintResource,
-        resourceModel: FintResourceMetadata,
-        coords: ResourceCoordinate,
-        resourceId: String,
-        resourceRef: FintResourceRef
-    ): List<StoredRelation> {
-        resource.links.entries.forEach { (relationName, links) ->
-            // Get the relation between A and B
-            val relation: FintRelation = resourceModel.relation(relationName) ?: return@forEach
-
-            val targetRef = relation.targetIn(resourceRef)
-
-            val idEntry = resource.idFor(resourceId) ?: return@forEach // håndter null!
-            return links.map { link ->
-                    StoredRelation(
-                        source =
-                            RelationEndpoint(
-                                coords,
-                                IdentifierRef(
-                                    idEntry.first.lowercase(),
-                                    idEntry.second
-                                ), // Not totally sure if idEntry.key should be lowercase here.
-                                relation.name,
-                            ),
-                        target =
-                            RelationEndpoint(
-                                targetRef,
-                                IdentifierRef(
-                                    requireNotNull(link.idField),
-                                    requireNotNull(link.idValue),
-                                ),
-                                resourceName,
-                            ),
-                    )
-            }
+        edgesByCollection.forEach { (collectionName, edges) ->
+            relationEdgeStore.upsertAll(collectionName, edges)
         }
     }
 
