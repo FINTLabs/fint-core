@@ -122,6 +122,5 @@ class ResourceService(
     private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
         map { it.toFintResource(resourceCoordinate) }
 
-    private fun Long?.toCriteria() =
-        this?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(this)) }
+    private fun Long?.toCriteria() = this?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(this)) }
 }
