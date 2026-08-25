@@ -2,6 +2,7 @@ package no.novari.core.shared.model
 
 import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintResource
+import no.novari.fint.core.model.FintResourceRef
 
 /**
  * ResourceCoordinate is mostly used to keep information needed to generate the CollectionName when we
@@ -31,7 +32,17 @@ data class ResourceCoordinate(
     fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
 
     fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
+
+    /**
+     * The org's relation-edge collection, `<orgId>_relation_edges`. One collection per org, so
+     * the org lives in the collection name and never on the edge documents themselves.
+     */
+    fun toEdgeCollectionName(): String = "${orgId.replace(".", "_")}_relation_edges"
+
+    fun toResourceRef(): FintResourceRef = FintResourceRef(domainName, packageName, resourceName)
 }
+
+fun FintResourceRef.toResourceUri(): String = "$domainName/$packageName/$resourceName"
 
 fun ResourceCoordinate.toResourceClass(): Class<out FintResource> =
     FintModel
