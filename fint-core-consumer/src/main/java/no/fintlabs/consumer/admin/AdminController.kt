@@ -51,10 +51,4 @@ class AdminController(
 //             val cache = cacheService.getCache(resourceName)
 //             CacheEntry(Date(cache.lastUpdated), cache.size)
 //         }
-
-    @PostMapping("/cache/rebuild", "/cache/rebuild/{model}")
-    fun rebuildCache(
-        @RequestHeader(name = "x-client") client: String?,
-        @PathVariable(required = false) model: String?,
-    ): Nothing = TODO("Yet to be implemented")
 }
