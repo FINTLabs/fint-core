@@ -82,7 +82,7 @@ private fun FintResource.relationLinkResponses(
 }
 
 /**
- * One stored link becomes one href. An unresolved link is passed through verbatim: it was kept
+ * One stored link becomes one href. An unresolved link is passed through unchanged: it was kept
  * at ingest precisely so the county sees what the adapter sent. A resolvable link without a
  * target path (a common target and no component) has no valid href and is dropped.
  */

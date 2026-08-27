@@ -8,8 +8,10 @@ import kotlin.test.assertEquals
 class OrgIdTest {
     @Test
     fun `from normalizes separators and casing`() {
-        assertEquals(OrgId("foo.org"), OrgId.from("Foo_ORG"))
-        assertEquals(OrgId("foo.org"), OrgId.fromTopicSegment("foo-org"))
+        val expected = OrgId("foo.org")
+
+        assertEquals(expected, OrgId.from("Foo_ORG"))
+        assertEquals(expected, OrgId.fromTopicSegment("foo-org"))
     }
 
     @Test
@@ -18,7 +20,7 @@ class OrgIdTest {
     }
 
     @Test
-    fun `constructor rejects non-canonical values`() {
+    fun `constructor rejects values that are not in the internal form`() {
         assertThrows<IllegalArgumentException> { OrgId("Foo.Org") }
         assertThrows<IllegalArgumentException> { OrgId("foo-org") }
         assertThrows<IllegalArgumentException> { OrgId("foo_org") }

@@ -29,8 +29,8 @@ import no.novari.fint.core.model.resolveLink
  * then [createContextual] replaces it per `links` property with one that has captured the
  * declaring class's metadata. [deserialize] looks the relation up by entry name and
  * [FintRelation.resolveLink] does the metadata-driven split. An href naming no id field of the
- * target (a foreign host, a target without a matching id field) is kept verbatim as
- * [Link.unresolved], never discarded.
+ * target (a foreign host, a target without a matching id field) is kept unchanged as
+ * [Link.unresolved], never thrown away.
  *
  * Decoding happens here and not in the model library, on purpose: the model does the structural
  * split and holds no codec (see [LinkCodec]), because what an ingress has already decoded is

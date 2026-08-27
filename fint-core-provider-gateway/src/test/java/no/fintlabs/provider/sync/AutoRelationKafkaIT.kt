@@ -20,8 +20,8 @@ import kotlin.test.assertNotNull
 
 /**
  * The broker-level half of autorelation: an adapter-shaped payload with an href link goes
- * through the real Kafka pipeline and comes out as a relation edge. The rule and store
- * semantics live in [AutoRelationIT], off the broker.
+ * through the real Kafka pipeline and comes out as a relation edge. How the rules and the
+ * store behave is tested in [AutoRelationIT], off the broker.
  */
 class AutoRelationKafkaIT(
     @Autowired private val writer: BufferWriter,
