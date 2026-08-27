@@ -2,7 +2,6 @@ package no.fintlabs.consumer.admin
 
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EndpointsConstants
-import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -15,12 +14,6 @@ import org.springframework.web.bind.annotation.RestController
 class AdminController(
     private val configuration: ConsumerConfiguration,
 ) {
-    @GetMapping("/health")
-    fun healthChecks(): ResponseEntity<*>? =
-        TODO(
-            "New implementation required, Event based health checks are no longer required. Perhaps lookup Health status in Status Service?",
-        )
-
     @GetMapping("/organisations")
     @Deprecated("")
     fun organisations(): List<String> = emptyList()
