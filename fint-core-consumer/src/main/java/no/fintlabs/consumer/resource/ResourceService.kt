@@ -77,11 +77,6 @@ class ResourceService(
         return resource
     }
 
-    fun getLastUpdated(resourceCoordinate: ResourceCoordinate): Long =
-        TODO("Get lastUpdated of resource coordinate in MongoDB")
-
-    fun getCacheSize(resourceCoordinate: ResourceCoordinate): Int = TODO("Get size of resource coordinate in MongoDB")
-
     /**
      * Attaches the back-links autorelation supplies onto the resources of a response, before the
      * response form renders `_links`: one query fetches the relation edges pointing at any of the

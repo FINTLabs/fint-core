@@ -4,8 +4,6 @@ import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EndpointsConstants
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
@@ -13,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping(EndpointsConstants.ADMIN)
 class AdminController(
     private val configuration: ConsumerConfiguration,
+    private val statsService: StatsService,
 ) {
     @GetMapping("/organisations")
     @Deprecated("")
@@ -38,10 +37,5 @@ class AdminController(
      * lastUpdated and size for the cache for that resource name
      */
     @GetMapping("/cache/status")
-    fun cacheStatus(): Map<String, CacheEntry> =
-        TODO("Implement mongoDB lookup of all resources within domainName and packageName. Reponse will be CacheEntry")
-//         cacheService.getCachedResourceNames().associateWith { resourceName ->
-//             val cache = cacheService.getCache(resourceName)
-//             CacheEntry(Date(cache.lastUpdated), cache.size)
-//         }
+    fun cacheStatus(): Map<String, CacheEntry> = statsService.cacheStatus()
 }

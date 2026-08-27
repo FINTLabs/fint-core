@@ -1,5 +1,6 @@
 package no.novari.core.shared.store
 
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
@@ -7,6 +8,7 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.findById
 import org.springframework.data.mongodb.core.findOne
+import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
@@ -137,6 +139,26 @@ class ResourceStore(
         val pageQuery = Query.of(query).skip(offset).limit(size)
 
         return template.find<ResourceEntry>(pageQuery, collectionName)
+    }
+
+    fun getCacheSize(coordinate: ResourceCoordinate): Long =
+        template.exactCount(
+            Query(),
+            ResourceEntry::class.java,
+            coordinate.toCollectionName(),
+        )
+
+    fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
+        val collectionName = coordinate.toCollectionName()
+
+        val query =
+            Query()
+                .with(Sort.by(Sort.Direction.DESC, "lastModified"))
+                .limit(1)
+
+        return template
+            .findOne<ResourceEntry>(query, collectionName)
+            ?.lastModified
     }
 
     /**
