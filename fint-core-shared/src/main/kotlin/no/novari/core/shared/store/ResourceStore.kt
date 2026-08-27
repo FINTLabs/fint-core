@@ -1,17 +1,20 @@
 package no.novari.core.shared.store
 
 import no.novari.fint.core.model.FintResource
+import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation
+import org.springframework.data.mongodb.core.aggregation.AggregationUpdate
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.findById
 import org.springframework.data.mongodb.core.findOne
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.Date
 
 @Service
 class ResourceStore(
@@ -37,18 +40,20 @@ class ResourceStore(
         )
     }
 
-    // Builds and executes a bulk upsert operation per collection.
+    /**
+     * Guarded bulk upsert per collection: a write only applies when its timestamp is not older
+     * than the stored document's lastModified, so a lagging writer (a deep sync buffer backlog)
+     * can never revert a fresher write (a direct event write) for the same resource. Equal
+     * timestamps let the incoming write win. createdAt is preserved for existing documents.
+     */
     fun saveAll(writes: List<ResourceWrite>) {
         if (writes.isEmpty()) return
 
         writes
-            // Bulk operations are collection-specific, so split the incoming writes by target collection.
             .groupBy { it.collectionName }
             .forEach { (collectionName, collectionWrites) ->
-                // If the same resource appears multiple times in this batch, this keeps the last
                 val latestWritesById = collectionWrites.associateBy { it.resourceId }
 
-                // Use unordered bulk writes so MongoDB can apply independent upserts, which may be faster.
                 val bulkOps =
                     template.bulkOps(
                         BulkOperations.BulkMode.UNORDERED,
@@ -56,23 +61,52 @@ class ResourceStore(
                     )
 
                 latestWritesById.values.forEach { write ->
-                    // Match the Mongo document by resource id, which is stored as the document _id.
                     val query = Query.query(Criteria.where("_id").`is`(write.resourceId))
-
-                    // Replace the resource payload and lookup fields, while preserving createdAt for existing documents.
-                    val update =
-                        Update()
-                            .set("data", bsonConverter.toDocument(write.resource))
-                            .set("identifiers", write.resource.toIdentifierRefs())
-                            .set("lastModified", write.timestamp)
-                            .setOnInsert("createdAt", write.timestamp)
-
-                    // Insert a new document or update the existing document for this resource id.
-                    bulkOps.upsert(query, update)
+                    bulkOps.upsert(query, write.toGuardedUpdate())
                 }
 
                 bulkOps.execute()
             }
+    }
+
+    /**
+     * The staleness check lives inside the update expression, not in the query, because of how
+     * upsert works: query matched means update, no match means insert, nothing else. A timestamp
+     * clause in the query would make a stale write look like "no match", so upsert would try to
+     * insert a duplicate _id and throw. Instead the query matches on _id alone and every field
+     * uses $cond to either keep its stored value or take the incoming one, so a stale write is a
+     * clean no-op instead of an error.
+     *
+     * All guarded fields share the exact same condition through keepUnlessStale on purpose:
+     * one shared condition means the write applies fully or not at all, never a half-updated
+     * document.
+     */
+    private fun ResourceWrite.toGuardedUpdate(): AggregationUpdate {
+        val incomingTimestamp = Date.from(timestamp)
+        val identifierDocuments =
+            resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }
+
+        fun keepUnlessStale(
+            field: String,
+            incoming: Any,
+        ): Document =
+            Document(
+                "\$cond",
+                listOf(
+                    Document("\$gt", listOf("\$lastModified", incomingTimestamp)),
+                    "$$field",
+                    incoming,
+                ),
+            )
+
+        val set =
+            Document()
+                .append("data", keepUnlessStale("data", bsonConverter.toDocument(resource)))
+                .append("identifiers", keepUnlessStale("identifiers", identifierDocuments))
+                .append("createdAt", Document("\$ifNull", listOf("\$createdAt", incomingTimestamp)))
+                .append("lastModified", keepUnlessStale("lastModified", incomingTimestamp))
+
+        return AggregationUpdate.from(listOf(AggregationOperation { Document("\$set", set) }))
     }
 
     /**

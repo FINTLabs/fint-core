@@ -1,69 +1,34 @@
 package no.fintlabs.provider.event.request
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
-import no.fintlabs.adapter.models.event.ResponseFintEvent
-import no.fintlabs.provider.event.response.ResponseFintEventProducer
-import org.slf4j.LoggerFactory
+import no.novari.core.shared.event.EventScope
+import no.novari.core.shared.event.EventStore
+import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.model.OrgId
 import org.springframework.stereotype.Service
-import java.util.Optional
-import java.util.function.Consumer
+import java.time.Clock
 
 @Service
 class RequestEventService(
-    private val requestCache: RequestCache,
-    private val responseProducer: ResponseFintEventProducer,
+    private val eventStore: EventStore,
+    private val clock: Clock,
 ) {
-    private val logger = LoggerFactory.getLogger(javaClass)
-
-    init {
-        requestCache.onExpired = Consumer { event -> sendExpiredResponse(event) }
-    }
-
     fun getEvents(
         assets: Set<String>,
-        domainName: String? = null,
-        packageName: String? = null,
-        resourceName: String? = null,
+        scope: EventScope,
         size: Int = 0,
     ): List<RequestFintEvent> {
-        val stream =
-            requestCache
-                .getAll()
-                .filter { assets.contains(it.orgId) }
-                .filter { domainName.isNullOrBlank() || it.domainName.equals(domainName, ignoreCase = true) }
-                .filter { packageName.isNullOrBlank() || it.packageName.equals(packageName, ignoreCase = true) }
-                .filter { resourceName.isNullOrBlank() || it.resourceName.equals(resourceName, ignoreCase = true) }
+        val now = clock.instant()
 
-        return if (size > 0) stream.take(size).toList() else stream.toList()
+        return assets
+            .flatMap { asset ->
+                eventStore.findPending(
+                    OrgId.from(asset).toEventCollectionName(),
+                    now,
+                    scope,
+                    size,
+                )
+            }.sortedBy { it.created }
+            .let { if (size > 0) it.take(size) else it }
     }
-
-    fun addEvent(event: RequestFintEvent) {
-        if (requestCache.add(event)) {
-            logger.debug("Event with corrId: {} added", event.corrId)
-        }
-    }
-
-    fun removeEvent(corrId: String) {
-        requestCache.remove(corrId)
-        logger.debug("Event with corrId: {} removed", corrId)
-    }
-
-    fun getEvent(corrId: String): Optional<RequestFintEvent> = Optional.ofNullable(requestCache.get(corrId))
-
-    /**
-     * Caffeine triggers this automatically when an item expires.
-     */
-    private fun sendExpiredResponse(request: RequestFintEvent) {
-        logger.info("Event {} expired. Sending expired response.", request.corrId)
-        responseProducer.sendEvent(request.toResponse(), request)
-    }
-
-    private fun RequestFintEvent.toResponse(): ResponseFintEvent =
-        ResponseFintEvent().apply {
-            corrId = this@toResponse.corrId
-            orgId = this@toResponse.orgId
-            handledAt = System.currentTimeMillis()
-            isFailed = true
-            errorMessage = "Event expired."
-        }
 }

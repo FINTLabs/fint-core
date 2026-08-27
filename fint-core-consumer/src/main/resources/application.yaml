@@ -15,6 +15,9 @@ fint:
     packageName: ${fint.consumer.package}
     org-id: ${fint.org-id}
     coreVersionHeader: 2
+    event:
+      answer-deadline: 15m
+      retention: 30m
     kafka:
       entity-concurrency: 6
       relation-concurrency: 6
@@ -38,6 +41,9 @@ spring:
   kafka:
     consumer:
       group-id: ${novari.kafka.application-id}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
   webflux:
     base-path: ${fint.consumer.domain}/${fint.consumer.package}

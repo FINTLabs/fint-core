@@ -53,19 +53,6 @@ class BufferWriter(
                 ),
         )
 
-    fun sendEventEntity(
-        coords: ResourceCoordinate,
-        syncEntry: SyncPageEntry,
-        lastModified: Long,
-    ): CompletableFuture<SendResult<String, Any>> =
-        send(
-            coords,
-            resourceId = syncEntry.identifier,
-            resource = syncEntry.resource,
-            lastModified = lastModified,
-            syncMetadata = null,
-        )
-
     private fun send(
         coords: ResourceCoordinate,
         resourceId: String,

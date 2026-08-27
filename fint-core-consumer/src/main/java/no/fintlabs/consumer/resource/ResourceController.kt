@@ -1,6 +1,7 @@
 package no.fintlabs.consumer.resource
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
+import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EndpointsConstants
 import no.fintlabs.consumer.resource.dto.FintResourcesResponse
@@ -8,7 +9,9 @@ import no.fintlabs.consumer.resource.dto.LastUpdatedResponse
 import no.fintlabs.consumer.resource.dto.ResourceCacheSizeResponse
 import no.fintlabs.consumer.resource.event.RequestAccepted
 import no.fintlabs.consumer.resource.event.RequestFailed
+import no.fintlabs.consumer.resource.event.RequestFintEventService
 import no.fintlabs.consumer.resource.event.RequestGone
+import no.fintlabs.consumer.resource.event.RequestStatusService
 import no.fintlabs.consumer.resource.event.RequestValidated
 import no.fintlabs.consumer.resource.event.ResourceCreated
 import no.fintlabs.consumer.resource.event.ResourceDeleted
@@ -33,6 +36,8 @@ import java.net.URI
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
+    private val requestFintEventService: RequestFintEventService,
+    private val requestStatusService: RequestStatusService,
     private val consumerConfig: ConsumerConfiguration,
 ) {
     @GetMapping
@@ -114,7 +119,20 @@ class ResourceController(
         @PathVariable resourceName: String,
         @PathVariable corrId: String,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<Any?> = ResponseEntity.ok().build()
+    ): ResponseEntity<Any?> =
+        requestStatusService
+            .getStatusResponse(ResourceCoordinate(orgId, domainName, packageName, resourceName), corrId)
+            .let { result ->
+                logger.debug("Status of Event: {} returned: {}", corrId, result)
+                when (result) {
+                    is ResourceCreated -> ResponseEntity.created(result.location).body(result.body)
+                    is RequestValidated -> ResponseEntity.ok(result.body)
+                    is ResourceDeleted -> ResponseEntity.noContent().build()
+                    is RequestAccepted -> ResponseEntity.accepted().build()
+                    is RequestGone -> ResponseEntity.status(HttpStatus.GONE).build()
+                    is RequestFailed -> ResponseEntity.status(result.failureType.toHttpStatus()).body(result.body)
+                }
+            }
 
     @PostMapping
     fun postResource(
@@ -124,10 +142,13 @@ class ResourceController(
         @RequestBody resourceData: Any,
         @RequestParam(name = "validate", required = false) validateOnly: Boolean,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<Nothing> = ResponseEntity.ok().build()
-//         requestFintEventService
-//             .createAndPublish(resource, resourceData, validateOnly)
-//             .toAcceptedResponse()
+    ): ResponseEntity<Nothing> =
+        requestFintEventService
+            .createAndPublish(
+                ResourceCoordinate(orgId, domainName, packageName, resourceName),
+                resourceData,
+                validateOnly,
+            ).toAcceptedResponse()
 
     @PutMapping(EndpointsConstants.BY_ID)
     fun putResource(
@@ -138,10 +159,13 @@ class ResourceController(
         @PathVariable idValue: String,
         @RequestBody resourceData: Any?,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<Nothing> = ResponseEntity.ok().build()
-//         requestFintEventService
-//             .createAndPublish(resource, resourceData, OperationType.UPDATE)
-//             .toAcceptedResponse()
+    ): ResponseEntity<Nothing> =
+        requestFintEventService
+            .createAndPublish(
+                ResourceCoordinate(orgId, domainName, packageName, resourceName),
+                resourceData,
+                OperationType.UPDATE,
+            ).toAcceptedResponse()
 
     private fun RequestFailed.FailureType.toHttpStatus() =
         when (this) {

@@ -3,6 +3,8 @@ package no.fintlabs.consumer.resource
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
 import no.fintlabs.consumer.config.TomcatConfiguration
+import no.fintlabs.consumer.resource.event.RequestFintEventService
+import no.fintlabs.consumer.resource.event.RequestStatusService
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.uri.LinkCodec
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -42,6 +44,12 @@ class EncodedIdCharactersIT {
 
     @MockitoBean
     private lateinit var resourceService: ResourceService
+
+    @MockitoBean
+    private lateinit var requestFintEventService: RequestFintEventService
+
+    @MockitoBean
+    private lateinit var requestStatusService: RequestStatusService
 
     @LocalServerPort
     private var port = 0
