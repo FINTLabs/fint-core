@@ -36,10 +36,17 @@ class AdminControllerTest {
     @Test
     fun `cache status returns stats service response`() {
         val response =
-            mapOf(
-                "elev" to CacheEntry(Date.from(Instant.parse("2026-02-03T04:05:06Z")), 2),
-                "person" to CacheEntry(null, 0),
+            listOf(
+                OrgCacheStatus(
+                    orgId = "fintlabs.no",
+                    caches =
+                        mapOf(
+                            "elev" to CacheEntry(Date.from(Instant.parse("2026-02-03T04:05:06Z")), 2),
+                            "person" to CacheEntry(null, 0),
+                        ),
+                ),
             )
+
         every { statsService.cacheStatus() } returns response
 
         mockMvc

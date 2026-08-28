@@ -37,5 +37,5 @@ class AdminController(
      * lastUpdated and size for the cache for that resource name
      */
     @GetMapping("/cache/status")
-    fun cacheStatus(): Map<String, CacheEntry> = statsService.cacheStatus()
+    fun cacheStatus(): List<OrgCacheStatus> = statsService.cacheStatus()
 }

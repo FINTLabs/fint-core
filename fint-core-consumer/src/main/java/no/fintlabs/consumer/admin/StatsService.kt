@@ -2,6 +2,7 @@ package no.fintlabs.consumer.admin
 
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintModel
 import org.springframework.stereotype.Service
@@ -11,6 +12,7 @@ import java.util.Date
 class StatsService(
     private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
+    private val orgStore: OrgStore,
 ) {
     fun getLastUpdated(resourceCoordinate: ResourceCoordinate): Long =
         resourceStore.getLastUpdated(resourceCoordinate)?.toEpochMilli() ?: 0L
@@ -18,11 +20,19 @@ class StatsService(
     fun getCacheSize(resourceCoordinate: ResourceCoordinate): Int =
         resourceStore.getCacheSize(resourceCoordinate).toInt()
 
-    fun cacheStatus(): Map<String, CacheEntry> =
+    fun cacheStatus(): List<OrgCacheStatus> =
+        orgStore.findAll().map { org ->
+            OrgCacheStatus(
+                orgId = org.id,
+                caches = cacheStatusFor(org.id),
+            )
+        }
+
+    private fun cacheStatusFor(orgId: String): Map<String, CacheEntry> =
         relevantResourceNames().associateWith { resource ->
             val coord =
                 ResourceCoordinate(
-                    consumerConfiguration.orgId.toString(),
+                    orgId,
                     consumerConfiguration.domain,
                     consumerConfiguration.packageName,
                     resource,
