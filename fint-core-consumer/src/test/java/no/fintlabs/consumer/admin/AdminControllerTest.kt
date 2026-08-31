@@ -47,7 +47,7 @@ class AdminControllerTest {
                 ),
             )
 
-        every { statsService.cacheStatus() } returns response
+        every { statsService.cacheStatus(any(), any()) } returns response
 
         mockMvc
             .perform(get("/utdanning/elev/admin/cache/status"))
@@ -55,7 +55,7 @@ class AdminControllerTest {
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(content().json(objectMapper.writeValueAsString(response)))
 
-        verify(exactly = 1) { statsService.cacheStatus() }
+        verify(exactly = 1) { statsService.cacheStatus(any(), any()) }
     }
 
     private fun consumerConfiguration() =

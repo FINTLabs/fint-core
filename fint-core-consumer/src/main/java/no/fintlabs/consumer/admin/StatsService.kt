@@ -20,16 +20,24 @@ class StatsService(
     fun getCacheSize(resourceCoordinate: ResourceCoordinate): Int =
         resourceStore.getCacheSize(resourceCoordinate).toInt()
 
-    fun cacheStatus(): List<OrgCacheStatus> =
+    fun cacheStatus(
+        domainName: String,
+        packageName: String,
+    ): List<OrgCacheStatus> =
         orgStore.findAll().map { org ->
             OrgCacheStatus(
                 orgId = org.id,
-                caches = cacheStatusFor(org.id),
+                caches = cacheStatusFor(org.id, domainName, packageName),
             )
         }
 
-    private fun cacheStatusFor(orgId: String): Map<String, CacheEntry> =
-        relevantResourceNames().associateWith { resource ->
+    private fun cacheStatusFor(
+        orgId: String,
+        domainName: String,
+        packageName: String,
+    ): Map<String, CacheEntry> =
+        FintModel.refsIn(domainName, packageName).associate { ref ->
+            val resource = ref.resourceName
             val coord =
                 ResourceCoordinate(
                     orgId,
@@ -38,24 +46,10 @@ class StatsService(
                     resource,
                 )
 
-            CacheEntry(
-                resourceStore.getLastUpdated(coord)?.let(Date::from),
-                resourceStore.getCacheSize(coord).toInt(),
-            )
+            resource to
+                CacheEntry(
+                    resourceStore.getLastUpdated(coord)?.let(Date::from),
+                    resourceStore.getCacheSize(coord).toInt(),
+                )
         }
-
-    private fun relevantResourceNames(): List<String> {
-        val componentPath =
-            "${consumerConfiguration.domain.lowercase()}/${consumerConfiguration.packageName.lowercase()}"
-
-        return FintModel.resources
-            .asSequence()
-            .mapNotNull { it.pathIn(componentPath) }
-            .map { it.lowercase() }
-            .filter { it.startsWith("$componentPath/") }
-            .map { it.substringAfterLast("/") }
-            .distinct()
-            .sorted()
-            .toList()
-    }
 }

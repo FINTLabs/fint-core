@@ -84,7 +84,7 @@ class StatsServiceTest {
             lastUpdatedByOrgAndResource[coordinate.orgId to coordinate.resourceName]
         }
 
-        val result = statsService.cacheStatus()
+        val result = statsService.cacheStatus("utdanning", "elev")
 
         assertEquals(2, result.size)
 
