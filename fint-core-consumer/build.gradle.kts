@@ -9,7 +9,7 @@ dependencies {
     implementation("no.fintlabs:fint-core-status-models:1.0.0")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
-    implementation("com.google.guava:guava:33.5.0-jre")
+    implementation("com.google.guava:guava:33.7.1-jre")
 
     testImplementation("org.testcontainers:kafka")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
