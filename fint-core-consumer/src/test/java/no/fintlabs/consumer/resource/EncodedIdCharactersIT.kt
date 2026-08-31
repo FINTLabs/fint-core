@@ -1,5 +1,6 @@
 package no.fintlabs.consumer.resource
 
+import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
 import no.fintlabs.consumer.config.TomcatConfiguration
@@ -42,6 +43,9 @@ class EncodedIdCharactersIT {
 
     @MockitoBean
     private lateinit var resourceService: ResourceService
+
+    @MockitoBean
+    private lateinit var statsService: StatsService
 
     @LocalServerPort
     private var port = 0
