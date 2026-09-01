@@ -2,6 +2,7 @@ package no.fintlabs.consumer.resource
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
+import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.EndpointsConstants
 import no.fintlabs.consumer.resource.dto.FintResourcesResponse
@@ -15,7 +16,6 @@ import no.fintlabs.consumer.resource.event.RequestStatusService
 import no.fintlabs.consumer.resource.event.RequestValidated
 import no.fintlabs.consumer.resource.event.ResourceCreated
 import no.fintlabs.consumer.resource.event.ResourceDeleted
-import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
@@ -39,6 +39,7 @@ class ResourceController(
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
     private val consumerConfig: ConsumerConfiguration,
+    private val statsService: StatsService,
 ) {
     @GetMapping
     fun getResource(
@@ -97,7 +98,7 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<LastUpdatedResponse> =
-        resourceService
+        statsService
             .getLastUpdated(ResourceCoordinate(orgId, domainName, packageName, resourceName))
             .let { ResponseEntity.ok(LastUpdatedResponse(it)) }
 
@@ -108,7 +109,7 @@ class ResourceController(
         @PathVariable resourceName: String,
         @RequestHeader("x-org-id") orgId: String,
     ): ResponseEntity<ResourceCacheSizeResponse> =
-        resourceService
+        statsService
             .getCacheSize(ResourceCoordinate(orgId, domainName, packageName, resourceName))
             .let { ResponseEntity.ok(ResourceCacheSizeResponse(it)) }
 

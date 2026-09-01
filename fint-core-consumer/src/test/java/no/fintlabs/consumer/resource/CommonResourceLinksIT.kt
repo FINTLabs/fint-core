@@ -2,6 +2,7 @@ package no.fintlabs.consumer.resource
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
 import no.fintlabs.consumer.config.TomcatConfiguration
@@ -53,6 +54,9 @@ class CommonResourceLinksIT {
 
     @MockitoBean
     private lateinit var requestStatusService: RequestStatusService
+
+    @MockitoBean
+    private lateinit var statsService: StatsService
 
     @LocalServerPort
     private var port = 0

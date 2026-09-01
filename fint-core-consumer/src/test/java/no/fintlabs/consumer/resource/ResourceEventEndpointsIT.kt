@@ -2,6 +2,7 @@ package no.fintlabs.consumer.resource
 
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
+import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
 import no.fintlabs.consumer.config.TomcatConfiguration
@@ -56,6 +57,9 @@ class ResourceEventEndpointsIT {
 
     @MockitoBean
     private lateinit var requestStatusService: RequestStatusService
+
+    @MockitoBean
+    private lateinit var statsService: StatsService
 
     @LocalServerPort
     private var port = 0
