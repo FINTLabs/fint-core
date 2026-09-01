@@ -12,49 +12,61 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
+data class RelationEdgeWrite(
+    val collectionName: String,
+    val edge: RelationEdge,
+)
+
 @Service
 class RelationEdgeStore(
     private val template: MongoTemplate,
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
 
+    fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
+
     /**
-     * Idempotent bulk upsert keyed by the deterministic edge id. Re-delivered or re-synced
-     * batches match the existing document and change nothing; `createdAt` is written on first
-     * insert only, which is why this is an [Update] and not a replace.
+     * Inserts or updates a batch of edges, matched by id. Edges are stored in one collection per
+     * organization (the org is part of the collection name),
+     * and one batch can contain edges for more than one organization, so this groups the batch
+     * by collection and writes each group separately. Writing the same edge again, for example
+     * after a re-sync, has no extra effect: `createdAt` is only set on the first insert, which is
+     * why this uses [Update] instead of replacing the whole document.
      */
-    fun upsertAll(
-        collectionName: String,
-        edges: List<RelationEdge>,
-    ) {
-        if (edges.isEmpty()) return
-        ensureIndexes(collectionName)
+    fun saveAll(writes: List<RelationEdgeWrite>) {
+        if (writes.isEmpty()) return
 
         val now = Instant.now()
-        val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
 
-        edges.associateBy { it.id }.values.forEach { edge ->
-            val query = Query.query(Criteria.where("_id").`is`(edge.id))
-            val update =
-                Update()
-                    .set("sourceIdField", edge.sourceIdField)
-                    .set("sourceIdValue", edge.sourceIdValue)
-                    .set("inverseName", edge.inverseName)
-                    .set("targetType", edge.targetType)
-                    .set("targetIdField", edge.targetIdField)
-                    .set("targetIdValue", edge.targetIdValue)
-                    .setOnInsert("createdAt", now)
-            bulkOps.upsert(query, update)
-        }
+        writes
+            .groupBy { it.collectionName }
+            .forEach { (collectionName, collectionWrites) ->
+                ensureIndexes(collectionName)
 
-        bulkOps.execute()
+                val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
+
+                collectionWrites
+                    .map { it.edge }
+                    .associateBy { it.id }
+                    .values
+                    .forEach { edge ->
+                        val query = Query.query(Criteria.where("_id").`is`(edge.id))
+                        val update =
+                            Update()
+                                .set("sourceIdField", edge.sourceIdField)
+                                .set("sourceIdValue", edge.sourceIdValue)
+                                .set("inverseName", edge.inverseName)
+                                .set("targetType", edge.targetType)
+                                .set("targetIdField", edge.targetIdField)
+                                .set("targetIdValue", edge.targetIdValue)
+                                .setOnInsert("createdAt", now)
+                        bulkOps.upsert(query, update)
+                    }
+
+                bulkOps.execute()
+            }
     }
 
-    /**
-     * The read-time merge query: edges pointing at any of [identifiers] on [targetType].
-     * Written as a rooted $or so each branch plans its own exact bounds on the
-     * (targetType, targetIdField, targetIdValue) index.
-     */
     fun findByTargets(
         collectionName: String,
         targetType: String,
@@ -79,10 +91,6 @@ class RelationEdgeStore(
         return template.find(query, RelationEdge::class.java, collectionName)
     }
 
-    /**
-     * Every edge pointing at [targetType], for full-collection reads where a per-identifier
-     * `$in` would be unbounded; the caller joins in memory instead.
-     */
     fun findAllByTargetType(
         collectionName: String,
         targetType: String,

@@ -1,41 +1,26 @@
 package no.fintlabs.provider.event.response
 
-import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
-import no.novari.kafka.producing.ParameterizedProducerRecord
-import no.novari.kafka.producing.ParameterizedTemplateFactory
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.fintlabs.provider.config.ProviderProperties
+import no.novari.core.shared.kafka.EventTopics
+import org.slf4j.LoggerFactory
+import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 
 @Service
 class ResponseFintEventProducer(
-    eventProducerFactory: ParameterizedTemplateFactory,
+    private val kafkaTemplate: KafkaTemplate<String, Any>,
+    private val providerProperties: ProviderProperties,
 ) {
-    private val eventProducer = eventProducerFactory.createTemplate(ResponseFintEvent::class.java)
+    private val logger = LoggerFactory.getLogger(javaClass)
 
-    fun sendEvent(
-        responseFintEvent: ResponseFintEvent,
-        requestFintEvent: RequestFintEvent,
-    ) {
-        eventProducer.send(
-            ParameterizedProducerRecord
-                .builder<ResponseFintEvent>()
-                .topicNameParameters(requestFintEvent.toTopicNameParameters())
-                .value(responseFintEvent)
-                .build(),
-        )
+    fun publish(response: ResponseFintEvent) {
+        val topic = EventTopics.responseTopic(providerProperties.orgId)
+
+        kafkaTemplate.send(topic, response.corrId, response).whenComplete { _, exception ->
+            if (exception != null) {
+                logger.error("Failed to publish ResponseFintEvent {} to {}", response.corrId, topic, exception)
+            }
+        }
     }
-
-    private fun RequestFintEvent.toTopicNameParameters() =
-        EventTopicNameParameters
-            .builder()
-            .topicNamePrefixParameters(
-                TopicNamePrefixParameters
-                    .stepBuilder()
-                    .orgId(orgId.replace(".", "-"))
-                    .domainContextApplicationDefault()
-                    .build(),
-            ).eventName("$domainName-$packageName-response")
-            .build()
 }

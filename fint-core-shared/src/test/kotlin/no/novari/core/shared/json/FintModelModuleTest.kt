@@ -53,7 +53,7 @@ class FintModelModuleTest {
     }
 
     @Test
-    fun `a raw value with a stray percent is kept verbatim rather than failing the page`() {
+    fun `a raw value with a stray percent is kept as it is rather than failing the page`() {
         val elev = elev(""""person": [ { "href": "https://api.felleskomponent.no/felles/person/fodselsnummer/100%" } ]""")
 
         assertEquals(Link("fodselsnummer", "100%"), elev.relationLinks("person").single())

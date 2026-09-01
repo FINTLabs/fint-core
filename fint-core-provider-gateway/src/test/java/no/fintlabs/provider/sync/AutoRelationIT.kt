@@ -1,6 +1,7 @@
 package no.fintlabs.provider.sync
 
 import com.mongodb.client.MongoClients
+import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
@@ -51,7 +52,7 @@ class AutoRelationIT {
     private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "autorelation-it") }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val bufferReader by lazy { BufferReader(resourceStore, relationEdgeStore) }
+    private val bufferReader by lazy { BufferReader(ResourceWritePipeline(resourceStore, relationEdgeStore)) }
 
     private val edgeCollection = "fintlabs_no_relation_edges"
     private val storageMapper = FintJson.storageMapper()

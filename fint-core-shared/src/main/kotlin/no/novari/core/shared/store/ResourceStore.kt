@@ -2,55 +2,42 @@ package no.novari.core.shared.store
 
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
+import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation
+import org.springframework.data.mongodb.core.aggregation.AggregationUpdate
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.findById
 import org.springframework.data.mongodb.core.findOne
 import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
-import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.Date
 
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
 ) {
-    // Save single Resource
-    fun save(
-        resourceId: String,
-        collectionName: String,
-        resource: FintResource,
-        timestamp: Instant,
-    ) {
-        saveAll(
-            listOf(
-                ResourceWrite(
-                    resourceId = resourceId,
-                    collectionName = collectionName,
-                    resource = resource,
-                    timestamp = timestamp,
-                ),
-            ),
-        )
-    }
-
-    // Builds and executes a bulk upsert operation per collection.
+    /**
+     * Inserts or updates a batch of resources, grouped by collection. Each write only takes
+     * effect if it isn't older than what's already stored, so a slow writer working through a
+     * backlog can never overwrite a newer write that already came in another way. If both writes
+     * have the exact same timestamp, the new one wins. The original `createdAt` value is always
+     * kept.
+     */
     fun saveAll(writes: List<ResourceWrite>) {
         if (writes.isEmpty()) return
 
         writes
-            // Bulk operations are collection-specific, so split the incoming writes by target collection.
             .groupBy { it.collectionName }
             .forEach { (collectionName, collectionWrites) ->
-                // If the same resource appears multiple times in this batch, this keeps the last
                 val latestWritesById = collectionWrites.associateBy { it.resourceId }
 
-                // Use unordered bulk writes so MongoDB can apply independent upserts, which may be faster.
                 val bulkOps =
                     template.bulkOps(
                         BulkOperations.BulkMode.UNORDERED,
@@ -58,19 +45,8 @@ class ResourceStore(
                     )
 
                 latestWritesById.values.forEach { write ->
-                    // Match the Mongo document by resource id, which is stored as the document _id.
                     val query = Query.query(Criteria.where("_id").`is`(write.resourceId))
-
-                    // Replace the resource payload and lookup fields, while preserving createdAt for existing documents.
-                    val update =
-                        Update()
-                            .set("data", bsonConverter.toDocument(write.resource))
-                            .set("identifiers", write.resource.toIdentifierRefs())
-                            .set("lastModified", write.timestamp)
-                            .setOnInsert("createdAt", write.timestamp)
-
-                    // Insert a new document or update the existing document for this resource id.
-                    bulkOps.upsert(query, update)
+                    bulkOps.upsert(query, write.toGuardedUpdate())
                 }
 
                 bulkOps.execute()
@@ -78,8 +54,50 @@ class ResourceStore(
     }
 
     /**
-     * Gets resource by database _id field.
+     * Builds the update that enforces the "don't overwrite a newer write" rule from [saveAll].
+     * This check has to live inside the update itself and not the query, because of how upsert
+     * works: if the query matches, Mongo updates the document; if it doesn't, Mongo inserts a new
+     * one. Putting the timestamp check in the query would make an old write look like "no match",
+     * so Mongo would try to insert a second document with the same id and fail. Instead, the
+     * query only matches on id, and each field in the update uses `$cond` to decide for itself
+     * whether to keep the stored value or take the new one.
+     *
+     * Every field uses the exact same condition (via `keepUnlessStale`), so the write always
+     * applies fully or not at all. There's no way to end up with a document that's part old and
+     * part new.
      */
+    private fun ResourceWrite.toGuardedUpdate(): AggregationUpdate {
+        val incomingTimestamp = Date.from(timestamp)
+        val identifierDocuments =
+            resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }
+
+        // `$cond` is Mongo's version of a ternary operator: `condition ? ifTrue : ifFalse`.
+        // Calling keepUnlessStale("data", newData) builds:
+        //   { $cond: [ { $gt: ["$lastModified", incomingTimestamp] }, "$data", newData ] }
+        // which Mongo reads as: storedLastModified > incomingTimestamp ? storedData : newData
+        fun keepUnlessStale(
+            field: String,
+            incoming: Any,
+        ): Document =
+            Document(
+                "\$cond",
+                listOf(
+                    Document("\$gt", listOf("\$lastModified", incomingTimestamp)),
+                    "$$field",
+                    incoming,
+                ),
+            )
+
+        val set =
+            Document()
+                .append("data", keepUnlessStale("data", bsonConverter.toDocument(resource)))
+                .append("identifiers", keepUnlessStale("identifiers", identifierDocuments))
+                .append("createdAt", Document("\$ifNull", listOf("\$createdAt", incomingTimestamp)))
+                .append("lastModified", keepUnlessStale("lastModified", incomingTimestamp))
+
+        return AggregationUpdate.from(listOf(AggregationOperation { Document("\$set", set) }))
+    }
+
     fun findByResourceId(
         resourceId: String,
         collectionName: String,
@@ -88,20 +106,6 @@ class ResourceStore(
         collectionName,
     )
 
-    /**
-     * Finds a resource entry from a given collection using a specific identifier field and value.
-     *
-     * The method queries for a resource in the database collection by looking for a matching
-     * identifier field and value combination within the `identifiers` array of the resource document.
-     *
-     * For example, if we have an elev with elevnummer, the id has the path /elev/elevnummer/1234.
-     * This method will then query for that identifier instead of the _id field.
-     *
-     * @param idField The name of the identifier field to query against.
-     * @param idValue The value of the identifier field to query for.
-     * @param collectionName The name of the collection where the resource is stored.
-     * @return The matching resource entry if found, or null if no match is found.
-     */
     fun findByIdentifier(
         idField: String,
         idValue: String,
@@ -161,18 +165,6 @@ class ResourceStore(
             ?.lastModified
     }
 
-    /**
-     * Constructs a base query object for MongoDB operations.
-     *
-     * The query is initialized optionally with filtering criteria and is sorted in ascending
-     * order by `createdAt` and `_id`.
-     *
-     * In other words, since the controller takes a sinceTimeStamp, we have to account for it here. So we insert
-     * it as base for each query.
-     *
-     * @param filter optional filtering criteria to be applied to the query. If null, no criteria are added.
-     * @return a query object with the applied criteria and sorting.
-     */
     private fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }

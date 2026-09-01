@@ -5,6 +5,8 @@ import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
 import no.fintlabs.consumer.config.TomcatConfiguration
+import no.fintlabs.consumer.resource.event.RequestFintEventService
+import no.fintlabs.consumer.resource.event.RequestStatusService
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -43,6 +45,12 @@ class EncodedSlashIT {
 
     @MockitoBean
     private lateinit var resourceService: ResourceService
+
+    @MockitoBean
+    private lateinit var requestFintEventService: RequestFintEventService
+
+    @MockitoBean
+    private lateinit var requestStatusService: RequestStatusService
 
     @MockitoBean
     private lateinit var statsService: StatsService
