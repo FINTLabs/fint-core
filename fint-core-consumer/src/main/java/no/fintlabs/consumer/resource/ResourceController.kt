@@ -82,7 +82,7 @@ class ResourceController(
         @PathVariable idField: String,
         @PathVariable idValue: String,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<FintResource?> =
+    ): ResponseEntity<FintResource> =
         resourceService
             .getResourceById(
                 ResourceCoordinate(orgId, domainName, packageName, resourceName),
@@ -120,7 +120,7 @@ class ResourceController(
         @PathVariable resourceName: String,
         @PathVariable corrId: String,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<Any?> =
+    ): ResponseEntity<Any> =
         requestStatusService
             .getStatusResponse(ResourceCoordinate(orgId, domainName, packageName, resourceName), corrId)
             .let { result ->

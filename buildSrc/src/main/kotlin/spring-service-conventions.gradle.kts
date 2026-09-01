@@ -28,6 +28,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -40,7 +41,6 @@ dependencies {
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
     implementation("no.novari:fint-core-information-model:0.6.0")
-    implementation("no.novari:kafka:6.0.0")
 }
 
 testing {
@@ -51,7 +51,7 @@ testing {
                 implementation("io.mockk:mockk:1.13.13")
                 implementation("org.springframework.boot:spring-boot-starter-test")
                 implementation("org.jetbrains.kotlin:kotlin-test")
-                implementation("org.springframework.kafka:spring-kafka-test")
+                implementation("org.springframework.boot:spring-boot-starter-kafka-test")
                 implementation("org.testcontainers:testcontainers-junit-jupiter")
             }
         }

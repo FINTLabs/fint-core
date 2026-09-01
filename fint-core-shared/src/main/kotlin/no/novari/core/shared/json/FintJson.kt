@@ -2,8 +2,8 @@ package no.novari.core.shared.json
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.util.ISO8601DateFormat
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -20,15 +20,7 @@ object FintJson {
      * `FintLinksDeserializer` produces from inbound adapter hrefs. Use it for everything read
      * from or written to storage; it never renders an href.
      */
-    fun storageMapper(): ObjectMapper =
-        ObjectMapper()
-            .registerModules(
-                JavaTimeModule(),
-                KotlinModule.Builder().build(),
-                FintModelModule(),
-            ).setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+    fun storageMapper(): JsonMapper = mapperBuilder().build()
 
     /**
      * The county-facing response form: everything in the storage form, plus `_links` rendered as
@@ -43,8 +35,24 @@ object FintJson {
     fun responseMapper(
         baseUrl: String,
         componentResolver: ComponentResolver = { null },
-    ): ObjectMapper =
-        storageMapper()
-            .registerModule(ResponseLinksModule(baseUrl, componentResolver))
-            .setDateFormat(ISO8601DateFormat())
+    ): JsonMapper =
+        mapperBuilder()
+            .addModule(ResponseLinksModule(baseUrl, componentResolver))
+            .defaultDateFormat(ISO8601DateFormat())
+            .build()
+
+    private fun mapperBuilder(): JsonMapper.Builder =
+        JsonMapper
+            .builder()
+            .addModules(
+                JavaTimeModule(),
+                KotlinModule.Builder().build(),
+                FintModelModule(),
+            ).defaultPropertyInclusion(
+                JsonInclude.Value.construct(
+                    JsonInclude.Include.NON_NULL,
+                    JsonInclude.Include.NON_NULL,
+                ),
+            ).disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 }

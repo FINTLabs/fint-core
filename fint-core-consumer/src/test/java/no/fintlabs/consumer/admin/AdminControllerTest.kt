@@ -7,7 +7,7 @@ import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.novari.core.shared.json.FintJson
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -21,7 +21,7 @@ class AdminControllerTest {
     private val mockMvc =
         MockMvcBuilders
             .standaloneSetup(AdminController(consumerConfiguration(), statsService))
-            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
+            .setMessageConverters(JacksonJsonHttpMessageConverter(objectMapper))
             .build()
 
     @Test

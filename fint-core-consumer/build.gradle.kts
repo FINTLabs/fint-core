@@ -11,6 +11,6 @@ dependencies {
 
     implementation("com.google.guava:guava:33.7.1-jre")
 
-    testImplementation("org.testcontainers:kafka")
+    testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
 }

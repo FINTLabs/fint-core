@@ -13,7 +13,7 @@ class AsyncConfig {
             corePoolSize = 2
             maxPoolSize = 4
             queueCapacity = 1_000
-            threadNamePrefix = "cache-eviction-"
+            setThreadNamePrefix("cache-eviction-")
             setWaitForTasksToCompleteOnShutdown(true)
             setAwaitTerminationSeconds(30)
             initialize()

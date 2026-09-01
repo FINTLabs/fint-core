@@ -1,7 +1,7 @@
 plugins {
     id("spring-service-conventions")
     groovy
-    id("com.github.ben-manes.versions") version "0.61.0"
+    id("io.github.ben-manes.versions") version "0.61.0"
     id("se.patrikerdes.use-latest-versions") version "0.2.19"
 }
 
