@@ -22,13 +22,13 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
-    testImplementation("org.testcontainers:kafka")
-    testImplementation("org.testcontainers:mongodb")
+    testImplementation("org.testcontainers:testcontainers-kafka")
+    testImplementation("org.testcontainers:testcontainers-mongodb")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.kafka:spring-kafka-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation("org.testcontainers:postgresql")
-    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

@@ -52,7 +52,7 @@ testing {
                 implementation("org.springframework.boot:spring-boot-starter-test")
                 implementation("org.jetbrains.kotlin:kotlin-test")
                 implementation("org.springframework.kafka:spring-kafka-test")
-                implementation("org.testcontainers:junit-jupiter")
+                implementation("org.testcontainers:testcontainers-junit-jupiter")
             }
         }
     }
