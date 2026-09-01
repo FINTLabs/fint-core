@@ -27,6 +27,16 @@ data class ResourceEntry(
     val lastModified: Instant,
 )
 
+/**
+ * The two things an eviction needs about a stored resource: which document to delete, and which
+ * identifiers other resources may have pointed at. Read as a projection rather than a whole
+ * [ResourceEntry], so sweeping a large collection never pulls the resource data into memory.
+ */
+data class ResourceIdentity(
+    @Id val id: String,
+    val identifiers: List<IdentifierRef>,
+)
+
 fun FintResource.toIdentifierRefs(): List<IdentifierRef> =
     buildList {
         visitIdentifikators { field, value -> add(IdentifierRef(field.lowercase(), value)) }

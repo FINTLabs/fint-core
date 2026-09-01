@@ -9,6 +9,7 @@ import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_MARKER
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.SyncMetadata
@@ -31,6 +32,14 @@ class BufferWriter(
 ) {
     companion object {
         const val KEY_DELIMITER = "\u001F"
+
+        /**
+         * Key prefix for sync markers. A resource key is the resource name, the delimiter and the
+         * resource id, and no resource is named this, so a marker can never collide with one. The
+         * corrId completes the key, which puts every sync's marker on its own key so log
+         * compaction cannot drop one marker in favour of another.
+         */
+        const val SYNC_MARKER_KEY = "__sync-marker__"
     }
 
     val log = LoggerFactory.getLogger(BufferWriter::class.java)
@@ -41,30 +50,45 @@ class BufferWriter(
         coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =
         send(
-            coords,
-            resourceId = syncEntry.identifier,
+            key = "${coords.resourceName}$KEY_DELIMITER${syncEntry.identifier}",
+            coords = coords,
             resource = syncEntry.resource,
             lastModified = clock.millis(),
-            syncMetadata =
-                SyncMetadata(
-                    corrId = syncPage.metadata.corrId,
-                    type = syncPage.syncType,
-                    totalSize = syncPage.metadata.totalSize,
-                ),
+            syncMetadata = syncPage.toSyncMetadata(),
+        )
+
+    /**
+     * Sends the record that stands in for a sync carrying no resources. It holds the same sync
+     * headers an entity record holds, so the reader counts it against the same correlation id,
+     * and its LAST_MODIFIED is what the eviction measures staleness against: everything written
+     * before this moment is what the adapter has just said it no longer has.
+     */
+    fun sendSyncMarker(
+        syncPage: SyncPage,
+        coords: ResourceCoordinate,
+    ): CompletableFuture<SendResult<String, Any>> =
+        send(
+            key = "$SYNC_MARKER_KEY$KEY_DELIMITER${syncPage.metadata.corrId}",
+            coords = coords,
+            resource = null,
+            lastModified = clock.millis(),
+            syncMetadata = syncPage.toSyncMetadata(),
+            marker = true,
         )
 
     private fun send(
+        key: String,
         coords: ResourceCoordinate,
-        resourceId: String,
         resource: Any?,
         lastModified: Long,
         syncMetadata: SyncMetadata?,
+        marker: Boolean = false,
     ): CompletableFuture<SendResult<String, Any>> {
         log.debug("SEND TO KAFKA:: {}", resource)
         return kafkaTemplate.send(
             ProducerRecord<String, Any>(
                 topic,
-                "${coords.resourceName}$KEY_DELIMITER$resourceId",
+                key,
                 resource,
             ).apply {
                 headers().apply {
@@ -73,6 +97,7 @@ class BufferWriter(
                     add(PACKAGE_NAME, coords.packageName.toByteArray())
                     add(RESOURCE_NAME, coords.resourceName.toByteArray())
                     add(LAST_MODIFIED, lastModified.toHeaderBytes())
+                    if (marker) add(SYNC_MARKER, byteArrayOf(1))
                     syncMetadata?.let {
                         add(SYNC_TYPE, byteArrayOf(it.type.ordinal.toByte()))
                         add(SYNC_CORRELATION_ID, it.corrId.toByteArray())
@@ -82,4 +107,11 @@ class BufferWriter(
             },
         )
     }
+
+    private fun SyncPage.toSyncMetadata() =
+        SyncMetadata(
+            corrId = metadata.corrId,
+            type = syncType,
+            totalSize = metadata.totalSize,
+        )
 }

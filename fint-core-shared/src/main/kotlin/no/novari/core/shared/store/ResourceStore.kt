@@ -17,12 +17,17 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
 ) {
+    private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
+
+    fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
+
     /**
      * Inserts or updates a batch of resources, grouped by collection. Each write only takes
      * effect if it isn't older than what's already stored, so a slow writer working through a
@@ -36,6 +41,8 @@ class ResourceStore(
         writes
             .groupBy { it.collectionName }
             .forEach { (collectionName, collectionWrites) ->
+                ensureIndexes(collectionName)
+
                 val latestWritesById = collectionWrites.associateBy { it.resourceId }
 
                 val bulkOps =
@@ -165,9 +172,70 @@ class ResourceStore(
             ?.lastModified
     }
 
+    /**
+     * Reads up to [limit] resources last written before [threshold], as ids and identifiers only.
+     *
+     * This is how an eviction finds what a completed full sync left behind: everything the sync
+     * carried was written at or after its earliest write, so anything still older than that is
+     * something the adapter no longer has. A resource written by the event path during the sync
+     * is newer than [threshold] too, so it is never picked up here.
+     */
+    fun findIdentitiesOlderThan(
+        threshold: Instant,
+        limit: Int,
+        collectionName: String,
+    ): List<ResourceIdentity> {
+        val query =
+            Query
+                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .limit(limit)
+        query.fields().include("identifiers")
+
+        return template.find(query, ResourceIdentity::class.java, collectionName)
+    }
+
+    /**
+     * Deletes those of [ids] still last written before [threshold], and returns how many went.
+     *
+     * The threshold is repeated here even though the ids came from a read that already applied
+     * it, because a client write can land in between and make one of them current again. Deleting
+     * on the id alone would throw that write away; this way the write simply keeps its resource.
+     */
+    fun deleteStaleByIds(
+        ids: Collection<String>,
+        threshold: Instant,
+        collectionName: String,
+    ): Long {
+        if (ids.isEmpty()) return 0
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("_id")
+                    .`in`(ids)
+                    .and("lastModified")
+                    .lt(Date.from(threshold)),
+            )
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
     private fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
             with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
         }
+
+    /**
+     * The `lastModified` index serves both the eviction sweep's range scan and the newest-first
+     * lookup behind [getLastUpdated]. Creating an index is not allowed inside a Mongo
+     * transaction, so [prepareCollection] exists for callers that write inside one.
+     */
+    private fun ensureIndexes(collectionName: String) {
+        if (!indexedCollections.add(collectionName)) return
+
+        template.indexOps(collectionName).createIndex(
+            Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+        )
+    }
 }
