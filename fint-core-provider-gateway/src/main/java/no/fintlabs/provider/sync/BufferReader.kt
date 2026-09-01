@@ -49,22 +49,6 @@ class BufferReader(
         syncCompletionTracker.track(buffered.mapNotNull { it.sync })
     }
 
-    /**
-     * A record's two readings: what to write, and what it says about the sync it belongs to.
-     * Both are optional. A marker carries no resource, and a record produced outside a sync, such
-     * as a hand-built test record, belongs to no sync.
-     */
-    private data class BufferedRecord(
-        val ingest: ResourceIngest?,
-        val sync: SyncRecord?,
-    )
-
-    /**
-     * A sync reading is only produced for a record that is also being written, or for a marker,
-     * which stands in for a sync that has nothing to write. That keeps counting records and
-     * counting what reached storage the same thing, which is what lets a finished count mean the
-     * sync is safe to evict against.
-     */
     private fun ConsumerRecord<String, String>.toBufferedRecord(): BufferedRecord {
         val headers = headers()
         val coordinate = headers.toResourceCoordinate()
@@ -100,6 +84,11 @@ class BufferReader(
             )
         }
 
+    private data class BufferedRecord(
+        val ingest: ResourceIngest?,
+        val sync: SyncRecord?,
+    )
+
     private fun Headers.toResourceCoordinate(): ResourceCoordinate =
         ResourceCoordinate(
             orgId = requiredStringValue(ORG_ID),
@@ -108,11 +97,6 @@ class BufferReader(
             resourceName = requiredStringValue(RESOURCE_NAME),
         )
 
-    /**
-     * The sync headers [BufferWriter] stamps on every record that came from a sync page, or null
-     * on a record that did not. The sync type travels as its ordinal, so the order of [SyncType]
-     * is part of the wire format and reordering it would change what old records mean.
-     */
     private fun Headers.toSyncMetadata(): SyncMetadata? {
         val corrId = stringValue(SYNC_CORRELATION_ID) ?: return null
         val type = byteValue(SYNC_TYPE)?.toInt()?.let(SyncType.entries::getOrNull) ?: return null

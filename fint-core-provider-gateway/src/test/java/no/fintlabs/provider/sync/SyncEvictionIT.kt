@@ -37,16 +37,6 @@ import org.testcontainers.junit.jupiter.Testcontainers
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Full-sync eviction end to end against a real Mongo, driving [BufferReader.readMessage] directly
- * so a test controls exactly what the buffer delivers: which partition and offset a record sat on,
- * when it was written, and which sync it belonged to. Deliberately no Spring, for the reason
- * [AutoRelationIT] gives.
- *
- * Times are the LAST_MODIFIED header, which is the provider's clock at sync-page receipt.
- * [BEFORE] stands for what was already stored and [DURING] for the sync under test, so a resource
- * the sync does not carry stays at [BEFORE] and is what eviction should find.
- */
 @Testcontainers
 class SyncEvictionIT {
     companion object {

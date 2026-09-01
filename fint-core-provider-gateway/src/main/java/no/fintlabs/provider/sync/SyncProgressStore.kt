@@ -13,13 +13,6 @@ import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
 
-/**
- * Keeps the per-sync progress documents that let any replica finish a sync another replica
- * started. Everything here is one round trip, because it runs once per batch of buffered records.
- *
- * Abandoned syncs are left to a TTL index instead of being cleaned up by hand. A sync whose pages
- * stop arriving never reaches its total, so it never evicts, and its document simply expires.
- */
 @Service
 class SyncProgressStore(
     private val template: MongoTemplate,
@@ -35,19 +28,6 @@ class SyncProgressStore(
 
     fun find(corrId: String): SyncProgress? = template.findById<SyncProgress>(corrId, COLLECTION_NAME)
 
-    /**
-     * Adds [freshCount] records to a sync's progress and returns the updated document, creating
-     * it if this is the first batch of the sync.
-     *
-     * [expectedOffset] is what the caller read from this partition's slot before deciding which
-     * records were fresh, and the write only lands while that slot still holds it. Losing that
-     * race, or racing another partition to create the document, throws
-     * [org.springframework.dao.DuplicateKeyException] so the caller can read again and redecide.
-     *
-     * The offset slot moves with `$max` rather than a plain set, so a redelivery that starts
-     * further back than what is already folded in cannot walk the watermark backwards and let the
-     * same records be counted a second time.
-     */
     fun fold(
         corrId: String,
         coordinate: ResourceCoordinate,
@@ -62,9 +42,6 @@ class SyncProgressStore(
         val identity = Criteria.where("_id").`is`(corrId)
         val query =
             Query.query(
-                // An $exists match rather than an equality on null: Mongo builds an inserted
-                // document out of the query's equalities, and a null one here would collide with
-                // this update's own write to the same field.
                 if (expectedOffset == null) {
                     identity.and(offsetField).exists(false)
                 } else {
@@ -90,11 +67,6 @@ class SyncProgressStore(
         )!!
     }
 
-    /**
-     * Takes the right to evict this sync, or returns null if it is already taken. Returning a
-     * document exactly once is the whole point: several replicas can watch the same sync finish,
-     * and a redelivered batch can make one replica watch it finish twice.
-     */
     fun claimEviction(corrId: String): SyncProgress? =
         template.findAndModify(
             Query.query(

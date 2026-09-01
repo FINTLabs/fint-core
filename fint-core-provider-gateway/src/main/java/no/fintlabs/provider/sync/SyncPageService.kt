@@ -51,15 +51,6 @@ class SyncPageService(
         CompletableFuture.allOf(*futures.toTypedArray()).join()
     }
 
-    /**
-     * A full sync of nothing is how an adapter resets a resource: everything we hold for it is
-     * gone at the source. It carries no resources, so it would leave no trace on the buffer at
-     * all, and the reader would never learn the sync happened. The marker is that trace.
-     *
-     * It goes through the buffer rather than evicting straight from here so it keeps its place in
-     * line: anything produced before it is written to storage before it, which is what makes the
-     * reset take out exactly the data that predates it.
-     */
     private fun sendResetMarker(
         page: SyncPage,
         coords: ResourceCoordinate,

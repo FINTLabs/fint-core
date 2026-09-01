@@ -32,13 +32,6 @@ class BufferWriter(
 ) {
     companion object {
         const val KEY_DELIMITER = "\u001F"
-
-        /**
-         * Key prefix for sync markers. A resource key is the resource name, the delimiter and the
-         * resource id, and no resource is named this, so a marker can never collide with one. The
-         * corrId completes the key, which puts every sync's marker on its own key so log
-         * compaction cannot drop one marker in favour of another.
-         */
         const val SYNC_MARKER_KEY = "__sync-marker__"
     }
 
@@ -57,12 +50,6 @@ class BufferWriter(
             syncMetadata = syncPage.toSyncMetadata(),
         )
 
-    /**
-     * Sends the record that stands in for a sync carrying no resources. It holds the same sync
-     * headers an entity record holds, so the reader counts it against the same correlation id,
-     * and its LAST_MODIFIED is what the eviction measures staleness against: everything written
-     * before this moment is what the adapter has just said it no longer has.
-     */
     fun sendSyncMarker(
         syncPage: SyncPage,
         coords: ResourceCoordinate,

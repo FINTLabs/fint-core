@@ -88,13 +88,6 @@ class RelationEdgeStore(
             collectionName,
         )
 
-    /**
-     * Deletes every edge owned by one of [sourceIds], and returns how many went. This is the
-     * delete that keeps responses honest: without it, a resource that is gone keeps supplying
-     * back-links to the resources it pointed at, so a live resource renders a link to nothing.
-     *
-     * [sourceType] fences the delete, because a source id is only unique within its own type.
-     */
     fun deleteBySources(
         collectionName: String,
         sourceType: String,
@@ -116,13 +109,6 @@ class RelationEdgeStore(
         return template.remove(query, collectionName).deletedCount
     }
 
-    /**
-     * Deletes every edge pointing at one of [identifiers], and returns how many went. These edges
-     * render nothing while their target is missing, so this is not a correctness fix like
-     * [deleteBySources]. It is here because nothing else would ever remove them: they would pile
-     * up for the life of the collection, and resurface as a wrong back-link if the target's
-     * identifier value is ever reused.
-     */
     fun deleteByTargets(
         collectionName: String,
         targetType: String,
@@ -135,12 +121,6 @@ class RelationEdgeStore(
         return template.remove(query, collectionName).deletedCount
     }
 
-    /**
-     * The query behind every read and delete that starts from the target end, or null when there
-     * is nothing to look for. Identifiers are grouped by field so each branch can match a whole
-     * set of values at once, which keeps the branch count at one per identifier field rather than
-     * one per identifier.
-     */
     private fun targetQuery(
         targetType: String,
         identifiers: Collection<IdentifierRef>,

@@ -12,18 +12,13 @@ import java.time.Instant
  * per org, `<org>_relation_edges`, so no field carries the org: the collection name is the org.
  *
  * Reads filter on (targetType, targetIdField, targetIdValue) and read out
- * (inverseName, sourceIdField, sourceIdValue). Deletes filter on either end: on
- * (sourceType, sourceId) when the owning resource goes away, and on the target triple when the
- * resource the back-link points at goes away.
+ * (inverseName, sourceIdField, sourceIdValue).
  */
 data class RelationEdge(
     @field:Id
     val id: String,
-    // Which resource owns this edge, used to delete it when that resource goes away.
-    // sourceId is the owning document's _id, which is the sync identifier and is not
-    // guaranteed to be one of the identifier values below.
-    val sourceType: String, // utdanning/elev/elevforhold
-    val sourceId: String, // EF-123
+    val sourceType: String,
+    val sourceId: String,
     // Fields that are used to generate back-link uri for example systemid/123
     val sourceIdField: String, // systemid
     val sourceIdValue: String, // 123
@@ -33,9 +28,6 @@ data class RelationEdge(
     val targetType: String, // targetPath == null (bruk coordinates fra elev istedenfor)
     val targetIdField: String,
     val targetIdValue: String,
-    // relationName is part of the identity and lives in [id], but is not stored on its own:
-    // nothing queries it, and the same source and target can be related through two relations,
-    // so [id] already keeps those apart.
     val createdAt: Instant? = null,
 )
 
@@ -47,10 +39,6 @@ const val RELATION_EDGE_ID_DELIMITER = "\u001F"
  * The six parameters are the identity: one source resource, declaring one relation, toward one
  * target identifier. The id doubles as the uniqueness guard, so writes are idempotent upserts
  * and Kafka's at-least-once redelivery can never duplicate an edge.
- *
- * All six parameters participate even though relationName is not a stored field: the identity
- * must be stable from day one, or every existing edge would change id (and thus duplicate) the
- * moment a field is added.
  *
  * The delimiter is the same unit separator the provider uses for Kafka keys. Identifier values
  * are adapter-controlled strings, so a printable delimiter like `|` could appear inside one and

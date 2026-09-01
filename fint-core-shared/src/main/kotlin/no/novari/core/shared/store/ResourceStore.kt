@@ -172,14 +172,6 @@ class ResourceStore(
             ?.lastModified
     }
 
-    /**
-     * Reads up to [limit] resources last written before [threshold], as ids and identifiers only.
-     *
-     * This is how an eviction finds what a completed full sync left behind: everything the sync
-     * carried was written at or after its earliest write, so anything still older than that is
-     * something the adapter no longer has. A resource written by the event path during the sync
-     * is newer than [threshold] too, so it is never picked up here.
-     */
     fun findIdentitiesOlderThan(
         threshold: Instant,
         limit: Int,
@@ -194,13 +186,6 @@ class ResourceStore(
         return template.find(query, ResourceIdentity::class.java, collectionName)
     }
 
-    /**
-     * Deletes those of [ids] still last written before [threshold], and returns how many went.
-     *
-     * The threshold is repeated here even though the ids came from a read that already applied
-     * it, because a client write can land in between and make one of them current again. Deleting
-     * on the id alone would throw that write away; this way the write simply keeps its resource.
-     */
     fun deleteStaleByIds(
         ids: Collection<String>,
         threshold: Instant,
@@ -226,11 +211,6 @@ class ResourceStore(
             with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
         }
 
-    /**
-     * The `lastModified` index serves both the eviction sweep's range scan and the newest-first
-     * lookup behind [getLastUpdated]. Creating an index is not allowed inside a Mongo
-     * transaction, so [prepareCollection] exists for callers that write inside one.
-     */
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
 
