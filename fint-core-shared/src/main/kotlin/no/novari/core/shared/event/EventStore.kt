@@ -23,20 +23,6 @@ sealed interface ClaimOutcome {
     data object NotFound : ClaimOutcome
 }
 
-/**
- * The Mongo-backed event flow shared by consumer and provider. The consumer [save]s a client's
- * write request as [EventState.PENDING], the provider serves [findPending] to adapters and
- * claims their answer with [markAnswered], the sweeper claims overdue events with
- * [markExpired], and the consumer derives client status from [findByCorrId].
- *
- * Both claims are conditional single-document updates guarded on [EventState.PENDING] plus the
- * deadline, with predicates that exclude each other: [markAnswered] requires the response's
- * handledAt to be before the deadline, [markExpired] requires the deadline to have passed the
- * sweeper's clock. Mongo runs the two
- * updates on a document one after the other, so exactly one claim ever wins per corrId, at any
- * replica count. Neither claim creates indexes, so both are safe to run inside a Mongo
- * transaction; index creation happens on [save] and the read paths, which run outside one.
- */
 @Service
 class EventStore(
     private val template: MongoTemplate,
@@ -69,12 +55,6 @@ class EventStore(
         now: Instant,
     ): List<RequestFintEvent> = findInState(collectionName, Criteria.where(DEADLINE).lte(now))
 
-    /**
-     * Claims the answer for a still-pending event whose deadline had not passed when the
-     * response was handled: the claim query compares the document's deadline against the
-     * response's own handledAt, so a late answer loses inside the database, atomically with
-     * the claim itself.
-     */
     fun markAnswered(
         response: ResponseFintEvent,
         collectionName: String,

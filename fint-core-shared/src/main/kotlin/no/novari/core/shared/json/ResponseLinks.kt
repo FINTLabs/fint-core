@@ -14,19 +14,18 @@ import no.novari.fint.core.model.Link
 const val LINKS_FIELD = "_links"
 
 /**
- * Supplies the component a common resource is being served through, as the "domain/package" of
- * the request path ("utdanning/elev"), or null when no request is in scope. A common resource
- * (felles:Person and friends) has no path of its own, so its hrefs can only be rendered against
- * the component it was reached through. Resolved lazily per bean, so serialization outside a
- * request stays legal and simply renders such resources without the links that need a component.
+ * Returns the domain/package part of the current request path, such as "utdanning/elev", or
+ * null if there is no request. Some resources (felles:Person and similar) don't have a path of
+ * their own, so we need to know which path they were requested through in order to build their
+ * links.
  */
 typealias ComponentResolver = () -> String?
 
 /**
- * The whole response-form computation, as a plain function with no Jackson in it: the stored id-based
- * links of one resource become the `_links` map the county receives: a regenerated `self` first,
- * then every stored relation rendered as absolute hrefs. [ResponseLinksPropertyWriter] calls this
- * during serialization; tests can call it directly.
+ * Turns the links stored on a resource into the `_links` map that gets sent in the response:
+ * a freshly built `self` link first, followed by every other stored link written out as a full
+ * URL. [ResponseLinksPropertyWriter] calls this while writing the JSON response; tests can also
+ * call it directly.
  */
 fun FintResource.toLinkResponses(
     baseUrl: String,
@@ -43,11 +42,6 @@ fun FintResource.toLinkResponses(
     return linkMap
 }
 
-/**
- * Self links are never stored; they are regenerated from whichever id fields carry a value. A
- * common resource takes its path from the resolved component; a resource with neither a path nor
- * a component to borrow, such as a nested Adresse, has nothing to link to.
- */
 private fun FintResource.selfLinkResponses(
     baseUrl: String,
     componentResolver: ComponentResolver,
@@ -62,9 +56,10 @@ private fun FintResource.selfLinkResponses(
 }
 
 /**
- * Any stored `self` entry is dropped so it can never beat the generated one. Common targets are
- * resolved against this resource's own path, or against the resolved component when the resource
- * is itself common and has none, as when a served Person links to another Person.
+ * Builds every link other than `self`. Any stored `self` entry is skipped, so it never overrides
+ * the one built by [selfLinkResponses]. When the target of a link has no path of its own, this
+ * falls back to the resolved component, for example when a Person resource links to another
+ * Person.
  */
 private fun FintResource.relationLinkResponses(
     baseUrl: String,
@@ -81,11 +76,6 @@ private fun FintResource.relationLinkResponses(
         }.filterValues { it.isNotEmpty() }
 }
 
-/**
- * One stored link becomes one href. An unresolved link is passed through unchanged: it was kept
- * at ingest precisely so the county sees what the adapter sent. A resolvable link without a
- * target path (a common target and no component) has no valid href and is dropped.
- */
 private fun Link.toLinkResponse(
     baseUrl: String,
     targetPath: String?,
@@ -97,9 +87,9 @@ private fun Link.toLinkResponse(
 }
 
 /**
- * Step 1, registration. Installing this module on a mapper is the single act that turns it into
- * the response-form mapper; [FintJson.responseMapper] is the only place that does. Everything else
- * in this file hangs off the [ResponseLinksSerializerModifier] it registers.
+ * Step 1: registration. Adding this module to a Jackson `ObjectMapper` is what turns it into the
+ * mapper used for responses; [FintJson.responseMapper] is the only place that does this. It works
+ * by registering the [ResponseLinksSerializerModifier] below.
  */
 class ResponseLinksModule(
     baseUrl: String,
@@ -111,10 +101,11 @@ class ResponseLinksModule(
 }
 
 /**
- * Step 2, the hook. Jackson calls this once per bean type when it first builds that type's
- * serializer, not per request. Non-resources pass through untouched; for a [FintResource] the
- * `_links` property writer is swapped for [ResponseLinksPropertyWriter], so the rule covers
- * every resource type without any per-type registration.
+ * Step 2: the hook. Jackson calls this once for each class it needs to serialize, the first time
+ * it needs to, not on every request. For any [FintResource] class, it replaces the normal
+ * `_links` field writer with [ResponseLinksPropertyWriter]. Everything that isn't a
+ * [FintResource] is left alone. This way every resource type is covered without registering
+ * anything per type.
  */
 class ResponseLinksSerializerModifier(
     private val baseUrl: String,
@@ -137,10 +128,10 @@ class ResponseLinksSerializerModifier(
 }
 
 /**
- * Step 3, the write. Runs on every serialization of a resource, top-level or nested, because it
- * *is* that resource's `_links` property from Jackson's point of view. It writes
- * [toLinkResponses] instead of the stored map, or nothing at all when no link survives
- * rendering: an empty `_links` is omitted, never rendered as `{}`.
+ * Step 3: the write. As far as Jackson is concerned, this *is* the resource's `_links` field, so
+ * it runs every time a resource is written to JSON, whether at the top level or nested inside
+ * another resource. It writes the result of [toLinkResponses] instead of the stored links, and
+ * if that result is empty, it writes nothing at all rather than an empty `_links: {}`.
  */
 private class ResponseLinksPropertyWriter(
     base: BeanPropertyWriter,

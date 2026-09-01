@@ -23,20 +23,15 @@ class RelationEdgeStore(
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
 
-    /**
-     * Creates the collection's indexes if this instance has not done so yet. Index creation is
-     * not allowed inside a Mongo transaction, so a caller that upserts within one must call
-     * this first, outside the transaction.
-     */
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
-     * Idempotent bulk upsert keyed by the deterministic edge id. Edges live in one collection
-     * per organization (the org is in the collection name, never on the edge documents) and one
-     * batch can mix organizations, so each write carries its target collection and the batch is
-     * grouped here; a bulk write only targets a single collection. Re-delivered or re-synced
-     * batches match the existing document and change nothing; `createdAt` is written on first
-     * insert only, which is why this is an [Update] and not a replace.
+     * Inserts or updates a batch of edges, matched by id. Edges are stored in one collection per
+     * organization (the org is part of the collection name),
+     * and one batch can contain edges for more than one organization, so this groups the batch
+     * by collection and writes each group separately. Writing the same edge again, for example
+     * after a re-sync, has no extra effect: `createdAt` is only set on the first insert, which is
+     * why this uses [Update] instead of replacing the whole document.
      */
     fun saveAll(writes: List<RelationEdgeWrite>) {
         if (writes.isEmpty()) return
@@ -72,11 +67,6 @@ class RelationEdgeStore(
             }
     }
 
-    /**
-     * The read-time merge query: edges pointing at any of [identifiers] on [targetType].
-     * Written as a rooted $or so each branch plans its own exact bounds on the
-     * (targetType, targetIdField, targetIdValue) index.
-     */
     fun findByTargets(
         collectionName: String,
         targetType: String,
@@ -101,10 +91,6 @@ class RelationEdgeStore(
         return template.find(query, RelationEdge::class.java, collectionName)
     }
 
-    /**
-     * Every edge pointing at [targetType], for full-collection reads where a per-identifier
-     * `$in` would be unbounded; the caller joins in memory instead.
-     */
     fun findAllByTargetType(
         collectionName: String,
         targetType: String,

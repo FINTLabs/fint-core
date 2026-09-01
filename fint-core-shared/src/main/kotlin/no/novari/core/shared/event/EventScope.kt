@@ -1,11 +1,5 @@
 package no.novari.core.shared.event
 
-/**
- * What part of the component tree a pending-event query asks for, mirroring the /event route
- * shapes: a domain, a domain and package, or all three. The hierarchy is enforced here, so a
- * scope with a resource but no package cannot be built and the query layer never has to
- * consider it.
- */
 data class EventScope(
     val domainName: String,
     val packageName: String? = null,

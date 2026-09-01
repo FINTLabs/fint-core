@@ -14,28 +14,26 @@ import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.resolveLink
 
 /**
- * The single reader for every `_links` field that enters the platform. Whatever a resource
- * arrives as, each entry lands as the same id-based [Link], so storage and everything behind it
- * never see an href again. Three entry shapes are accepted:
+ * Reads the `_links` field of a FINT resource and turns each entry into a [Link].
  *
- * - `"https://…/elev/systemid/123"`: a bare href, as adapters send them,
- * - `{"href": "https://…"}`: the same href wrapped in the old platform's link object,
- * - `{"idField": …, "idValue": …}` / `{"unresolved": …}`: our own storage form, read back
- *   from Mongo and the provider's buffer topic.
+ * A `_links` entry can be written three different ways, depending on where it came from:
  *
- * An href can only be resolved against the id fields of the resource it points *to*, and which
- * resource that is depends on which relation of the *owning* resource the entry sits under.
- * Hence [ContextualDeserializer]: Jackson builds the no-arg instance from the mixin annotation,
- * then [createContextual] replaces it per `links` property with one that has captured the
- * declaring class's metadata. [deserialize] looks the relation up by entry name and
- * [FintRelation.resolveLink] does the metadata-driven split. An href naming no id field of the
- * target (a foreign host, a target without a matching id field) is kept unchanged as
- * [Link.unresolved], never thrown away.
+ * - a plain URL, like `"https://.../elev/systemid/123"`
+ * - `{"href": "https://..."}`, an older format that wraps the URL in an object
+ * - `{"idField": ..., "idValue": ...}` or `{"unresolved": ...}`, our own format for a
+ *   link that has already been read back from storage
  *
- * Decoding happens here and not in the model library, on purpose: the model does the structural
- * split and holds no codec (see [LinkCodec]), because what an ingress has already decoded is
- * platform knowledge. Storage holds decoded values; [ResponseLinksModule] re-encodes on the way
- * out.
+ * All three end up as the same [Link] object, so nothing downstream has to deal with URLs.
+ *
+ * To turn a URL into a [Link], we need to know which field of the *target* resource its id
+ * belongs to, and that depends on which relation the link is under. Different resource types
+ * have different relations, so this class implements [ContextualDeserializer] to find out which
+ * resource it is currently working on: Jackson first creates a plain instance, then calls
+ * [createContextual] once per `links` property to get an instance that knows the owning
+ * resource type. [deserialize] looks up the matching relation by name, and
+ * [FintRelation.resolveLink] does the actual matching. If a URL doesn't match any id field on
+ * the target, for example because it points to a different system, it is kept as-is via
+ * [Link.unresolved].
  */
 class FintLinksDeserializer private constructor(
     private val owner: FintResourceMetadata?,

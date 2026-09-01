@@ -23,30 +23,12 @@ class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
 ) {
-    // Save single Resource
-    fun save(
-        resourceId: String,
-        collectionName: String,
-        resource: FintResource,
-        timestamp: Instant,
-    ) {
-        saveAll(
-            listOf(
-                ResourceWrite(
-                    resourceId = resourceId,
-                    collectionName = collectionName,
-                    resource = resource,
-                    timestamp = timestamp,
-                ),
-            ),
-        )
-    }
-
     /**
-     * Guarded bulk upsert per collection: a write only applies when its timestamp is not older
-     * than the stored document's lastModified, so a lagging writer (a deep sync buffer backlog)
-     * can never revert a fresher write (a direct event write) for the same resource. Equal
-     * timestamps let the incoming write win. createdAt is preserved for existing documents.
+     * Inserts or updates a batch of resources, grouped by collection. Each write only takes
+     * effect if it isn't older than what's already stored, so a slow writer working through a
+     * backlog can never overwrite a newer write that already came in another way. If both writes
+     * have the exact same timestamp, the new one wins. The original `createdAt` value is always
+     * kept.
      */
     fun saveAll(writes: List<ResourceWrite>) {
         if (writes.isEmpty()) return
@@ -72,22 +54,27 @@ class ResourceStore(
     }
 
     /**
-     * The staleness check lives inside the update expression, not in the query, because of how
-     * upsert works: query matched means update, no match means insert, nothing else. A timestamp
-     * clause in the query would make a stale write look like "no match", so upsert would try to
-     * insert a duplicate _id and throw. Instead the query matches on _id alone and every field
-     * uses $cond to either keep its stored value or take the incoming one, so a stale write is a
-     * clean no-op instead of an error.
+     * Builds the update that enforces the "don't overwrite a newer write" rule from [saveAll].
+     * This check has to live inside the update itself and not the query, because of how upsert
+     * works: if the query matches, Mongo updates the document; if it doesn't, Mongo inserts a new
+     * one. Putting the timestamp check in the query would make an old write look like "no match",
+     * so Mongo would try to insert a second document with the same id and fail. Instead, the
+     * query only matches on id, and each field in the update uses `$cond` to decide for itself
+     * whether to keep the stored value or take the new one.
      *
-     * All guarded fields share the exact same condition through keepUnlessStale on purpose:
-     * one shared condition means the write applies fully or not at all, never a half-updated
-     * document.
+     * Every field uses the exact same condition (via `keepUnlessStale`), so the write always
+     * applies fully or not at all. There's no way to end up with a document that's part old and
+     * part new.
      */
     private fun ResourceWrite.toGuardedUpdate(): AggregationUpdate {
         val incomingTimestamp = Date.from(timestamp)
         val identifierDocuments =
             resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }
 
+        // `$cond` is Mongo's version of a ternary operator: `condition ? ifTrue : ifFalse`.
+        // Calling keepUnlessStale("data", newData) builds:
+        //   { $cond: [ { $gt: ["$lastModified", incomingTimestamp] }, "$data", newData ] }
+        // which Mongo reads as: storedLastModified > incomingTimestamp ? storedData : newData
         fun keepUnlessStale(
             field: String,
             incoming: Any,
@@ -111,9 +98,6 @@ class ResourceStore(
         return AggregationUpdate.from(listOf(AggregationOperation { Document("\$set", set) }))
     }
 
-    /**
-     * Gets resource by database _id field.
-     */
     fun findByResourceId(
         resourceId: String,
         collectionName: String,
@@ -122,20 +106,6 @@ class ResourceStore(
         collectionName,
     )
 
-    /**
-     * Finds a resource entry from a given collection using a specific identifier field and value.
-     *
-     * The method queries for a resource in the database collection by looking for a matching
-     * identifier field and value combination within the `identifiers` array of the resource document.
-     *
-     * For example, if we have an elev with elevnummer, the id has the path /elev/elevnummer/1234.
-     * This method will then query for that identifier instead of the _id field.
-     *
-     * @param idField The name of the identifier field to query against.
-     * @param idValue The value of the identifier field to query for.
-     * @param collectionName The name of the collection where the resource is stored.
-     * @return The matching resource entry if found, or null if no match is found.
-     */
     fun findByIdentifier(
         idField: String,
         idValue: String,
@@ -195,18 +165,6 @@ class ResourceStore(
             ?.lastModified
     }
 
-    /**
-     * Constructs a base query object for MongoDB operations.
-     *
-     * The query is initialized optionally with filtering criteria and is sorted in ascending
-     * order by `createdAt` and `_id`.
-     *
-     * In other words, since the controller takes a sinceTimeStamp, we have to account for it here. So we insert
-     * it as base for each query.
-     *
-     * @param filter optional filtering criteria to be applied to the query. If null, no criteria are added.
-     * @return a query object with the applied criteria and sorting.
-     */
     private fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
