@@ -30,12 +30,6 @@ class AdminController(
     @Deprecated("")
     fun caches(): MutableMap<String, Int> = HashMap<String, Int>()
 
-    /**
-     * Get status for all caches.
-     *
-     * @return an object where each key is a resource name and each value is an object containing
-     * lastUpdated and size for the cache for that resource name
-     */
     @GetMapping("/cache/status")
     fun cacheStatus(
         @PathVariable domainName: String,
