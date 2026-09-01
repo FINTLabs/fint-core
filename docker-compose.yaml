@@ -9,7 +9,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
-    image: confluentinc/cp-kafka:7.6.8
+    image: confluentinc/cp-kafka:8.3.1
     networks:
       - broker-kafka
     depends_on:
@@ -38,7 +38,7 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
 
   postgres:
-    image: postgres:18.3
+    image: postgres:18.6
     networks:
       - broker-kafka
     ports:
@@ -49,7 +49,7 @@ services:
       POSTGRES_DB: contract
 
   mongodb:
-    image: mongo:7.0
+    image: mongo:8.3
     networks:
       - broker-kafka
     ports:
@@ -72,7 +72,7 @@ services:
       - 27018:27018
 
   toxiproxy-init:
-    image: curlimages/curl:8.11.1
+    image: curlimages/curl:8.21.0
     networks:
       - broker-kafka
     depends_on:
