@@ -1,6 +1,5 @@
 package no.novari.core.shared.model
 
-import no.novari.core.shared.event.eventCollectionOrgId
 import no.novari.core.shared.event.toEventCollectionName
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -33,10 +32,7 @@ class OrgIdTest {
     }
 
     @Test
-    fun `the event collection name round-trips back to the org`() {
-        val org = OrgId.from("test.novari.no")
-
-        assertEquals("test_novari_no_events", org.toEventCollectionName())
-        assertEquals(org, eventCollectionOrgId(org.toEventCollectionName()))
+    fun `the event collection name is the org with an events suffix`() {
+        assertEquals("test_novari_no_events", OrgId.from("test.novari.no").toEventCollectionName())
     }
 }

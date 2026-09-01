@@ -57,8 +57,6 @@ class EventStore(
         collectionName: String,
     ): StoredEvent? = template.findById(corrId, EventDocument::class.java, collectionName)?.toStoredEvent()
 
-    fun eventCollections(): List<String> = template.collectionNames.filter { it.endsWith(EVENT_COLLECTION_SUFFIX) }
-
     fun findPending(
         collectionName: String,
         now: Instant,

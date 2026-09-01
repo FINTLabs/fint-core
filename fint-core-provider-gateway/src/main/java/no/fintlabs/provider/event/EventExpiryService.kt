@@ -5,7 +5,9 @@ import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.provider.config.ProviderProperties
 import no.fintlabs.provider.event.response.ResponseFintEventProducer
 import no.novari.core.shared.event.EventStore
-import no.novari.core.shared.event.eventCollectionOrgId
+import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.org.OrgStore
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
@@ -16,9 +18,10 @@ import java.time.Instant
  * Flips events that passed their deadline unanswered from PENDING to EXPIRED, so adapters stop
  * being served them and clients polling the status endpoint see the failure.
  *
- * The collections to sweep are found by listing the event collections themselves: every
- * collection whose org is this provider's org or a sub-org of it is swept, so a new sub-asset
- * is covered from its first event without any separate registry.
+ * The collections to sweep come from the org registry: every registered org that is this
+ * provider's org or a sub-org of it has its event collection swept. An org lands in the
+ * registry when its adapter registers, so an org whose adapter never registered is not swept;
+ * its events still expire for clients through status derivation and are purged by TTL.
  *
  * Expiry stores no response in Mongo, the flip is the entire write. The flip only applies to a
  * PENDING event past its deadline, so when an adapter answers at the same instant, or another
@@ -29,6 +32,7 @@ import java.time.Instant
 @Service
 class EventExpiryService(
     private val eventStore: EventStore,
+    private val orgStore: OrgStore,
     private val providerProperties: ProviderProperties,
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val clock: Clock,
@@ -39,10 +43,11 @@ class EventExpiryService(
     fun expireOverdueEvents() {
         val now = clock.instant()
 
-        eventStore
-            .eventCollections()
-            .filter { it.belongsToProvider() }
-            .forEach { collectionName -> sweep(collectionName, now) }
+        orgStore
+            .findAll()
+            .map { OrgId.from(it.id) }
+            .filter { it.belongsTo(providerProperties.orgId) }
+            .forEach { org -> sweep(org.toEventCollectionName(), now) }
     }
 
     private fun sweep(
@@ -56,9 +61,6 @@ class EventExpiryService(
             }
         }
     }
-
-    private fun String.belongsToProvider(): Boolean =
-        runCatching { eventCollectionOrgId(this).belongsTo(providerProperties.orgId) }.getOrDefault(false)
 
     private fun RequestFintEvent.toExpiredResponse(): ResponseFintEvent =
         ResponseFintEvent().apply {

@@ -97,5 +97,3 @@ const val EVENT_COLLECTION_SUFFIX = "_events"
 fun OrgId.toEventCollectionName(): String = value.replace(".", "_") + EVENT_COLLECTION_SUFFIX
 
 fun ResourceCoordinate.toEventCollectionName(): String = OrgId.from(orgId).toEventCollectionName()
-
-fun eventCollectionOrgId(collectionName: String): OrgId = OrgId.from(collectionName.removeSuffix(EVENT_COLLECTION_SUFFIX))

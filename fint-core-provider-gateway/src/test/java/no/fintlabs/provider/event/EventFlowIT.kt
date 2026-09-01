@@ -11,6 +11,7 @@ import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -46,6 +47,9 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     @Autowired
     private lateinit var resourceStore: ResourceStore
 
+    @Autowired
+    private lateinit var orgStore: OrgStore
+
     private val adapterCollection get() = OrgId.from(orgId).toEventCollectionName()
     private val sweeperCollection get() = providerProperties.orgId.toEventCollectionName()
     private val resourceCollection get() = "test_org_no_${domainName}_${packageName}_$resourceName"
@@ -55,6 +59,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         mongoTemplate.dropCollection(adapterCollection)
         mongoTemplate.dropCollection(sweeperCollection)
         mongoTemplate.dropCollection(resourceCollection)
+        mongoTemplate.dropCollection(OrgStore.COLLECTION_NAME)
     }
 
     @Test
@@ -205,6 +210,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `the sweeper answers overdue events with an expired response`() {
+        orgStore.upsert(providerProperties.orgId.value)
         val overdue = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
         val pending = seedRequest(sweeperCollection, providerProperties.orgId.value)
 
@@ -242,6 +248,8 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     @Test
     fun `the sweeper covers sub-org collections but never foreign orgs`() {
         val primary = providerProperties.orgId.value
+        orgStore.upsert("test.$primary")
+        orgStore.upsert(orgId)
         val subOrgCollection = OrgId.from("test.$primary").toEventCollectionName()
         val subOrg = seedRequest(subOrgCollection, "test.$primary", ttlMillis = -1_000)
         val foreign = seedRequest(adapterCollection, orgId, ttlMillis = -1_000)
@@ -257,7 +265,18 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
+    fun `the sweeper skips an org that never registered`() {
+        val overdue = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
+
+        eventExpiryService.expireOverdueEvents()
+
+        assertThat(eventStore.findByCorrId(overdue.corrId, sweeperCollection)?.status)
+            .isEqualTo(EventState.PENDING)
+    }
+
+    @Test
     fun `the sweeper never overwrites an answer that raced it`() {
+        orgStore.upsert(providerProperties.orgId.value)
         val request = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
         val adapterResponse =
             responseFor(request).apply {
