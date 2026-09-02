@@ -28,6 +28,17 @@ class SyncProgressStore(
 
     fun find(corrId: String): SyncProgress? = template.findById<SyncProgress>(corrId, COLLECTION_NAME)
 
+    /**
+     * Adds [freshCount] records to the sync's count and returns the updated document, creating it
+     * if this is the sync's first batch.
+     *
+     * What changes: `processed` goes up by [freshCount], this partition's offset moves up to
+     * [highestOffset], and `startedAt` moves down if [startedAt] is older than what is stored.
+     *
+     * The write only lands while this partition's offset is still [expectedOffset]. If someone
+     * moved it first, or created the document first, this throws DuplicateKeyException so the
+     * caller can read the new value and try again.
+     */
     fun fold(
         corrId: String,
         coordinate: ResourceCoordinate,

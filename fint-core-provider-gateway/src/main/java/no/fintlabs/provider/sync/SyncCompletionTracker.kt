@@ -20,6 +20,18 @@ class SyncCompletionTracker(
             .forEach { (key, group) -> advance(key.first, key.second, group) }
     }
 
+    /**
+     * Counts this batch's records towards the sync, and evicts if they were the last ones missing.
+     *
+     * The batch's offset is only committed after the listener returns, so a batch already written
+     * to Mongo can still arrive again: the listener can throw and be retried, or the partition can
+     * move to another replica first. Writing a resource twice changes nothing, but counting it
+     * twice would make the sync look finished before it is.
+     *
+     * So a sync remembers the highest offset it has counted for each partition. This reads that
+     * offset first and counts only the records above it, and tries again if someone moved it in
+     * between.
+     */
     private fun advance(
         corrId: String,
         partition: Int,

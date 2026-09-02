@@ -105,6 +105,10 @@ class BufferReader(
         return SyncMetadata(corrId = corrId, type = type, totalSize = totalSize)
     }
 
+    /**
+     * A sync marker is set upon an empty full-sync.
+     * That means there is no resource present and we want to empty the database for that specific resource.
+     */
     private fun Headers.isSyncMarker(): Boolean = byteValue(SYNC_MARKER) != null
 
     /**
