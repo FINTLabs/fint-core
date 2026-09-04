@@ -1,18 +1,18 @@
 package no.fintlabs.consumer.kafka
 
-import no.novari.kafka.consuming.ErrorHandlerConfiguration
 import org.slf4j.Logger
+import org.springframework.kafka.listener.CommonErrorHandler
+import org.springframework.kafka.listener.DefaultErrorHandler
+import org.springframework.util.backoff.FixedBackOff
 
 object KafkaConsumerErrorHandling {
     @JvmStatic
-    fun <VALUE> createLoggingErrorHandlerConfiguration(
+    fun loggingErrorHandler(
         log: Logger,
         consumerName: String,
-    ): ErrorHandlerConfiguration<VALUE> {
-        return ErrorHandlerConfiguration
-            .stepBuilder<VALUE>()
-            .noRetries()
-            .recoverFailedRecords { consumerRecord, exception ->
+    ): CommonErrorHandler =
+        DefaultErrorHandler(
+            { consumerRecord, exception ->
                 log.error(
                     "Kafka consumer {} failed topic={} partition={} offset={} key={} value={}",
                     consumerName,
@@ -23,7 +23,7 @@ object KafkaConsumerErrorHandling {
                     consumerRecord.value(),
                     exception,
                 )
-            }.skipRecordOnRecoveryFailure()
-            .build()
-    }
+            },
+            FixedBackOff(0L, 0L),
+        )
 }

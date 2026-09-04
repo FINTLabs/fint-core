@@ -1,15 +1,15 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.databind.BeanDescription
-import com.fasterxml.jackson.databind.SerializationConfig
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.module.SimpleModule
-import com.fasterxml.jackson.databind.ser.BeanPropertyWriter
-import com.fasterxml.jackson.databind.ser.BeanSerializerModifier
 import no.novari.core.shared.uri.LinkCodec
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link
+import tools.jackson.core.JsonGenerator
+import tools.jackson.databind.BeanDescription
+import tools.jackson.databind.SerializationConfig
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.module.SimpleModule
+import tools.jackson.databind.ser.BeanPropertyWriter
+import tools.jackson.databind.ser.ValueSerializerModifier
 
 const val LINKS_FIELD = "_links"
 
@@ -87,7 +87,7 @@ private fun Link.toLinkResponse(
 }
 
 /**
- * Step 1: registration. Adding this module to a Jackson `ObjectMapper` is what turns it into the
+ * Step 1: registration. Adding this module to a Jackson `JsonMapper` is what turns it into the
  * mapper used for responses; [FintJson.responseMapper] is the only place that does this. It works
  * by registering the [ResponseLinksSerializerModifier] below.
  */
@@ -110,10 +110,10 @@ class ResponseLinksModule(
 class ResponseLinksSerializerModifier(
     private val baseUrl: String,
     private val componentResolver: ComponentResolver = { null },
-) : BeanSerializerModifier() {
+) : ValueSerializerModifier() {
     override fun changeProperties(
         config: SerializationConfig,
-        beanDesc: BeanDescription,
+        beanDesc: BeanDescription.Supplier,
         beanProperties: MutableList<BeanPropertyWriter>,
     ): MutableList<BeanPropertyWriter> {
         if (!FintResource::class.java.isAssignableFrom(beanDesc.beanClass)) return beanProperties
@@ -138,15 +138,15 @@ private class ResponseLinksPropertyWriter(
     private val baseUrl: String,
     private val componentResolver: ComponentResolver,
 ) : BeanPropertyWriter(base) {
-    override fun serializeAsField(
+    override fun serializeAsProperty(
         bean: Any,
         generator: JsonGenerator,
-        provider: SerializerProvider,
+        context: SerializationContext,
     ) {
         val links = (bean as FintResource).toLinkResponses(baseUrl, componentResolver)
         if (links.isEmpty()) return
 
-        generator.writeFieldName(LINKS_FIELD)
-        provider.defaultSerializeValue(links, generator)
+        generator.writeName(LINKS_FIELD)
+        context.writeValue(generator, links)
     }
 }

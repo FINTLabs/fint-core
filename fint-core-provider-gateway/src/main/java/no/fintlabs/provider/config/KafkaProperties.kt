@@ -5,6 +5,7 @@ import java.time.Duration
 
 @ConfigurationProperties(prefix = "fint.provider.kafka")
 data class KafkaProperties(
+    val replicas: Int = 2,
     val entity: EntityKafkaProperties = EntityKafkaProperties(),
     val adapter: AdapterKafkaProperties = AdapterKafkaProperties(),
     val event: EventKafkaProperties = EventKafkaProperties(),

@@ -1,6 +1,5 @@
 package no.fintlabs.consumer.config
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.novari.core.shared.json.FintJson
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -8,6 +7,7 @@ import org.springframework.context.annotation.Primary
 import org.springframework.web.context.request.RequestAttributes
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.servlet.HandlerMapping
+import tools.jackson.databind.json.JsonMapper
 
 /**
  * The consumer's primary mapper speaks the response contract: outbound `_links` as full hrefs
@@ -20,7 +20,7 @@ import org.springframework.web.servlet.HandlerMapping
 open class JacksonConfiguration {
     @Bean
     @Primary
-    open fun objectMapper(consumerConfiguration: ConsumerConfiguration): ObjectMapper =
+    open fun jsonMapper(consumerConfiguration: ConsumerConfiguration): JsonMapper =
         FintJson.responseMapper(consumerConfiguration.baseUrl, ::requestComponent)
 }
 

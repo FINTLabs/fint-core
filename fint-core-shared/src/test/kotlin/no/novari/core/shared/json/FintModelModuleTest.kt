@@ -1,17 +1,17 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import no.novari.fint.core.model.utdanning.timeplan.Fag
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.json.JsonMapper
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FintModelModuleTest {
-    private val mapper: ObjectMapper = FintJson.storageMapper()
+    private val mapper: JsonMapper = FintJson.storageMapper()
 
     private fun elev(links: String) = mapper.readValue("""{ "_links": { $links } }""", Elev::class.java)
 
@@ -125,8 +125,8 @@ class FintModelModuleTest {
         val tree = mapper.readTree(mapper.writeValueAsString(elev))
         val person = tree.get("_links").get("person").get(0)
 
-        assertEquals("fodselsnummer", person.get("idField").asText())
-        assertEquals("123", person.get("idValue").asText())
+        assertEquals("fodselsnummer", person.get("idField").asString())
+        assertEquals("123", person.get("idValue").asString())
         assertNull(tree.get("links"))
     }
 

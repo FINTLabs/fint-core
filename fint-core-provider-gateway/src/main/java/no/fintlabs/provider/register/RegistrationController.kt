@@ -20,12 +20,12 @@ class RegistrationController(
     fun register(
         corePrincipal: CorePrincipal,
         @RequestBody adapterContract: AdapterContract,
-    ): ResponseEntity<Void?> {
+    ): ResponseEntity<Void> {
         logger.debug("Received contract: {}", adapterContract.adapterId)
         requestValidator.validateOrgId(corePrincipal, adapterContract.orgId)
         requestValidator.validateUsername(corePrincipal, adapterContract.username)
         logger.debug("Contract validated: {}", adapterContract.adapterId)
         registrationService.register(adapterContract)
-        return ResponseEntity.ok().build<Void?>()
+        return ResponseEntity.ok().build()
     }
 }

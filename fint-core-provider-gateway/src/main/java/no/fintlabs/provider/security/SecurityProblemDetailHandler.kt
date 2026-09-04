@@ -1,10 +1,8 @@
 package no.fintlabs.provider.security
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import no.fintlabs.provider.kafka.ProviderError
-import no.fintlabs.provider.kafka.ProviderErrorPublisher
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.enums.FintScope
 import no.novari.resource.server.enums.FintType
@@ -18,12 +16,12 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.stereotype.Component
+import tools.jackson.databind.json.JsonMapper
 import java.net.URI
 
 @Component
 class SecurityProblemDetailHandler(
-    private val objectMapper: ObjectMapper,
-    private val providerErrorPublisher: ProviderErrorPublisher,
+    private val objectMapper: JsonMapper,
 ) : AccessDeniedHandler,
     AuthenticationEntryPoint {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -35,7 +33,6 @@ class SecurityProblemDetailHandler(
     ) {
         val detail = describeDenial()
         logger.warn("Access denied on {} {}: {}", request.method, request.requestURI, detail)
-        providerErrorPublisher.publish(ProviderError.from(accessDeniedException))
         writeProblemDetail(
             request = request,
             response = response,
@@ -61,7 +58,6 @@ class SecurityProblemDetailHandler(
         authException: AuthenticationException,
     ) {
         logger.warn("Authentication failed on {} {}: {}", request.method, request.requestURI, authException.message)
-        providerErrorPublisher.publish(ProviderError.from(authException))
         writeProblemDetail(
             request = request,
             response = response,

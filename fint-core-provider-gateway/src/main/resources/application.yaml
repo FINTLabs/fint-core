@@ -6,23 +6,13 @@ fint:
       consumer:
         batch-size: 100
         concurrency: 1
-  metamodel:
-    base-url: http://fint-core-consumer-metamodel:8080
-  kafka:
-    enable-ssl: true
+    kafka:
+      replicas: 2
   base-url: https://api.felleskomponent.no
 
-novari:
-  kafka:
-    topic:
-      org-id: fintlabs-no
-      domain-context: fint-core
-    application-id: provider
-    producer:
-      linger: 0ms
-      batch-size: 64KB
-
 spring:
+  application:
+    name: provider
   jpa:
     properties:
       jdbc:
@@ -47,11 +37,18 @@ spring:
     virtual:
       enabled: true
   kafka:
+    security:
+      protocol: SSL
+    admin:
+      modify-topic-configs: true
     consumer:
       group-id: provider
     producer:
+      batch-size: 64KB
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        linger.ms: 0
 
 management:
   endpoints:

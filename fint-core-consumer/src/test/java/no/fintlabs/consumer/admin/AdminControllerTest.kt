@@ -7,7 +7,7 @@ import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.novari.core.shared.json.FintJson
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -16,12 +16,12 @@ import java.time.Instant
 import java.util.Date
 
 class AdminControllerTest {
-    private val objectMapper = FintJson.responseMapper("https://api.felleskomponent.no")
+    private val jsonMapper = FintJson.responseMapper("https://api.felleskomponent.no")
     private val statsService = mockk<StatsService>()
     private val mockMvc =
         MockMvcBuilders
             .standaloneSetup(AdminController(consumerConfiguration(), statsService))
-            .setMessageConverters(MappingJackson2HttpMessageConverter(objectMapper))
+            .setMessageConverters(JacksonJsonHttpMessageConverter(jsonMapper))
             .build()
 
     @Test
@@ -53,7 +53,7 @@ class AdminControllerTest {
             .perform(get("/utdanning/elev/admin/cache/status"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-            .andExpect(content().json(objectMapper.writeValueAsString(response)))
+            .andExpect(content().json(jsonMapper.writeValueAsString(response)))
 
         verify(exactly = 1) { statsService.cacheStatus(any(), any()) }
     }

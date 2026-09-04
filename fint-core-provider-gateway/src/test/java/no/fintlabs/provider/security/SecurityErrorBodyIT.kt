@@ -1,10 +1,8 @@
 package no.fintlabs.provider.security
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.provider.TestcontainersConfiguration
 import no.fintlabs.provider.kafka.ProviderError
-import no.fintlabs.provider.kafka.ProviderErrorPublisher
 import no.novari.resource.server.authentication.CorePrincipal
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
@@ -30,6 +28,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -40,10 +39,7 @@ class SecurityErrorBodyIT {
     private lateinit var context: WebApplicationContext
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
-
-    @MockitoBean
-    private lateinit var providerErrorPublisher: ProviderErrorPublisher
+    private lateinit var objectMapper: JsonMapper
 
     private lateinit var mockMvc: MockMvc
 
@@ -72,8 +68,6 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Unauthorized"))
             .andExpect(jsonPath("$.detail").exists())
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 
     @Test
@@ -103,8 +97,6 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Forbidden"))
             .andExpect(jsonPath("$.detail").value(containsString("fint-adapter")))
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 
     @Test
@@ -133,7 +125,5 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Bad Request"))
             .andExpect(jsonPath("$.detail").value("Required request body is missing"))
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 }

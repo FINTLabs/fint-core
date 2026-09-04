@@ -6,8 +6,6 @@ fint:
       env-header: true
   relation:
     base-url: https://api.felleskomponent.no
-  kafka:
-    enable-ssl: false
   consumer:
     base-url: ${fint.relation.base-url}
     domain: utdanning
@@ -17,14 +15,6 @@ fint:
     kafka:
       bootstrap-topics: true
       startup-jitter: 0s
-
-novari:
-  kafka:
-    topic:
-      org-id: fintlabs-no
-      domain-context: fint-core
-    application-id: fint-core-consumer
-    default-replicas: 1
 
 spring:
   threads:
@@ -37,6 +27,5 @@ spring:
 logging:
   level:
     org.apache.kafka: OFF
-    no.novari.kafka: OFF
     no.fintlabs.cache: DEBUG
     no.fintlabs.resource.server: DEBUG

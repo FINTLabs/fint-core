@@ -1,6 +1,5 @@
 package no.fintlabs.consumer.resource
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
@@ -19,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.bean.override.mockito.MockitoBean
+import tools.jackson.databind.json.JsonMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -59,7 +59,7 @@ class EncodedSlashIT {
     private var port = 0
 
     private val client = HttpClient.newHttpClient()
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper.builder().build()
 
     private fun get(path: String): HttpResponse<String> =
         client.send(
@@ -85,7 +85,7 @@ class EncodedSlashIT {
 
         assertEquals(200, response.statusCode())
         val body = mapper.readTree(response.body())
-        assertEquals("2023/145", body.get("systemId").get("identifikatorverdi").asText())
+        assertEquals("2023/145", body.get("systemId").get("identifikatorverdi").asString())
         assertEquals(
             "https://api.felleskomponent.no/utdanning/elev/elev/systemid/2023%2F145",
             body
@@ -93,7 +93,7 @@ class EncodedSlashIT {
                 .get("self")
                 .get(0)
                 .get("href")
-                .asText(),
+                .asString(),
         )
     }
 

@@ -2,12 +2,12 @@ package no.novari.core.shared.json
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-import com.fasterxml.jackson.databind.module.SimpleModule
 import no.novari.fint.core.model.FintObject
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.FintTypeMetadata
 import no.novari.fint.core.model.Link
+import tools.jackson.databind.annotation.JsonDeserialize
+import tools.jackson.databind.module.SimpleModule
 
 /**
  * Binding rules for the information model. The model jar is deliberately Jackson-free, so the
@@ -18,8 +18,8 @@ import no.novari.fint.core.model.Link
  */
 class FintModelModule : SimpleModule("fint-model") {
     override fun setupModule(context: SetupContext) {
-        context.setMixInAnnotations(FintObject::class.java, FintObjectMixin::class.java)
-        context.setMixInAnnotations(FintResource::class.java, FintResourceMixin::class.java)
+        context.setMixIn(FintObject::class.java, FintObjectMixin::class.java)
+        context.setMixIn(FintResource::class.java, FintResourceMixin::class.java)
         super.setupModule(context)
     }
 }

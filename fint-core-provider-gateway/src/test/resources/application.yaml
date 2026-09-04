@@ -6,20 +6,13 @@ server:
 fint:
   provider:
     org-id: fintlabs.no
+    kafka:
+      replicas: 1
   metamodel:
     base-url: http://localhost:8082 # You can mock this using WireMock later if your service actually calls it
-  kafka:
-    enable-ssl: false
-
-novari:
-  kafka:
-    application-id: provider-test
-    default-replicas: 1
-    topic:
-      org-id: fintlabs-no
-      domain-context: fint-core
-
 spring:
+  application:
+    name: provider-test
   jpa:
     properties:
       jdbc:
@@ -32,6 +25,8 @@ spring:
   kafka:
     # MAGIC HAPPENS HERE: This variable is automatically populated by the @EmbeddedKafka annotation
     bootstrap-servers: localhost:19092  #${spring.embedded.kafka.brokers}
+    security:
+      protocol: PLAINTEXT
     consumer:
       group-id: provider-test-group
       auto-offset-reset: earliest

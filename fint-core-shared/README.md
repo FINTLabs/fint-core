@@ -48,7 +48,7 @@ from the id fields:
 | Mapper | Produces | Used by |
 |---|---|---|
 | `FintJson.storageMapper()` | storage form | everything that reads/writes Mongo or Kafka, in both services |
-| `FintJson.responseMapper(baseUrl, componentResolver)` | response form | the consumer's primary HTTP `ObjectMapper`, nothing else |
+| `FintJson.responseMapper(baseUrl, componentResolver)` | response form | the consumer's primary HTTP `JsonMapper`, nothing else |
 
 ### The journey of a link
 

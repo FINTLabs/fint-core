@@ -3,17 +3,13 @@ package no.fintlabs.consumer.kafka
 import jakarta.annotation.PostConstruct
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.novari.core.shared.model.OrgId
-import org.apache.kafka.clients.admin.AdminClient
-import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.TopicExistsException
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.kafka.core.KafkaAdmin
 import org.springframework.stereotype.Component
 import java.time.Duration
-import java.util.concurrent.ExecutionException
 
 /**
  * Creates the default topics a consumer needs so the service can start against an empty broker
@@ -24,23 +20,15 @@ import java.util.concurrent.ExecutionException
 @ConditionalOnProperty("fint.consumer.kafka.bootstrap-topics", havingValue = "true")
 class TopicBootstrapper(
     private val consumerConfig: ConsumerConfiguration,
-    @param:Value("\${spring.kafka.bootstrap-servers}") private val bootstrapServers: String,
+    private val kafkaAdmin: KafkaAdmin,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @PostConstruct
     fun createTopics() {
         val topics = buildTopics()
-        logger.info("Bootstrapping {} topics on {}: {}", topics.size, bootstrapServers, topics)
-
-        val adminProps = mapOf(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers)
-        AdminClient.create(adminProps).use { admin ->
-            try {
-                admin.createTopics(topics.map { it.toNewTopic() }).all().get()
-            } catch (e: ExecutionException) {
-                if (e.cause !is TopicExistsException) throw e
-            }
-        }
+        logger.info("Bootstrapping {} topics: {}", topics.size, topics)
+        kafkaAdmin.createOrModifyTopics(*topics.map { it.toNewTopic() }.toTypedArray())
     }
 
     private fun buildTopics(): List<TopicSpec> {

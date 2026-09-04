@@ -24,14 +24,9 @@ fint:
       fetchMinBytes: 65536
       fetchMaxWaitMs: 10000
 
-novari:
-  kafka:
-    topic:
-      org-id: ${fint.org-id}
-      domain-context: fint-core
-    application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
-
 spring:
+  application:
+    name: fint-core-consumer
   config:
     import:
       - classpath:shared-mongodb.yaml
@@ -40,7 +35,7 @@ spring:
       enabled: true
   kafka:
     consumer:
-      group-id: ${novari.kafka.application-id}
+      group-id: fint-core-consumer-${fint.org-id}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -57,7 +52,6 @@ management:
 logging:
   level:
     org.apache.kafka: WARN
-    no.novari.kafka: WARN
 #      org.apache.kafka.clients.NetworkClient: INFO
 #      org.apache.kafka.clients.consumer.internals.AbstractCoordinator: DEBUG
 #      org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: DEBUG

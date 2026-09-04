@@ -1,11 +1,8 @@
 package no.fintlabs.provider.kafka.topic
 
 import no.fintlabs.provider.config.AdapterKafkaProperties
-import no.novari.kafka.topic.EventTopicService
-import no.novari.kafka.topic.configuration.EventCleanupFrequency
-import no.novari.kafka.topic.configuration.EventTopicConfiguration
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.fintlabs.provider.config.ProviderProperties
+import no.novari.core.shared.kafka.KafkaTopicNames
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
@@ -15,7 +12,8 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(prefix = "fint.provider", name = ["ensure-topics"], havingValue = "true", matchIfMissing = true)
 class EventTopicEnsurer(
     private val adapterKafkaProperties: AdapterKafkaProperties,
-    private val eventTopicService: EventTopicService,
+    private val kafkaTopicService: KafkaTopicService,
+    private val providerProperties: ProviderProperties,
 ) {
     @EventListener(ApplicationReadyEvent::class)
     fun ensureEventTopics() =
@@ -27,23 +25,10 @@ class EventTopicEnsurer(
                 TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME to deltaSyncRetentionTime,
                 TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME to deleteSyncRetentionTime,
             ).forEach { (eventName, retentionTime) ->
-                eventTopicService.createOrModifyTopic(
-                    EventTopicNameParameters
-                        .builder()
-                        .topicNamePrefixParameters(
-                            TopicNamePrefixParameters
-                                .stepBuilder()
-                                .orgIdApplicationDefault()
-                                .domainContextApplicationDefault()
-                                .build(),
-                        ).eventName(eventName)
-                        .build(),
-                    EventTopicConfiguration
-                        .stepBuilder()
-                        .partitions(partitions)
-                        .retentionTime(retentionTime)
-                        .cleanupFrequency(EventCleanupFrequency.NORMAL)
-                        .build(),
+                kafkaTopicService.createOrModifyEventTopic(
+                    KafkaTopicNames.eventTopic(providerProperties.orgId, eventName),
+                    partitions,
+                    retentionTime,
                 )
             }
         }
