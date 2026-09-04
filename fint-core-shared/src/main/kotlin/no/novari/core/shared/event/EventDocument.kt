@@ -1,15 +1,19 @@
 package no.novari.core.shared.event
 
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import org.springframework.data.annotation.Id
+import tools.jackson.databind.DeserializationFeature
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 
-private val mapper = ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+private val mapper =
+    JsonMapper
+        .builder()
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        .build()
 
 enum class EventState {
     PENDING,

@@ -1,17 +1,16 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.BeanProperty
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonDeserializer
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.deser.ContextualDeserializer
 import no.novari.core.shared.uri.LinkCodec
 import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintRelation
 import no.novari.fint.core.model.FintResourceMetadata
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.resolveLink
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.BeanProperty
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ValueDeserializer
 
 /**
  * Reads the `_links` field of a FINT resource and turns each entry into a [Link].
@@ -29,7 +28,7 @@ import no.novari.fint.core.model.resolveLink
  * belongs to, and that depends on which relation the link is under. Different resource types
  * have different relations, so this class implements [ContextualDeserializer] to find out which
  * resource it is currently working on: Jackson first creates a plain instance, then calls
- * [createContextual] once per `links` property to get an instance that knows the owning
+ * [ValueDeserializer.createContextual] once per `links` property to get an instance that knows the owning
  * resource type. [deserialize] looks up the matching relation by name, and
  * [FintRelation.resolveLink] does the actual matching. If a URL doesn't match any id field on
  * the target, for example because it points to a different system, it is kept as-is via
@@ -37,23 +36,22 @@ import no.novari.fint.core.model.resolveLink
  */
 class FintLinksDeserializer private constructor(
     private val owner: FintResourceMetadata?,
-) : JsonDeserializer<MutableMap<String, MutableList<Link>>>(),
-    ContextualDeserializer {
+) : ValueDeserializer<MutableMap<String, MutableList<Link>>>() {
     constructor() : this(null)
 
     override fun createContextual(
         context: DeserializationContext,
         property: BeanProperty?,
-    ): JsonDeserializer<*> = FintLinksDeserializer(property?.member?.declaringClass?.let(::resourceMetadataOf))
+    ): ValueDeserializer<*> = FintLinksDeserializer(property?.member?.declaringClass?.let(::resourceMetadataOf))
 
     override fun deserialize(
         parser: JsonParser,
         context: DeserializationContext,
     ): MutableMap<String, MutableList<Link>> {
-        val node: JsonNode = parser.codec.readTree(parser)
+        val node: JsonNode = context.readTree(parser)
         val links = LinkedHashMap<String, MutableList<Link>>()
 
-        node.fields().forEach { (relationName, entries) ->
+        node.properties().forEach { (relationName, entries) ->
             if (!entries.isArray) return@forEach
 
             val relation = owner?.relation(relationName)
@@ -64,9 +62,19 @@ class FintLinksDeserializer private constructor(
         return links
     }
 
+    override fun deserialize(
+        parser: JsonParser,
+        context: DeserializationContext,
+        intoValue: MutableMap<String, MutableList<Link>>,
+    ): MutableMap<String, MutableList<Link>> =
+        intoValue.apply {
+            clear()
+            putAll(deserialize(parser, context))
+        }
+
     private fun JsonNode.toLink(relation: FintRelation?): Link? {
         if (isNull) return null
-        if (isTextual) return resolve(asText(), relation)
+        if (isString) return resolve(asString(), relation)
 
         val href = textOrNull("href")
         if (href != null) return resolve(href, relation)
@@ -88,7 +96,7 @@ class FintLinksDeserializer private constructor(
         return link.copy(idValue = LinkCodec.decodeIdValue(idValue))
     }
 
-    private fun JsonNode.textOrNull(field: String): String? = get(field)?.takeIf { it.isTextual }?.asText()
+    private fun JsonNode.textOrNull(field: String): String? = get(field)?.takeIf { it.isString }?.asString()
 }
 
 private fun resourceMetadataOf(type: Class<*>): FintResourceMetadata? = FintModel.byType(type.kotlin) as? FintResourceMetadata

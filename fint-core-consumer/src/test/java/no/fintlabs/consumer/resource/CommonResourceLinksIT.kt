@@ -1,7 +1,5 @@
 package no.fintlabs.consumer.resource
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.consumer.admin.StatsService
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.config.JacksonConfiguration
@@ -22,6 +20,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.bean.override.mockito.MockitoBean
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -62,7 +62,7 @@ class CommonResourceLinksIT {
     private var port = 0
 
     private val client = HttpClient.newHttpClient()
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper.builder().build()
     private val baseUrl = "https://api.felleskomponent.no"
 
     private val person =
@@ -93,7 +93,7 @@ class CommonResourceLinksIT {
             .get(relation)
             .get(0)
             .get("href")
-            .asText()
+            .asString()
 
     @Test
     fun `a common resource self-links under the component it was requested through`() {

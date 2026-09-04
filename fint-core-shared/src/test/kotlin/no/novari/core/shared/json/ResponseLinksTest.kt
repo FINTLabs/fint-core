@@ -1,13 +1,13 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.Person
 import no.novari.fint.core.model.felles.kompleksedatatyper.Adresse
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -21,13 +21,18 @@ class ResponseLinksTest {
 
     private fun response(
         resource: Any,
-        with: ObjectMapper = mapper,
+        with: JsonMapper = mapper,
     ): JsonNode = with.readTree(with.writeValueAsString(resource))
 
     private fun hrefs(
         node: JsonNode,
         relation: String,
-    ): List<String> = node.get("_links").get(relation).map { it.get("href").asText() }
+    ): List<String> =
+        node
+            .get("_links")
+            .get(relation)
+            .values()
+            .map { it.get("href").asString() }
 
     @Test
     fun `self links are generated from every id field that has a value`() {

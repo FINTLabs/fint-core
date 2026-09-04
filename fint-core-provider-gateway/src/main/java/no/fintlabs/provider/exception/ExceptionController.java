@@ -1,6 +1,5 @@
 package no.fintlabs.provider.exception;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import tools.jackson.core.JacksonException;
 
 import java.net.URI;
 
@@ -65,8 +65,8 @@ public class ExceptionController {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
     }
 
-    @ExceptionHandler(JsonProcessingException.class)
-    public ResponseEntity<Void> handleJsonProcessingException(Throwable e) {
+    @ExceptionHandler(JacksonException.class)
+    public ResponseEntity<Void> handleJacksonException(Throwable e) {
         providerErrorPublisher.publish(ProviderError.from(e));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
     }

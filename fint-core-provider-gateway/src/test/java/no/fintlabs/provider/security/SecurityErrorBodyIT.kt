@@ -1,6 +1,5 @@
 package no.fintlabs.provider.security
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.provider.TestcontainersConfiguration
 import no.fintlabs.provider.kafka.ProviderError
@@ -30,6 +29,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -40,7 +40,7 @@ class SecurityErrorBodyIT {
     private lateinit var context: WebApplicationContext
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    private lateinit var objectMapper: JsonMapper
 
     @MockitoBean
     private lateinit var providerErrorPublisher: ProviderErrorPublisher

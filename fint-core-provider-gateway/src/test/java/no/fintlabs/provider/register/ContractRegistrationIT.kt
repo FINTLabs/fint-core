@@ -1,6 +1,5 @@
 package no.fintlabs.provider.register
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.provider.TestcontainersConfiguration
@@ -23,6 +22,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -33,7 +33,7 @@ class ContractRegistrationIT {
     private lateinit var context: WebApplicationContext
 
     @Autowired
-    private lateinit var objectMapper: ObjectMapper
+    private lateinit var objectMapper: JsonMapper
 
     @Autowired
     private lateinit var contractJpaRepository: ContractJpaRepository

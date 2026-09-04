@@ -1,6 +1,5 @@
 package no.fintlabs.consumer.resource.event
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.consumer.config.EventProperties
@@ -11,6 +10,7 @@ import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
 import org.springframework.stereotype.Service
+import tools.jackson.databind.json.JsonMapper
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -31,7 +31,7 @@ class RequestFintEventService(
     private val eventStore: EventStore,
     private val eventProperties: EventProperties,
     private val requestFintEventProducer: RequestFintEventProducer,
-    private val responseMapper: ObjectMapper,
+    private val responseMapper: JsonMapper,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val storageMapper = FintJson.storageMapper()

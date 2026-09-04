@@ -1,6 +1,5 @@
 package no.fintlabs.provider
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.novari.resource.server.authentication.CorePrincipal
@@ -20,6 +19,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -30,7 +30,7 @@ abstract class GatewayIntegrationTestBase {
     protected lateinit var context: WebApplicationContext
 
     @Autowired
-    protected lateinit var objectMapper: ObjectMapper
+    protected lateinit var objectMapper: JsonMapper
 
     protected lateinit var mockMvc: MockMvc
     protected lateinit var mockPrincipal: CorePrincipal
