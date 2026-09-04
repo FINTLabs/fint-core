@@ -27,7 +27,7 @@ spring:
       enabled: true
   kafka:
     consumer:
-      group-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
+      group-id: fint-core-consumer-${fint.org-id}
   webflux:
     base-path: ${fint.consumer.domain}/${fint.consumer.package}
 

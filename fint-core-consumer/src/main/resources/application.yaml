@@ -26,7 +26,7 @@ fint:
 
 spring:
   application:
-    name: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}
+    name: fint-core-consumer
   config:
     import:
       - classpath:shared-mongodb.yaml
@@ -35,7 +35,7 @@ spring:
       enabled: true
   kafka:
     consumer:
-      group-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
+      group-id: fint-core-consumer-${fint.org-id}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

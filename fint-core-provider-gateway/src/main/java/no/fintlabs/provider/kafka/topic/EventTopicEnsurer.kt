@@ -24,7 +24,6 @@ class EventTopicEnsurer(
                 TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME to fullSyncRetentionTime,
                 TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME to deltaSyncRetentionTime,
                 TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME to deleteSyncRetentionTime,
-                TopicNamesConstants.PROVIDER_ERROR_EVENT_NAME to PROVIDER_ERROR_RETENTION_TIME,
             ).forEach { (eventName, retentionTime) ->
                 kafkaTopicService.createOrModifyEventTopic(
                     KafkaTopicNames.eventTopic(providerProperties.orgId, eventName),
@@ -33,8 +32,4 @@ class EventTopicEnsurer(
                 )
             }
         }
-
-    private companion object {
-        val PROVIDER_ERROR_RETENTION_TIME: java.time.Duration = java.time.Duration.ofDays(7)
-    }
 }

@@ -3,7 +3,6 @@ package no.fintlabs.provider.security
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.provider.TestcontainersConfiguration
 import no.fintlabs.provider.kafka.ProviderError
-import no.fintlabs.provider.kafka.ProviderErrorPublisher
 import no.novari.resource.server.authentication.CorePrincipal
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
@@ -42,9 +41,6 @@ class SecurityErrorBodyIT {
     @Autowired
     private lateinit var objectMapper: JsonMapper
 
-    @MockitoBean
-    private lateinit var providerErrorPublisher: ProviderErrorPublisher
-
     private lateinit var mockMvc: MockMvc
 
     private val orgId = "test.org.no"
@@ -72,8 +68,6 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Unauthorized"))
             .andExpect(jsonPath("$.detail").exists())
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 
     @Test
@@ -103,8 +97,6 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Forbidden"))
             .andExpect(jsonPath("$.detail").value(containsString("fint-adapter")))
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 
     @Test
@@ -133,7 +125,5 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.title").value("Bad Request"))
             .andExpect(jsonPath("$.detail").value("Required request body is missing"))
             .andExpect(jsonPath("$.instance").value("/register"))
-
-        verify(providerErrorPublisher, times(1)).publish(any(ProviderError::class.java))
     }
 }

@@ -31,7 +31,7 @@ class EventTopicEnsurerTest {
     fun `ensureEventTopics creates adapter and provider-error event topics`() {
         sut.ensureEventTopics()
 
-        verify(exactly = 6) { kafkaTopicService.createOrModifyEventTopic(any(), any(), any()) }
+        verify(exactly = 5) { kafkaTopicService.createOrModifyEventTopic(any(), any(), any()) }
     }
 
     @Test
@@ -44,7 +44,6 @@ class EventTopicEnsurerTest {
             TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME,
             TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME,
             TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME,
-            TopicNamesConstants.PROVIDER_ERROR_EVENT_NAME,
         ).forEach { eventName ->
             verify(exactly = 1) {
                 kafkaTopicService.createOrModifyEventTopic(
