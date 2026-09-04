@@ -6,29 +6,32 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.provider.config.AdapterKafkaProperties
-import no.novari.kafka.topic.EventTopicService
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.fintlabs.provider.config.ProviderProperties
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class EventTopicEnsurerTest {
-    private lateinit var eventTopicService: EventTopicService
+    private lateinit var kafkaTopicService: KafkaTopicService
     private val adapterKafkaProperties = AdapterKafkaProperties()
     private lateinit var sut: EventTopicEnsurer
 
     @BeforeEach
     fun setup() {
-        eventTopicService = mockk()
-        every { eventTopicService.createOrModifyTopic(any(), any()) } just Runs
-        sut = EventTopicEnsurer(adapterKafkaProperties, eventTopicService)
+        kafkaTopicService = mockk()
+        every { kafkaTopicService.createOrModifyEventTopic(any(), any(), any()) } just Runs
+        sut =
+            EventTopicEnsurer(
+                adapterKafkaProperties,
+                kafkaTopicService,
+                ProviderProperties(orgIdValue = "fintlabs.no", baseUrl = ""),
+            )
     }
 
     @Test
-    fun `ensureEventTopics creates all five adapter event topics`() {
+    fun `ensureEventTopics creates adapter and provider-error event topics`() {
         sut.ensureEventTopics()
 
-        verify(exactly = 5) { eventTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 6) { kafkaTopicService.createOrModifyEventTopic(any(), any(), any()) }
     }
 
     @Test
@@ -41,20 +44,15 @@ class EventTopicEnsurerTest {
             TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME,
             TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME,
             TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME,
+            TopicNamesConstants.PROVIDER_ERROR_EVENT_NAME,
         ).forEach { eventName ->
-            val expected =
-                EventTopicNameParameters
-                    .builder()
-                    .topicNamePrefixParameters(
-                        TopicNamePrefixParameters
-                            .stepBuilder()
-                            .orgIdApplicationDefault()
-                            .domainContextApplicationDefault()
-                            .build(),
-                    ).eventName(eventName)
-                    .build()
-
-            verify(exactly = 1) { eventTopicService.createOrModifyTopic(expected, any()) }
+            verify(exactly = 1) {
+                kafkaTopicService.createOrModifyEventTopic(
+                    "fintlabs-no.fint-core.event.$eventName",
+                    any(),
+                    any(),
+                )
+            }
         }
     }
 }

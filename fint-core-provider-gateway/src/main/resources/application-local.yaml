@@ -4,15 +4,11 @@ server:
     context-path: /provider
 
 fint:
+  provider:
+    kafka:
+      replicas: 1
   metamodel:
     base-url: http://localhost:8082
-  kafka:
-    enable-ssl: false
-
-novari:
-  kafka:
-    application-id: provider
-    default-replicas: 1
 
 spring:
   jpa:
@@ -34,6 +30,8 @@ spring:
       schema: public
   kafka:
     bootstrap-servers: localhost:9092
+    security:
+      protocol: PLAINTEXT
     consumer:
       group-id: provider
       properties:

@@ -21,20 +21,13 @@ fint:
       idleBetweenPolls: 0
       startup-jitter: 0s
 
-novari:
-  kafka:
-    topic:
-      org-id: ${fint.org-id}
-      domain-context: fint-core
-    application-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
-
 spring:
   threads:
     virtual:
       enabled: true
   kafka:
     consumer:
-      group-id: ${novari.kafka.application-id}
+      group-id: fint-core-consumer-${fint.consumer.domain}-${fint.consumer.package}-${fint.org-id}
   webflux:
     base-path: ${fint.consumer.domain}/${fint.consumer.package}
 
@@ -47,4 +40,3 @@ management:
 logging:
   level:
     org.apache.kafka: WARN
-    no.novari.kafka: WARN

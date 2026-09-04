@@ -2,7 +2,6 @@ package no.fintlabs.provider.security
 
 import no.fintlabs.provider.TestcontainersConfiguration
 import no.fintlabs.provider.kafka.ProviderErrorPublisher
-import no.novari.kafka.KafkaConfiguration
 import no.novari.resource.server.authentication.CorePrincipal
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -10,7 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
-import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
@@ -226,7 +225,7 @@ class SecurityConfigurationIT {
 
     @Configuration
     @Profile(PROFILE)
-    @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class, KafkaConfiguration::class])
+    @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
     @Import(SecurityConfiguration::class, SecurityProblemDetailHandler::class, Endpoints::class)
     class TestApp
 

@@ -8,26 +8,23 @@ import io.mockk.verify
 import no.fintlabs.provider.config.ComponentConfig
 import no.fintlabs.provider.config.ProviderProperties
 import no.fintlabs.provider.config.RelationUpdateKafkaProperties
-import no.novari.kafka.topic.EntityTopicService
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class RelationUpdateTopicEnsurerTest {
-    private lateinit var entityTopicService: EntityTopicService
+    private lateinit var kafkaTopicService: KafkaTopicService
     private val relationUpdateKafkaProperties = RelationUpdateKafkaProperties()
 
     @BeforeEach
     fun setup() {
-        entityTopicService = mockk()
-        every { entityTopicService.createOrModifyTopic(any(), any()) } just Runs
+        kafkaTopicService = mockk()
+        every { kafkaTopicService.createOrModifyEntityTopic(any(), any(), any()) } just Runs
     }
 
     private fun sut(components: List<ComponentConfig> = emptyList()) =
         RelationUpdateTopicEnsurer(
-            entityTopicService,
+            kafkaTopicService,
             relationUpdateKafkaProperties,
             ProviderProperties(orgIdValue = "fintlabs.no", components = components, baseUrl = ""),
         )
@@ -45,7 +42,7 @@ class RelationUpdateTopicEnsurerTest {
 
         sut(components).ensureRelationUpdateTopics()
 
-        verify(exactly = 3) { entityTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 3) { kafkaTopicService.createOrModifyEntityTopic(any(), any(), any()) }
     }
 
     @Test
@@ -57,19 +54,13 @@ class RelationUpdateTopicEnsurerTest {
 
         sut(components).ensureRelationUpdateTopics()
 
-        val expected =
-            EntityTopicNameParameters
-                .builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters
-                        .stepBuilder()
-                        .orgId("fintlabs-no")
-                        .domainContextApplicationDefault()
-                        .build(),
-                ).resourceName("utdanning-elev-relation-update")
-                .build()
-
-        verify(exactly = 1) { entityTopicService.createOrModifyTopic(expected, any()) }
+        verify(exactly = 1) {
+            kafkaTopicService.createOrModifyEntityTopic(
+                "fintlabs-no.fint-core.entity.utdanning-elev-relation-update",
+                relationUpdateKafkaProperties.partitions,
+                relationUpdateKafkaProperties.retentionTime,
+            )
+        }
     }
 
     @Test
@@ -82,14 +73,14 @@ class RelationUpdateTopicEnsurerTest {
 
         sut(components).ensureRelationUpdateTopics()
 
-        verify(exactly = 0) { entityTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 0) { kafkaTopicService.createOrModifyEntityTopic(any(), any(), any()) }
     }
 
     @Test
     fun `ensureRelationUpdateTopics does nothing when components list is empty`() {
         sut(emptyList()).ensureRelationUpdateTopics()
 
-        verify(exactly = 0) { entityTopicService.createOrModifyTopic(any(), any()) }
+        verify(exactly = 0) { kafkaTopicService.createOrModifyEntityTopic(any(), any(), any()) }
     }
 
     @Test

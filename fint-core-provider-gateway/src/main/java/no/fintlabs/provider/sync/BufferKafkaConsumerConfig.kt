@@ -1,6 +1,6 @@
 package no.fintlabs.provider.sync
 
-import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer
+import org.springframework.boot.kafka.autoconfigure.ConcurrentKafkaListenerContainerFactoryConfigurer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
@@ -15,6 +15,6 @@ class BufferKafkaConsumerConfig {
     ): ConcurrentKafkaListenerContainerFactory<Any, Any> =
         ConcurrentKafkaListenerContainerFactory<Any, Any>().also { factory ->
             configurer.configure(factory, consumerFactory)
-            factory.isBatchListener = true
+            factory.setBatchListener(true)
         }
 }

@@ -20,10 +20,7 @@ import no.fintlabs.provider.kafka.topic.TopicNamesConstants.FINT_CORE
 import no.fintlabs.provider.kafka.topic.TopicNamesConstants.HEARTBEAT_EVENT_NAME
 import no.fintlabs.provider.kafka.topic.TopicNamesConstants.PROVIDER_ERROR_EVENT_NAME
 import no.fintlabs.provider.kafka.topic.TopicNamesConstants.SYNC_STATUS_EVENT_NAME
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.EventTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
-import no.novari.kafka.topic.name.TopicNameService
+import no.novari.core.shared.kafka.KafkaTopicNames
 import org.apache.kafka.clients.admin.AdminClient
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -43,7 +40,6 @@ import java.time.Duration
 class TopicCleanupService(
     private val providerProperties: ProviderProperties,
     private val cleanupTopicsProperties: CleanupTopicsProperties,
-    private val topicNameService: TopicNameService,
     private val kafkaAdmin: KafkaAdmin,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -219,19 +215,7 @@ class TopicCleanupService(
             PROVIDER_ERROR_EVENT_NAME,
             SYNC_STATUS_EVENT_NAME,
         ).forEach { eventName ->
-            expected +=
-                topicNameService.validateAndMapToTopicName(
-                    EventTopicNameParameters
-                        .builder()
-                        .topicNamePrefixParameters(
-                            TopicNamePrefixParameters
-                                .stepBuilder()
-                                .orgIdApplicationDefault()
-                                .domainContextApplicationDefault()
-                                .build(),
-                        ).eventName(eventName)
-                        .build(),
-                )
+            expected += KafkaTopicNames.eventTopic(providerProperties.orgId, eventName)
         }
 
         return expected
@@ -240,34 +224,10 @@ class TopicCleanupService(
     private fun entityTopicName(
         orgId: String,
         resourceName: String,
-    ): String =
-        topicNameService.validateAndMapToTopicName(
-            EntityTopicNameParameters
-                .builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters
-                        .stepBuilder()
-                        .orgId(orgId)
-                        .domainContextApplicationDefault()
-                        .build(),
-                ).resourceName(resourceName)
-                .build(),
-        )
+    ): String = KafkaTopicNames.entityTopic(orgId, resourceName)
 
     private fun eventTopicName(
         orgId: String,
         eventName: String,
-    ): String =
-        topicNameService.validateAndMapToTopicName(
-            EventTopicNameParameters
-                .builder()
-                .topicNamePrefixParameters(
-                    TopicNamePrefixParameters
-                        .stepBuilder()
-                        .orgId(orgId)
-                        .domainContextApplicationDefault()
-                        .build(),
-                ).eventName(eventName)
-                .build(),
-        )
+    ): String = KafkaTopicNames.eventTopic(orgId, eventName)
 }

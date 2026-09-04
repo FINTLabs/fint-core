@@ -3,18 +3,15 @@ package no.fintlabs.provider.register
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.provider.config.EntityKafkaProperties
-import no.novari.kafka.topic.EntityTopicService
-import no.novari.kafka.topic.configuration.EntityCleanupFrequency
-import no.novari.kafka.topic.configuration.EntityTopicConfiguration
-import no.novari.kafka.topic.name.EntityTopicNameParameters
-import no.novari.kafka.topic.name.TopicNamePrefixParameters
+import no.fintlabs.provider.kafka.topic.KafkaTopicService
+import no.novari.core.shared.kafka.KafkaTopicNames
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class AdapterRegistrationTopicService(
-    private val entityTopicService: EntityTopicService,
+    private val kafkaTopicService: KafkaTopicService,
     private val entityKafkaProperties: EntityKafkaProperties,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -47,29 +44,10 @@ class AdapterRegistrationTopicService(
             entityKafkaProperties.partitions,
         )
 
-        entityTopicService.createOrModifyTopic(
-            createTopicNameParameters(orgId, capability),
-            EntityTopicConfiguration
-                .stepBuilder()
-                .partitions(entityKafkaProperties.partitions)
-                .lastValueRetentionTime(entityKafkaProperties.retentionTime)
-                .nullValueRetentionTime(entityKafkaProperties.retentionTime)
-                .cleanupFrequency(EntityCleanupFrequency.NORMAL)
-                .build(),
+        kafkaTopicService.createOrModifyEntityTopic(
+            KafkaTopicNames.entityTopic(orgId, capability.component),
+            entityKafkaProperties.partitions,
+            entityKafkaProperties.retentionTime,
         )
     }
-
-    private fun createTopicNameParameters(
-        orgId: String,
-        capability: AdapterCapability,
-    ) = EntityTopicNameParameters
-        .builder()
-        .topicNamePrefixParameters(
-            TopicNamePrefixParameters
-                .stepBuilder()
-                .orgId(orgId.replace(".", "-"))
-                .domainContextApplicationDefault()
-                .build(),
-        ).resourceName(capability.component)
-        .build()
 }

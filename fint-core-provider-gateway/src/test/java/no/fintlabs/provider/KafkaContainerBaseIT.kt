@@ -25,7 +25,7 @@ abstract class KafkaContainerBaseIT {
         @DynamicPropertySource
         fun kafkaProperties(registry: DynamicPropertyRegistry) {
             registry.add("spring.kafka.bootstrap-servers") { KAFKA.bootstrapServers }
-            registry.add("novari.kafka.default-replicas") { "1" }
+            registry.add("fint.provider.kafka.replicas") { "1" }
             registry.add("fint.consumer.kafka.bootstrap-topics") { "true" }
         }
     }
