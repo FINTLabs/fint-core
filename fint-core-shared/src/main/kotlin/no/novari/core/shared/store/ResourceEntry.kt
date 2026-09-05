@@ -27,6 +27,11 @@ data class ResourceEntry(
     val lastModified: Instant,
 )
 
+data class ResourceIdentity(
+    @Id val id: String,
+    val identifiers: List<IdentifierRef>,
+)
+
 fun FintResource.toIdentifierRefs(): List<IdentifierRef> =
     buildList {
         visitIdentifikators { field, value -> add(IdentifierRef(field.lowercase(), value)) }

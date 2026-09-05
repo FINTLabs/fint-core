@@ -17,12 +17,17 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
 ) {
+    private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
+
+    fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
+
     /**
      * Inserts or updates a batch of resources, grouped by collection. Each write only takes
      * effect if it isn't older than what's already stored, so a slow writer working through a
@@ -36,6 +41,8 @@ class ResourceStore(
         writes
             .groupBy { it.collectionName }
             .forEach { (collectionName, collectionWrites) ->
+                ensureIndexes(collectionName)
+
                 val latestWritesById = collectionWrites.associateBy { it.resourceId }
 
                 val bulkOps =
@@ -165,9 +172,50 @@ class ResourceStore(
             ?.lastModified
     }
 
+    fun findIdentitiesOlderThan(
+        threshold: Instant,
+        limit: Int,
+        collectionName: String,
+    ): List<ResourceIdentity> {
+        val query =
+            Query
+                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .limit(limit)
+        query.fields().include("identifiers")
+
+        return template.find(query, ResourceIdentity::class.java, collectionName)
+    }
+
+    fun deleteStaleByIds(
+        ids: Collection<String>,
+        threshold: Instant,
+        collectionName: String,
+    ): Long {
+        if (ids.isEmpty()) return 0
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("_id")
+                    .`in`(ids)
+                    .and("lastModified")
+                    .lt(Date.from(threshold)),
+            )
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
     private fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
             with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
         }
+
+    private fun ensureIndexes(collectionName: String) {
+        if (!indexedCollections.add(collectionName)) return
+
+        template.indexOps(collectionName).createIndex(
+            Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+        )
+    }
 }
