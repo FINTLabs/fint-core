@@ -145,12 +145,20 @@ class ResourceStore(
         return template.find<ResourceEntry>(pageQuery, collectionName)
     }
 
-    fun getCacheSize(coordinate: ResourceCoordinate): Long =
-        template.exactCount(
-            Query(),
-            ResourceEntry::class.java,
-            coordinate.toCollectionName(),
-        )
+    /**
+     * Counts the entries that match [filter]. When [filter] is null, every entry in the collection
+     * is counted. Paged reads use this number as `total_items`, so [findPage] and this method must
+     * be called with the same filter.
+     */
+    fun count(
+        filter: Criteria?,
+        collectionName: String,
+    ): Long {
+        val query = Query().apply { filter?.let { addCriteria(it) } }
+        return template.exactCount(query, ResourceEntry::class.java, collectionName)
+    }
+
+    fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
 
     fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
         val collectionName = coordinate.toCollectionName()

@@ -43,6 +43,11 @@ class FintResourcesResponse(
 /**
  * Builds the response together with the self, prev and next pagination links.
  *
+ * Every link has `offset` and `size`. When the request had a `sinceTimeStamp`, the links keep it,
+ * so a client can follow `next` without adding it again. `prev` is only added when `offset > 0`.
+ * `next` is only added when `offset + size < totalItems`. When [size] is zero or lower there is no
+ * paging, and `self` is the plain resource URL with `sinceTimeStamp` added if the request had one.
+ *
  * Example:
  * ```
  * createFintResourcesResponse(
@@ -52,12 +57,13 @@ class FintResourcesResponse(
  *     offset = 0,
  *     size = 2,
  *     totalItems = 10,
+ *     sinceTimeStamp = 1000,
  * )
  * ```
  *
  * produces:
- * - self: `https://api.felleskomponent.no/utdanning/elev/elev?offset=0&size=2`
- * - next: `https://api.felleskomponent.no/utdanning/elev/elev?offset=2&size=2`
+ * - self: `https://api.felleskomponent.no/utdanning/elev/elev?sinceTimeStamp=1000&offset=0&size=2`
+ * - next: `https://api.felleskomponent.no/utdanning/elev/elev?sinceTimeStamp=1000&offset=2&size=2`
  */
 fun createFintResourcesResponse(
     baseUrl: String,
@@ -66,9 +72,10 @@ fun createFintResourcesResponse(
     offset: Long,
     size: Int,
     totalItems: Int,
+    sinceTimeStamp: Long = 0,
 ): FintResourcesResponse {
-    val selfUrl = "$baseUrl/$resourceUri"
-    val builder = UriComponentsBuilder.fromUriString(selfUrl)
+    val builder = UriComponentsBuilder.fromUriString("$baseUrl/$resourceUri")
+    if (sinceTimeStamp > 0) builder.queryParam("sinceTimeStamp", sinceTimeStamp)
 
     return FintResourcesResponse(entries, offset, totalItems).apply {
         if (size > 0) {
@@ -76,7 +83,7 @@ fun createFintResourcesResponse(
             if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size)))
             if (offset + size < this.totalItems) addLink("next", pageLink(builder, size, offset + size))
         } else {
-            addLink("self", LinkResponse(selfUrl))
+            addLink("self", LinkResponse(builder.toUriString()))
         }
     }
 }
