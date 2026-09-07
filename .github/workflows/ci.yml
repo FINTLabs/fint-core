@@ -20,6 +20,7 @@ jobs:
           filters: |
             shared: &shared
               - 'fint-core-shared/**'
+              - 'buildSrc/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
               - 'gradle.properties'
