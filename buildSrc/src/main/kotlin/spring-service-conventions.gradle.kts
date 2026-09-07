@@ -8,6 +8,9 @@ plugins {
     java
 }
 
+// Remove tomcat.version pin below when spring boot is updated from 4.1.1!
+extra["tomcat.version"] = "11.0.25"
+
 group = "no.fintlabs"
 version = System.getenv("RELEASE_VERSION") ?: "0.0.1-SNAPSHOT"
 
