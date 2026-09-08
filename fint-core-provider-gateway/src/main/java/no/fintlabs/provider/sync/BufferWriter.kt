@@ -31,7 +31,7 @@ class BufferWriter(
 ) {
     companion object {
         const val KEY_DELIMITER = "\u001F"
-        const val SYNC_MARKER_KEY = "__sync-marker__"
+        const val SYNC_RESET_MARKER = "__sync-reset-marker__"
     }
 
     val log = LoggerFactory.getLogger(BufferWriter::class.java)
@@ -54,7 +54,7 @@ class BufferWriter(
         coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =
         send(
-            key = "$SYNC_MARKER_KEY$KEY_DELIMITER${syncPage.metadata.corrId}",
+            key = "$SYNC_RESET_MARKER$KEY_DELIMITER${syncPage.metadata.corrId}",
             coords = coords,
             resource = null,
             lastModified = clock.millis(),
