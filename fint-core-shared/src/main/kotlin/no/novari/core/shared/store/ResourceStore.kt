@@ -174,13 +174,9 @@ class ResourceStore(
 
     fun findIdentitiesOlderThan(
         threshold: Instant,
-        limit: Int,
         collectionName: String,
     ): List<ResourceIdentity> {
-        val query =
-            Query
-                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
-                .limit(limit)
+        val query = Query.query(Criteria.where("lastModified").lt(Date.from(threshold)))
         query.fields().include("identifiers")
 
         return template.find(query, ResourceIdentity::class.java, collectionName)

@@ -31,16 +31,9 @@ class EvictionService(
         val edgeCollectionName = coordinate.toEdgeCollectionName()
         val resourceType = coordinate.toResourceUri()
 
-        var resources = 0L
-        var edges = 0L
-
-        while (true) {
-            val doomed = resourceStore.findIdentitiesOlderThan(threshold, BATCH_SIZE, collectionName)
-            if (doomed.isEmpty()) break
-
-            edges += deleteEdges(edgeCollectionName, resourceType, doomed)
-            resources += resourceStore.deleteStaleByIds(doomed.map { it.id }, threshold, collectionName)
-        }
+        val doomed = resourceStore.findIdentitiesOlderThan(threshold, collectionName)
+        val edges = deleteEdges(edgeCollectionName, resourceType, doomed)
+        val resources = resourceStore.deleteStaleByIds(doomed.map { it.id }, threshold, collectionName)
 
         record(resourceType, resources, edges)
         log.info(
@@ -79,8 +72,4 @@ class EvictionService(
             .builder(name)
             .tag("resource", resourceType)
             .register(meterRegistry)
-
-    companion object {
-        private const val BATCH_SIZE = 500
-    }
 }
