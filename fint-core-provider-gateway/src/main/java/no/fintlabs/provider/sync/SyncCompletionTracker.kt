@@ -13,6 +13,10 @@ class SyncCompletionTracker(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Tracks a full-sync and triggers a cache-eviction of the related [SyncRecord.coordinate]
+     * upon completion.
+     */
     fun track(records: List<SyncRecord>) {
         records
             .filter { it.metadata.type == SyncType.FULL }
