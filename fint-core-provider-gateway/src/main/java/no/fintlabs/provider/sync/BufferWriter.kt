@@ -49,7 +49,7 @@ class BufferWriter(
             syncMetadata = syncPage.toSyncMetadata(),
         )
 
-    fun sendResetMarker(
+    fun sendSyncResetMarker(
         syncPage: SyncPage,
         coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =

@@ -40,7 +40,7 @@ class SyncPageService(
         page: SyncPage,
         coords: ResourceCoordinate,
     ) {
-        if (page.isEmptyFullSync()) return sendResetMarker(page, coords)
+        if (page.isEmptyFullSync()) return sendSyncResetMarker(page, coords)
 
         val futures =
             page.resources.map { syncPageEntry ->
@@ -51,7 +51,7 @@ class SyncPageService(
         CompletableFuture.allOf(*futures.toTypedArray()).join()
     }
 
-    private fun sendResetMarker(
+    private fun sendSyncResetMarker(
         page: SyncPage,
         coords: ResourceCoordinate,
     ) {
@@ -61,7 +61,7 @@ class SyncPageService(
             page.metadata.uriRef,
         )
         bufferWriter
-            .sendResetMarker(page, coords)
+            .sendSyncResetMarker(page, coords)
             .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
             .join()
     }

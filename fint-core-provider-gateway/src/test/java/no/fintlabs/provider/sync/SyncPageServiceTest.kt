@@ -20,11 +20,11 @@ class SyncPageServiceTest {
 
     @Test
     fun `a full sync carrying nothing sends a marker instead of entities`() {
-        every { bufferWriter.sendResetMarker(any(), any()) } returns CompletableFuture.completedFuture(mockk())
+        every { bufferWriter.sendSyncResetMarker(any(), any()) } returns CompletableFuture.completedFuture(mockk())
 
         syncPageService.doSync(fullSync(totalSize = 0, resources = emptyList()), coordinate)
 
-        verify(exactly = 1) { bufferWriter.sendResetMarker(any(), coordinate) }
+        verify(exactly = 1) { bufferWriter.sendSyncResetMarker(any(), coordinate) }
         verify(exactly = 0) { bufferWriter.sendSyncEntity(any(), any(), any()) }
     }
 
@@ -36,7 +36,7 @@ class SyncPageServiceTest {
         syncPageService.doSync(fullSync(totalSize = 1, resources = listOf(entry)), coordinate)
 
         verify(exactly = 1) { bufferWriter.sendSyncEntity(any(), entry, coordinate) }
-        verify(exactly = 0) { bufferWriter.sendResetMarker(any(), any()) }
+        verify(exactly = 0) { bufferWriter.sendSyncResetMarker(any(), any()) }
     }
 
     private fun fullSync(
