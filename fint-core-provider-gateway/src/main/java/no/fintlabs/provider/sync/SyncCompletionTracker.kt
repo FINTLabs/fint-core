@@ -25,16 +25,9 @@ class SyncCompletionTracker(
     }
 
     /**
-     * Counts this batch's records towards the sync, and evicts if they were the last ones missing.
-     *
-     * The batch's offset is only committed after the listener returns, so a batch already written
-     * to Mongo can still arrive again: the listener can throw and be retried, or the partition can
-     * move to another replica first. Writing a resource twice changes nothing, but counting it
-     * twice would make the sync look finished before it is.
-     *
-     * So a sync remembers the highest offset it has counted for each partition. This reads that
-     * offset first and counts only the records above it, and tries again if someone moved it in
-     * between.
+     * There's a possibility we read the same kafka message again, even after storing it to the database.
+     * Therefore we also count the latest offset per partition written. We do that so we know we are reading an old
+     * (already written) kafka message and can therefore skip it.
      */
     private fun advance(
         corrId: String,
