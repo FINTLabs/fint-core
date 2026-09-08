@@ -34,8 +34,6 @@ class BufferWriter(
         const val SYNC_RESET_MARKER = "__sync-reset-marker__"
     }
 
-    val log = LoggerFactory.getLogger(BufferWriter::class.java)
-
     fun sendSyncEntity(
         syncPage: SyncPage,
         syncEntry: SyncPageEntry,
