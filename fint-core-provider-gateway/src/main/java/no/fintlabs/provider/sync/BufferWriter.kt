@@ -49,6 +49,11 @@ class BufferWriter(
             syncMetadata = syncPage.toSyncMetadata(),
         )
 
+    /**
+     * If an empty full-sync is present, we send a syncResetMarker.
+     * This is to let the [BufferReader] know that we recieved an empty full-sync.
+     * An empty full-sync means we will evict all resources of that [ResourceCoordinate].
+     */
     fun sendSyncResetMarker(
         syncPage: SyncPage,
         coords: ResourceCoordinate,
