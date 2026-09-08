@@ -1,6 +1,5 @@
 package no.fintlabs.provider.sync
 
-import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
@@ -50,7 +49,7 @@ class BufferWriter(
             syncMetadata = syncPage.toSyncMetadata(),
         )
 
-    fun sendSyncMarker(
+    fun sendResetMarker(
         syncPage: SyncPage,
         coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =

@@ -61,7 +61,7 @@ class SyncPageService(
             page.metadata.uriRef,
         )
         bufferWriter
-            .sendSyncMarker(page, coords)
+            .sendResetMarker(page, coords)
             .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
             .join()
     }
