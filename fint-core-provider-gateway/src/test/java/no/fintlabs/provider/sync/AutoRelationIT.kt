@@ -1,6 +1,8 @@
 package no.fintlabs.provider.sync
 
 import com.mongodb.client.MongoClients
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import no.fintlabs.provider.storage.EvictionService
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
@@ -52,7 +54,14 @@ class AutoRelationIT {
     private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "autorelation-it") }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val bufferReader by lazy { BufferReader(ResourceWritePipeline(resourceStore, relationEdgeStore)) }
+    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()) }
+    private val syncProgressStore by lazy { SyncProgressStore(mongoTemplate) }
+    private val bufferReader by lazy {
+        BufferReader(
+            ResourceWritePipeline(resourceStore, relationEdgeStore),
+            SyncCompletionTracker(syncProgressStore, evictionService),
+        )
+    }
 
     private val edgeCollection = "fintlabs_no_relation_edges"
     private val storageMapper = FintJson.storageMapper()

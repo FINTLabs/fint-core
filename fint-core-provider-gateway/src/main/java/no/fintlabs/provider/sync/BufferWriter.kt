@@ -1,6 +1,5 @@
 package no.fintlabs.provider.sync
 
-import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
@@ -9,6 +8,7 @@ import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_MARKER
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.SyncMetadata
@@ -31,6 +31,7 @@ class BufferWriter(
 ) {
     companion object {
         const val KEY_DELIMITER = "\u001F"
+        const val SYNC_RESET_MARKER = "__sync-reset-marker__"
     }
 
     val log = LoggerFactory.getLogger(BufferWriter::class.java)
@@ -41,30 +42,43 @@ class BufferWriter(
         coords: ResourceCoordinate,
     ): CompletableFuture<SendResult<String, Any>> =
         send(
-            coords,
-            resourceId = syncEntry.identifier,
+            key = "${coords.resourceName}$KEY_DELIMITER${syncEntry.identifier}",
+            coords = coords,
             resource = syncEntry.resource,
             lastModified = clock.millis(),
-            syncMetadata =
-                SyncMetadata(
-                    corrId = syncPage.metadata.corrId,
-                    type = syncPage.syncType,
-                    totalSize = syncPage.metadata.totalSize,
-                ),
+            syncMetadata = syncPage.toSyncMetadata(),
+        )
+
+    /**
+     * If an empty full-sync is present, we send a syncResetMarker.
+     * This is to let the [BufferReader] know that we recieved an empty full-sync.
+     * An empty full-sync means we will evict all resources of that [ResourceCoordinate].
+     */
+    fun sendSyncResetMarker(
+        syncPage: SyncPage,
+        coords: ResourceCoordinate,
+    ): CompletableFuture<SendResult<String, Any>> =
+        send(
+            key = "$SYNC_RESET_MARKER$KEY_DELIMITER${syncPage.metadata.corrId}",
+            coords = coords,
+            resource = null,
+            lastModified = clock.millis(),
+            syncMetadata = syncPage.toSyncMetadata(),
+            marker = true,
         )
 
     private fun send(
+        key: String,
         coords: ResourceCoordinate,
-        resourceId: String,
         resource: Any?,
         lastModified: Long,
         syncMetadata: SyncMetadata?,
-    ): CompletableFuture<SendResult<String, Any>> {
-        log.debug("SEND TO KAFKA:: {}", resource)
-        return kafkaTemplate.send(
+        marker: Boolean = false,
+    ): CompletableFuture<SendResult<String, Any>> =
+        kafkaTemplate.send(
             ProducerRecord<String, Any>(
                 topic,
-                "${coords.resourceName}$KEY_DELIMITER$resourceId",
+                key,
                 resource,
             ).apply {
                 headers().apply {
@@ -73,6 +87,7 @@ class BufferWriter(
                     add(PACKAGE_NAME, coords.packageName.toByteArray())
                     add(RESOURCE_NAME, coords.resourceName.toByteArray())
                     add(LAST_MODIFIED, lastModified.toHeaderBytes())
+                    if (marker) add(SYNC_MARKER, byteArrayOf(1))
                     syncMetadata?.let {
                         add(SYNC_TYPE, byteArrayOf(it.type.ordinal.toByte()))
                         add(SYNC_CORRELATION_ID, it.corrId.toByteArray())
@@ -81,5 +96,11 @@ class BufferWriter(
                 }
             },
         )
-    }
+
+    private fun SyncPage.toSyncMetadata() =
+        SyncMetadata(
+            corrId = metadata.corrId,
+            type = syncType,
+            totalSize = metadata.totalSize,
+        )
 }

@@ -95,6 +95,8 @@ class RelationEdgeMergerTest {
                 targetIdField = targetIdField,
                 targetIdValue = targetIdValue,
             ),
+        sourceType = "utdanning/elev/elevforhold",
+        sourceId = sourceId,
         sourceIdField = "systemid",
         sourceIdValue = sourceId,
         inverseName = inverseName,

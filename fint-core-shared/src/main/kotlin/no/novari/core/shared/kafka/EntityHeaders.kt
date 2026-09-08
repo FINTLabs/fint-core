@@ -9,4 +9,5 @@ object EntityHeaders {
     const val SYNC_TYPE = "sync-type"
     const val SYNC_CORRELATION_ID = "sync-correlation-id"
     const val SYNC_TOTAL_SIZE = "sync-total-size"
+    const val SYNC_MARKER = "sync-marker"
 }

@@ -1,5 +1,6 @@
 package no.fintlabs.provider.sync
 
+import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.storage.ResourceIngest
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
@@ -8,6 +9,12 @@ import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_CORRELATION_ID
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_MARKER
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
+import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
+import no.novari.core.shared.kafka.SyncMetadata
+import no.novari.core.shared.kafka.byteValue
 import no.novari.core.shared.kafka.longValue
 import no.novari.core.shared.kafka.stringValue
 import no.novari.core.shared.model.ResourceCoordinate
@@ -23,6 +30,7 @@ import java.time.Instant
 @Component
 class BufferReader(
     private val resourceWritePipeline: ResourceWritePipeline,
+    private val syncCompletionTracker: SyncCompletionTracker,
 ) {
     val log: Logger = LoggerFactory.getLogger(BufferReader::class.java)
     private val objectMapper = FintJson.storageMapper()
@@ -35,35 +43,73 @@ class BufferReader(
     fun readMessage(records: List<ConsumerRecord<String, String>>) {
         log.debug("Read {} records from Kafka buffer", records.size)
 
-        val ingests =
-            records.mapNotNull { record ->
-                val json = record.value()
-                if (json == null) {
-                    // TODO: Since json is null we should delete it (tombstone)
-                    log.warn("Skipping delition for key '{}' until the delete phase lands", record.key())
-                    return@mapNotNull null
-                }
+        val buffered = records.map { it.toBufferedRecord() }
 
-                val coords = resourceCoordinate(record.headers())
-
-                ResourceIngest(
-                    coordinate = coords,
-                    resourceId = record.extractIdentifier(),
-                    resource = objectMapper.readValue(json, coords.toResourceClass()),
-                    timestamp = record.headers().extractTimestamp(),
-                )
-            }
-
-        resourceWritePipeline.applyAll(ingests)
+        resourceWritePipeline.applyAll(buffered.mapNotNull { it.ingest })
+        syncCompletionTracker.track(buffered.mapNotNull { it.sync })
     }
 
-    private fun resourceCoordinate(headers: Headers): ResourceCoordinate =
+    private fun ConsumerRecord<String, String>.toBufferedRecord(): BufferedRecord {
+        val headers = headers()
+        val coordinate = headers.toResourceCoordinate()
+
+        if (headers.isSyncMarker()) return BufferedRecord(ingest = null, sync = toSyncRecord(coordinate))
+
+        val json = value()
+        if (json == null) {
+            // TODO: Since json is null we should delete it (tombstone)
+            log.warn("Skipping delition for key '{}' until the delete phase lands", key())
+            return BufferedRecord(ingest = null, sync = null)
+        }
+
+        val ingest =
+            ResourceIngest(
+                coordinate = coordinate,
+                resourceId = extractIdentifier(),
+                resource = objectMapper.readValue(json, coordinate.toResourceClass()),
+                timestamp = headers.extractTimestamp(),
+            )
+
+        return BufferedRecord(ingest = ingest, sync = toSyncRecord(coordinate))
+    }
+
+    private fun ConsumerRecord<String, String>.toSyncRecord(coordinate: ResourceCoordinate): SyncRecord? =
+        headers().toSyncMetadata()?.let {
+            SyncRecord(
+                coordinate = coordinate,
+                metadata = it,
+                partition = partition(),
+                offset = offset(),
+                writtenAt = headers().extractTimestamp(),
+            )
+        }
+
+    private data class BufferedRecord(
+        val ingest: ResourceIngest?,
+        val sync: SyncRecord?,
+    )
+
+    private fun Headers.toResourceCoordinate(): ResourceCoordinate =
         ResourceCoordinate(
-            orgId = headers.requiredStringValue(ORG_ID),
-            domainName = headers.requiredStringValue(DOMAIN_NAME),
-            packageName = headers.requiredStringValue(PACKAGE_NAME),
-            resourceName = headers.requiredStringValue(RESOURCE_NAME),
+            orgId = requiredStringValue(ORG_ID),
+            domainName = requiredStringValue(DOMAIN_NAME),
+            packageName = requiredStringValue(PACKAGE_NAME),
+            resourceName = requiredStringValue(RESOURCE_NAME),
         )
+
+    private fun Headers.toSyncMetadata(): SyncMetadata? {
+        val corrId = stringValue(SYNC_CORRELATION_ID) ?: return null
+        val type = byteValue(SYNC_TYPE)?.toInt()?.let(SyncType.entries::getOrNull) ?: return null
+        val totalSize = longValue(SYNC_TOTAL_SIZE) ?: return null
+
+        return SyncMetadata(corrId = corrId, type = type, totalSize = totalSize)
+    }
+
+    /**
+     * A sync marker is set upon an empty full-sync.
+     * That means there is no resource present and we want to empty the database for that specific resource.
+     */
+    private fun Headers.isSyncMarker(): Boolean = byteValue(SYNC_MARKER) != null
 
     /**
      * When the write happened, read from the LAST_MODIFIED header that [BufferWriter] stamps on

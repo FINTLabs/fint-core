@@ -53,6 +53,8 @@ class RelationEdgeStore(
                         val query = Query.query(Criteria.where("_id").`is`(edge.id))
                         val update =
                             Update()
+                                .set("sourceType", edge.sourceType)
+                                .set("sourceId", edge.sourceId)
                                 .set("sourceIdField", edge.sourceIdField)
                                 .set("sourceIdValue", edge.sourceIdValue)
                                 .set("inverseName", edge.inverseName)
@@ -72,7 +74,58 @@ class RelationEdgeStore(
         targetType: String,
         identifiers: Collection<IdentifierRef>,
     ): List<RelationEdge> {
-        if (identifiers.isEmpty()) return emptyList()
+        val query = targetQuery(targetType, identifiers) ?: return emptyList()
+        return template.find(query, RelationEdge::class.java, collectionName)
+    }
+
+    fun findAllByTargetType(
+        collectionName: String,
+        targetType: String,
+    ): List<RelationEdge> =
+        template.find(
+            Query.query(Criteria.where("targetType").`is`(targetType)),
+            RelationEdge::class.java,
+            collectionName,
+        )
+
+    fun deleteBySources(
+        collectionName: String,
+        sourceType: String,
+        sourceIds: Collection<String>,
+    ): Long {
+        if (sourceIds.isEmpty()) return 0
+
+        ensureIndexes(collectionName)
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("sourceType")
+                    .`is`(sourceType)
+                    .and("sourceId")
+                    .`in`(sourceIds.distinct()),
+            )
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
+    fun deleteByTargets(
+        collectionName: String,
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+    ): Long {
+        val query = targetQuery(targetType, identifiers) ?: return 0
+
+        ensureIndexes(collectionName)
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
+    private fun targetQuery(
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+    ): Query? {
+        if (identifiers.isEmpty()) return null
 
         val branches =
             identifiers
@@ -87,19 +140,8 @@ class RelationEdgeStore(
                         .`in`(values.distinct())
                 }
 
-        val query = Query.query(Criteria().orOperator(branches))
-        return template.find(query, RelationEdge::class.java, collectionName)
+        return Query.query(Criteria().orOperator(branches))
     }
-
-    fun findAllByTargetType(
-        collectionName: String,
-        targetType: String,
-    ): List<RelationEdge> =
-        template.find(
-            Query.query(Criteria.where("targetType").`is`(targetType)),
-            RelationEdge::class.java,
-            collectionName,
-        )
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -110,6 +152,13 @@ class RelationEdgeStore(
                 .on("targetIdField", Sort.Direction.ASC)
                 .on("targetIdValue", Sort.Direction.ASC)
                 .named("target_lookup"),
+        )
+
+        template.indexOps(collectionName).createIndex(
+            Index()
+                .on("sourceType", Sort.Direction.ASC)
+                .on("sourceId", Sort.Direction.ASC)
+                .named("source_lookup"),
         )
     }
 }

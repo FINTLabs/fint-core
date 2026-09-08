@@ -32,7 +32,10 @@ class ResourceWritePipeline(
      * Creates the indexes a later [apply] will need. Index creation is not allowed inside a
      * Mongo transaction, so a caller that applies within one must call this first, outside it.
      */
-    fun prepare(coordinate: ResourceCoordinate) = relationEdgeStore.prepareCollection(coordinate.toEdgeCollectionName())
+    fun prepare(coordinate: ResourceCoordinate) {
+        resourceStore.prepareCollection(coordinate.toCollectionName())
+        relationEdgeStore.prepareCollection(coordinate.toEdgeCollectionName())
+    }
 
     fun apply(ingest: ResourceIngest) = applyAll(listOf(ingest))
 
