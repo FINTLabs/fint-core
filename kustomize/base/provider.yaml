@@ -35,11 +35,8 @@ spec:
     acls:
       - topic: "fintlabs.fint-core.fint-felleskomponent-event-response"
         permission: admin
-      - topic: "fintlabs.fint-core.fint-felleskomponent-event-response"
-        permission: admin
   resources:
     limits:
-      memory: 16Gi
+      memory: 3Gi
     requests:
-      cpu: 100m
-      memory: 16Gi
+      memory: 3Gi
