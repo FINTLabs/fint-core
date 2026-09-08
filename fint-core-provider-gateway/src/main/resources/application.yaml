@@ -1,6 +1,6 @@
 fint:
   provider:
-    org-id: fintlabs.no
+    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     buffer:
       topic: ${fint.provider.org-id}
       consumer:

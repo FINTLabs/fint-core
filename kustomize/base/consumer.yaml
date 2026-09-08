@@ -14,21 +14,13 @@ metadata:
 spec:
   port: 8080
   orgId: REPLACE
-  image: ghcr.io/fintlabs/fint-core-consumer-db:latest
+  image: ghcr.io/fintlabs/fint-core-consumer:REPLACE
   replicas: 1
   onePassword:
     itemPath: REPLACE
   env:
     - name: fint.relation.base-url
       value: REPLACE
-    - name: fint.consumer.org-id
-      value: REPLACE
-    - name: spring.kafka.consumer.fetch-min-size
-      value: "1"
-    - name: spring.kafka.consumer.fetch-max-wait
-      value: "500ms"
-    - name: fint.consumer.kafka.startup-jitter
-      value: 0ms
     - name: JAVA_TOOL_OPTIONS
       value: |
         -XX:MaxRAMPercentage=80
@@ -42,15 +34,10 @@ spec:
   kafka:
     enabled: true
     acls:
-      - topic: "REPLACE.fint-core.*"
-        permission: admin
-      - topic: "REPLACE.fint-core.event.consumer-error"
-        permission: admin
-      - topic: "REPLACE.fint-core.event.sync-status"
+      - topic: "fintlabs.fint-core.fint-felleskomponent-event-request"
         permission: admin
   resources:
+    requests:
+      memory: 2Gi
     limits:
       memory: 2Gi
-    requests:
-      memory: 128Mi
-      cpu: 100m

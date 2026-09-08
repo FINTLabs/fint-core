@@ -14,12 +14,14 @@ metadata:
 spec:
   port: 8080
   orgId: REPLACE
-  image: ghcr.io/fintlabs/fint-core-provider-gateway-db:latest
+  image: ghcr.io/fintlabs/fint-core-provider-gateway:REPLACE
   onePassword:
     itemPath: REPLACE
   env:
     - name: JAVA_TOOL_OPTIONS
-      value: -XX:+ExitOnOutOfMemoryError -Xmx15G
+      value: |
+        -XX:MaxRAMPercentage=80
+        -XX:+ExitOnOutOfMemoryError
   database:
     database: fint-core
   ingress:
@@ -31,7 +33,9 @@ spec:
   kafka:
     enabled: true
     acls:
-      - topic: '*.fint-core.*'
+      - topic: "fintlabs.fint-core.fint-felleskomponent-event-response"
+        permission: admin
+      - topic: "fintlabs.fint-core.fint-felleskomponent-event-response"
         permission: admin
   resources:
     limits:

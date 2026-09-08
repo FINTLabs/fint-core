@@ -1,133 +1,124 @@
 name: CD
 
-# Tag push  -> build+push both images, then deploy:
-#   tag contains "rc" -> beta
-#   stable tag        -> beta + api
-# Manual run -> deploy an already-built version to one chosen env (alpha is manual-only).
 on:
   push:
-    tags: ['*']
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Environment to deploy
-        type: choice
-        options: [alpha, beta, api]
-        default: alpha
-      version:
-        description: Image version to deploy (e.g. 1.11.9-rc.1-4.0.10)
-        required: true
+    branches: [main, develop]
 
-env:
-  REGISTRY: ghcr.io
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.v.outputs.version }}
-      environments: ${{ steps.v.outputs.environments }}
-      build: ${{ steps.v.outputs.build }}
-      stable: ${{ steps.v.outputs.stable }}
+      environment: ${{ steps.env.outputs.environment }}
+      services: ${{ steps.services.outputs.services }}
+      orgs: ${{ steps.orgs.outputs.orgs }}
     steps:
-      - id: v
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "environments=[\"${{ inputs.environment }}\"]" >> "$GITHUB_OUTPUT"
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "stable=false" >> "$GITHUB_OUTPUT"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            # Clean release tag = SEMVER[-rc.N]-IMODEL with nothing trailing (no branch suffix).
-            if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              if [[ "$VERSION" == *-rc.* ]]; then
-                echo 'environments=["beta"]' >> "$GITHUB_OUTPUT"
-                echo "stable=false" >> "$GITHUB_OUTPUT"
-              else
-                echo 'environments=["beta","api"]' >> "$GITHUB_OUTPUT"
-                echo "stable=true" >> "$GITHUB_OUTPUT"
-              fi
-            else
-              # Branch / non-standard tag: build the image, but DO NOT auto-deploy.
-              echo 'environments=[]' >> "$GITHUB_OUTPUT"
-              echo "stable=false" >> "$GITHUB_OUTPUT"
-              echo "::notice::$VERSION is not a clean release tag — image built, no auto-deploy. Use the Run workflow button to deploy it."
-            fi
-          fi
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-  build-and-push:
+      - name: Map branch to environment
+        id: env
+        run: |
+          case "$GITHUB_REF_NAME" in
+            main)    echo "environment=api"  >> "$GITHUB_OUTPUT" ;;
+            develop) echo "environment=beta" >> "$GITHUB_OUTPUT" ;;
+            *) echo "no environment for branch $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+
+      - name: Resolve per-service versions
+        id: services
+        run: |
+          eval "$(.github/scripts/service-versions.sh)"
+          echo "consumer=$consumer provider=$provider"
+          jq -nc --arg c "$consumer" --arg p "$provider" \
+            '[{service:"fint-core-consumer", sha:$c}, {service:"fint-core-provider-gateway", sha:$p}]' \
+            | sed 's/^/services=/' >> "$GITHUB_OUTPUT"
+
+      - name: Discover org overlays
+        id: orgs
+        run: |
+          dir="kustomize/overlays/${{ steps.env.outputs.environment }}"
+          orgs=$(find "$dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          echo "orgs=$orgs" >> "$GITHUB_OUTPUT"
+          echo "targets in $dir: $orgs"
+
+  build:
     needs: setup
-    if: ${{ needs.setup.outputs.build == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        service: [fint-core-consumer, fint-core-provider-gateway]
+        include: ${{ fromJson(needs.setup.outputs.services) }}
+    env:
+      IMAGE: ghcr.io/fintlabs/${{ matrix.service }}:sha-${{ matrix.sha }}
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}-db
-          tags: |
-            type=raw,value=${{ needs.setup.outputs.version }}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
-            type=raw,value=latest,enable=${{ needs.setup.outputs.stable == 'true' }}
+      - name: Check whether ${{ env.IMAGE }} already exists
+        id: exists
+        run: |
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "$IMAGE already in registry, skipping build"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.exists.outputs.exists == 'false'
 
       - name: Build and push
+        if: steps.exists.outputs.exists == 'false'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ matrix.sha }}
 
   deploy:
-    needs: [setup, build-and-push]
-    # Runs after a successful build (tag push) or directly on manual dispatch (build skipped).
-    if: ${{ always() && needs.setup.result == 'success' && needs.setup.outputs.environments != '[]' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') }}
+    needs: [setup, build]
+    if: needs.setup.outputs.orgs != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJson(needs.setup.outputs.environments) }}
-        # One leg per org; add overlay dir names here as orgs are onboarded.
-        org: [fintlabs-no]
-    environment: ${{ matrix.environment }}
+        org: ${{ fromJson(needs.setup.outputs.orgs) }}
+    environment: ${{ needs.setup.outputs.environment }}
+    env:
+      ENVIRONMENT: ${{ needs.setup.outputs.environment }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Resolve cluster + resource group
         id: aks
         run: |
-          case "${{ matrix.environment }}" in
-            alpha) echo "cluster=aks-alpha-fint-2021-11-18" >> "$GITHUB_OUTPUT" ;;
-            beta)  echo "cluster=aks-beta-fint-2021-11-23"  >> "$GITHUB_OUTPUT" ;;
-            api)   echo "cluster=aks-api-fint-2022-02-08"   >> "$GITHUB_OUTPUT" ;;
-            *) echo "unknown environment ${{ matrix.environment }}"; exit 1 ;;
+          case "$ENVIRONMENT" in
+            beta) echo "cluster=aks-beta-fint-2021-11-23" >> "$GITHUB_OUTPUT" ;;
+            api)  echo "cluster=aks-api-fint-2022-02-08"  >> "$GITHUB_OUTPUT" ;;
+            *) echo "unknown environment $ENVIRONMENT"; exit 1 ;;
           esac
-          echo "resource-group=rg-aks-${{ matrix.environment }}" >> "$GITHUB_OUTPUT"
+          echo "resource-group=rg-aks-$ENVIRONMENT" >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v2
         with:
-          creds: ${{ secrets[format('AKS_{0}_FINT_GITHUB', matrix.environment)] }}
+          creds: ${{ secrets[format('AKS_{0}_FINT_GITHUB', needs.setup.outputs.environment)] }}
 
       - uses: azure/use-kubelogin@v1
         with:
@@ -145,16 +136,19 @@ jobs:
         uses: azure/k8s-bake@v3
         with:
           renderEngine: 'kustomize'
-          kustomizationPath: 'kustomize/overlays/${{ matrix.environment }}/${{ matrix.org }}'
+          kustomizationPath: 'kustomize/overlays/${{ env.ENVIRONMENT }}/${{ matrix.org }}'
 
-      - name: Pin image to the release version
-        # k8s-deploy's image substitution only rewrites pod-spec containers, not the
-        # FLAIS Application CRD's spec.image — so pin the tag in the baked manifest here.
+      - name: Pin each Application to its service version
         env:
-          TAG: ${{ needs.setup.outputs.version }}
+          SERVICES: ${{ needs.setup.outputs.services }}
+          BUNDLE: ${{ steps.bake.outputs.manifestsBundle }}
         run: |
-          yq -i '.spec.image |= sub(":[^:]*$", ":" + strenv(TAG))' "${{ steps.bake.outputs.manifestsBundle }}"
-          echo "pinned spec.image ->"; yq '.spec.image' "${{ steps.bake.outputs.manifestsBundle }}"
+          for row in $(echo "$SERVICES" | jq -r '.[] | "\(.service)=\(.sha)"'); do
+            name="${row%%=*}" sha="${row##*=}" \
+              yq -i '(select(.kind == "Application" and .metadata.name == strenv(name)) | .spec.image) |= sub(":[^:]*$", ":sha-" + strenv(sha))' "$BUNDLE"
+          done
+          echo "pinned images ->"
+          yq '.metadata.name + " " + .spec.image' "$BUNDLE"
 
       - name: Ensure namespace ${{ matrix.org }}
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
