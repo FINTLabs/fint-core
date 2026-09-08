@@ -74,9 +74,8 @@ class BufferWriter(
         lastModified: Long,
         syncMetadata: SyncMetadata?,
         marker: Boolean = false,
-    ): CompletableFuture<SendResult<String, Any>> {
-        log.debug("SEND TO KAFKA:: {}", resource)
-        return kafkaTemplate.send(
+    ): CompletableFuture<SendResult<String, Any>> =
+        kafkaTemplate.send(
             ProducerRecord<String, Any>(
                 topic,
                 key,
@@ -97,7 +96,6 @@ class BufferWriter(
                 }
             },
         )
-    }
 
     private fun SyncPage.toSyncMetadata() =
         SyncMetadata(
