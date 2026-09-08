@@ -29,15 +29,11 @@ class SyncProgressStore(
     fun find(corrId: String): SyncProgress? = template.findById<SyncProgress>(corrId, COLLECTION_NAME)
 
     /**
-     * Adds [freshCount] records to the sync's count and returns the updated document, creating it
-     * if this is the sync's first batch.
+     * Records that this batch of a sync has been stored and returns the updated progress, so the
+     * caller can see whether the sync is complete.
      *
-     * What changes: `processed` goes up by [freshCount], this partition's offset moves up to
-     * [highestOffset], and `startedAt` moves down if [startedAt] is older than what is stored.
-     *
-     * The write only lands while this partition's offset is still [expectedOffset]. If someone
-     * moved it first, or created the document first, this throws DuplicateKeyException so the
-     * caller can read the new value and try again.
+     * Throws DuplicateKeyException if another replica updated this partition first. The caller
+     * should read the progress again and retry.
      */
     fun fold(
         corrId: String,
@@ -69,13 +65,15 @@ class SyncProgressStore(
                 .setOnInsert("coordinate", coordinate)
                 .setOnInsert("totalSize", totalSize)
 
-        return template.findAndModify(
-            query,
-            update,
-            FindAndModifyOptions().upsert(true).returnNew(true),
-            SyncProgress::class.java,
-            COLLECTION_NAME,
-        )!!
+        return checkNotNull(
+            template.findAndModify(
+                query,
+                update,
+                FindAndModifyOptions().upsert(true).returnNew(true),
+                SyncProgress::class.java,
+                COLLECTION_NAME,
+            ),
+        ) { "findAndModify with upsert and returnNew returned no document for sync $corrId partition $partition" }
     }
 
     fun claimEviction(corrId: String): SyncProgress? =
