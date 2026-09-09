@@ -5,9 +5,9 @@ metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
 data:
-  id-dotted: fintlabs.no
-  id-dashed: fintlabs-no
-  id-underscore: fintlabs_no
+  id-dotted: novari.no
+  id-dashed: novari-no
+  id-underscore: novari_no
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-consumer-cluster-beta"
