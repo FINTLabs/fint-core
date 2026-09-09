@@ -8,6 +8,7 @@ data:
   id-dotted: novari.no
   id-dashed: novari-no
   id-underscore: novari_no
+  asset-regex: 're:(^|,)novari\.no(,|$)'
   host: api.felleskomponent.no
   base-url: https://api.felleskomponent.no
   onepassword-itempath: "vaults/aks-api-vault/items/fint-core-consumer-cluster-api"

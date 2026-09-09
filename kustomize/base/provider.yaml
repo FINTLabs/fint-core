@@ -29,7 +29,7 @@ spec:
       - host: REPLACE
         path: /provider
         headers:
-          x-org-id: REPLACE
+          x-allowed-asset-ids: REPLACE
   kafka:
     enabled: true
     acls:

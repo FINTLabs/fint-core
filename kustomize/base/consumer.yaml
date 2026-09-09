@@ -30,7 +30,7 @@ spec:
       - host: REPLACE
         path: /utdanning
         headers:
-          x-org-id: REPLACE
+          x-allowed-asset-ids: REPLACE
   kafka:
     enabled: true
     acls:

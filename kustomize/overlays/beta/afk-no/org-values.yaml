@@ -8,6 +8,7 @@ data:
   id-dotted: afk.no
   id-dashed: afk-no
   id-underscore: afk_no
+  asset-regex: 're:(^|,)afk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-afk-no-cluster-beta"
