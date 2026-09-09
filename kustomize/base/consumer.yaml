@@ -28,7 +28,7 @@ spec:
   ingress:
     routes:
       - host: REPLACE
-        path: /
+        path: /utdanning
         headers:
           x-org-id: REPLACE
   kafka:
