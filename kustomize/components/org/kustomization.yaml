@@ -26,7 +26,7 @@ replacements:
           - metadata.labels.[fintlabs.no/org-id]
           - spec.ingress.routes.0.headers.x-org-id
 
-  # dashed (org-id) -> namespace (both) + consumer kafka acl prefixes
+  # dashed (org-id) -> namespace (both) + consumer/provider per-org kafka acl prefixes
   - source:
       kind: ConfigMap
       name: fint-org
@@ -47,6 +47,14 @@ replacements:
           name: fint-core-consumer
         fieldPaths:
           - spec.kafka.acls.0.topic
+        options:
+          delimiter: "."
+          index: 0
+      - select:
+          kind: Application
+          name: fint-core-provider-gateway
+        fieldPaths:
+          - spec.kafka.acls.6.topic
         options:
           delimiter: "."
           index: 0

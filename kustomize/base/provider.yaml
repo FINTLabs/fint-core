@@ -45,6 +45,8 @@ spec:
         permission: admin
       - topic: "novari-no.fint-core.fint-felleskomponent-adapter-delete-sync"
         permission: admin
+      - topic: "REPLACE-DASHED.fint-core.fint-felleskomponent-resource"
+        permission: admin
   resources:
     limits:
       memory: 3Gi
