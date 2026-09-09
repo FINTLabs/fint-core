@@ -35,6 +35,16 @@ spec:
     acls:
       - topic: "novari-no.fint-core.fint-felleskomponent-event-response"
         permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-heartbeat"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-contract"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-full-sync"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-delta-sync"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-delete-sync"
+        permission: admin
   resources:
     limits:
       memory: 3Gi
