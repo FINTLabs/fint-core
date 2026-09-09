@@ -159,3 +159,22 @@ docker compose up -d
 ./gradlew :fint-core-provider-gateway:bootRun
 ./gradlew :fint-core-consumer:bootRun
 ```
+
+---
+
+## Building Docker images
+
+Each service has its own `Dockerfile`, but the build **context must be the repo
+root**, not the module directory, since the Gradle build inside needs the whole
+multi-module project (root `settings.gradle.kts` plus `fint-core-shared`). Run
+these from the repo root:
+
+```
+docker build -f fint-core-provider-gateway/Dockerfile -t fint-core-provider-gateway .
+docker build -f fint-core-consumer/Dockerfile -t fint-core-consumer .
+```
+
+Each Dockerfile scopes its Gradle build to its own module's `bootJar` task
+(`:fint-core-provider-gateway:bootJar` / `:fint-core-consumer:bootJar`), so it
+pulls in `fint-core-shared` as needed but never builds the sibling service. This
+is the same command CD runs (see the CD section above), just without the push.
