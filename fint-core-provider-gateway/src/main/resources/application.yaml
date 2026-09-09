@@ -32,6 +32,8 @@ spring:
     import:
       - classpath:cleanup-topics.yaml
       - classpath:shared-mongodb.yaml
+  mongodb:
+    database: fint
   threads:
     virtual:
       enabled: true
