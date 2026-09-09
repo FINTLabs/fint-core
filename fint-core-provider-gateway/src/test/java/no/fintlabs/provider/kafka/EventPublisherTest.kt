@@ -32,7 +32,7 @@ class EventPublisherTest {
         publisher.publish("provider-error", "error-id", "payload")
 
         with(record.captured) {
-            assertThat(topic()).isEqualTo("fintlabs-no.fint-core.event.provider-error")
+            assertThat(topic()).isEqualTo("fintlabs-no.fint-core.provider-error")
             assertThat(key()).isEqualTo("error-id")
             assertThat(value()).isEqualTo("payload")
             assertThat(

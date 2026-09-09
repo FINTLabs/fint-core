@@ -17,7 +17,6 @@ replacements:
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
-          - spec.env.[name=fint.consumer.org-id].value
           - spec.ingress.routes.0.headers.x-org-id
       - select:
           kind: Application
@@ -48,8 +47,6 @@ replacements:
           name: fint-core-consumer
         fieldPaths:
           - spec.kafka.acls.0.topic
-          - spec.kafka.acls.1.topic
-          - spec.kafka.acls.2.topic
         options:
           delimiter: "."
           index: 0

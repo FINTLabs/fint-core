@@ -9,7 +9,7 @@ object KafkaTopicNames {
     fun eventTopic(
         orgId: OrgId,
         eventName: String,
-    ): String = "${orgId.asTopicSegment}.$DOMAIN_CONTEXT.event.$eventName"
+    ): String = "${orgId.asTopicSegment}.$DOMAIN_CONTEXT.$eventName"
 
     @JvmStatic
     fun eventTopic(

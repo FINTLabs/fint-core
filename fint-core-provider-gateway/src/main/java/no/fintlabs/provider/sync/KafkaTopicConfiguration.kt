@@ -35,10 +35,10 @@ class KafkaTopicConfiguration {
             .build()
 
     @Bean
-    fun eventRequestTopic(properties: ProviderProperties): NewTopic = eventTopic(EventTopics.requestTopic(properties.orgId))
+    fun eventRequestTopic(): NewTopic = eventTopic(EventTopics.requestTopic())
 
     @Bean
-    fun eventResponseTopic(properties: ProviderProperties): NewTopic = eventTopic(EventTopics.responseTopic(properties.orgId))
+    fun eventResponseTopic(): NewTopic = eventTopic(EventTopics.responseTopic())
 
     private fun eventTopic(name: String): NewTopic =
         TopicBuilder

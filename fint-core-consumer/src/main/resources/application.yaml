@@ -13,7 +13,7 @@ fint:
     domain: utdanning
     package: vurdering
     packageName: ${fint.consumer.package}
-    org-id: ${fint.org-id}
+    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     coreVersionHeader: 2
     event:
       answer-deadline: 15m

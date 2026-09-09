@@ -1,6 +1,6 @@
 fint:
   provider:
-    org-id: fintlabs.no
+    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     buffer:
       topic: ${fint.provider.org-id}
       consumer:
@@ -30,7 +30,6 @@ spring:
     driver-class-name: org.postgresql.Driver
   config:
     import:
-      - classpath:components.yaml
       - classpath:cleanup-topics.yaml
       - classpath:shared-mongodb.yaml
   threads:

@@ -5,11 +5,11 @@ import no.fintlabs.provider.kafka.EventProducerKafka;
 import no.fintlabs.provider.kafka.EventPublisher;
 import org.springframework.stereotype.Service;
 
-import static no.fintlabs.provider.kafka.topic.TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME;
+import static no.fintlabs.provider.kafka.topic.TopicNamesConstants.ADAPTER_CONTRACT;
 
 @Service
 public class AdapterContractProducer extends EventProducerKafka<AdapterContract> {
     public AdapterContractProducer(EventPublisher eventPublisher) {
-        super(eventPublisher, ADAPTER_REGISTER_EVENT_NAME);
+        super(eventPublisher, ADAPTER_CONTRACT);
     }
 }

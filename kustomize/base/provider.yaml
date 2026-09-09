@@ -14,12 +14,14 @@ metadata:
 spec:
   port: 8080
   orgId: REPLACE
-  image: ghcr.io/fintlabs/fint-core-provider-gateway-db:latest
+  image: ghcr.io/fintlabs/fint-core-provider-gateway:REPLACE
   onePassword:
     itemPath: REPLACE
   env:
     - name: JAVA_TOOL_OPTIONS
-      value: -XX:+ExitOnOutOfMemoryError -Xmx15G
+      value: |
+        -XX:MaxRAMPercentage=80
+        -XX:+ExitOnOutOfMemoryError
   database:
     database: fint-core
   ingress:
@@ -31,11 +33,20 @@ spec:
   kafka:
     enabled: true
     acls:
-      - topic: '*.fint-core.*'
+      - topic: "novari-no.fint-core.fint-felleskomponent-event-response"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-heartbeat"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-contract"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-full-sync"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-delta-sync"
+        permission: admin
+      - topic: "novari-no.fint-core.fint-felleskomponent-adapter-delete-sync"
         permission: admin
   resources:
     limits:
-      memory: 16Gi
+      memory: 3Gi
     requests:
-      cpu: 100m
-      memory: 16Gi
+      memory: 3Gi

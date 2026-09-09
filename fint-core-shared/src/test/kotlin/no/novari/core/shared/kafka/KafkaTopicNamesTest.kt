@@ -8,8 +8,8 @@ class KafkaTopicNamesTest {
     @Test
     fun `event topic normalizes dotted org id`() {
         assertEquals(
-            "fintlabs-no.fint-core.event.adapter-health",
-            KafkaTopicNames.eventTopic(OrgId.from("fintlabs.no"), "adapter-health"),
+            "fintlabs-no.fint-core.fint-felleskomponent-adapter-heartbeat",
+            KafkaTopicNames.eventTopic(OrgId.from("fintlabs.no"), "fint-felleskomponent-adapter-heartbeat"),
         )
     }
 
