@@ -35,7 +35,7 @@ jobs:
           eval "$(.github/scripts/service-versions.sh)"
           echo "consumer=$consumer provider=$provider"
           jq -nc --arg c "$consumer" --arg p "$provider" \
-            '[{service:"fint-core-consumer", sha:$c}, {service:"fint-core-provider-gateway", sha:$p}]' \
+            '[{service:"fint-core-consumer", image:"fint-core-consumer-db", sha:$c}, {service:"fint-core-provider-gateway", image:"fint-core-provider-gateway-db", sha:$p}]' \
             | sed 's/^/services=/' >> "$GITHUB_OUTPUT"
 
       - name: Discover org overlays
@@ -57,7 +57,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.setup.outputs.services) }}
     env:
-      IMAGE: ghcr.io/fintlabs/${{ matrix.service }}:sha-${{ matrix.sha }}
+      IMAGE: ghcr.io/fintlabs/${{ matrix.image }}:sha-${{ matrix.sha }}
     steps:
       - uses: docker/login-action@v3
         with:
@@ -124,7 +124,7 @@ jobs:
           {
             echo "images<<EOF"
             jq -r \
-              '.[] | "ghcr.io/fintlabs/\(.service):sha-\(.sha)"' \
+              '.[] | "ghcr.io/fintlabs/\(.image):sha-\(.sha)"' \
               <<< "$SERVICES"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
