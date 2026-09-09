@@ -116,45 +116,57 @@ jobs:
           esac
           echo "resource-group=rg-aks-$ENVIRONMENT" >> "$GITHUB_OUTPUT"
 
-      - uses: azure/login@v2
+      - name: Resolve deployment image tags
+        id: image_tags
+        env:
+          SERVICES: ${{ needs.setup.outputs.services }}
+        run: |
+          {
+            echo "images<<EOF"
+            jq -r \
+              '.[] | "ghcr.io/fintlabs/\(.service):sha-\(.sha)"' \
+              <<< "$SERVICES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bake manifests with Kustomize
+        id: bake
+        uses: azure/k8s-bake@v4.0.0
         with:
-          creds: ${{ secrets[format('AKS_{0}_FINT_GITHUB', needs.setup.outputs.environment)] }}
+          renderEngine: "kustomize"
+          kustomizationPath: "kustomize/overlays/${{ env.ENVIRONMENT }}/${{ matrix.org }}"
+
+      - name: Substitute images into baked YAML
+        id: substitute
+        uses: azure/k8s-artifact-substitute@v2.0.0
+        with:
+          manifests: ${{ steps.bake.outputs.manifestsBundle }}
+          images: ${{ steps.image_tags.outputs.images }}
+
+      - uses: azure/login@v3.0.0
+        with:
+          creds: "${{ secrets[format('AKS_{0}_FINT_GITHUB', needs.setup.outputs.environment)] }}"
 
       - uses: azure/use-kubelogin@v1
         with:
-          kubelogin-version: 'v0.0.26'
+          kubelogin-version: "0.2.19"
 
-      - uses: azure/aks-set-context@v4
+      - name: Set the target cluster
+        uses: azure/aks-set-context@v5.0.0
         with:
-          cluster-name: ${{ steps.aks.outputs.cluster }}
-          resource-group: ${{ steps.aks.outputs.resource-group }}
-          admin: 'true'
-          use-kubelogin: 'true'
-
-      - name: Bake manifests with kustomize
-        id: bake
-        uses: azure/k8s-bake@v3
-        with:
-          renderEngine: 'kustomize'
-          kustomizationPath: 'kustomize/overlays/${{ env.ENVIRONMENT }}/${{ matrix.org }}'
-
-      - name: Pin each Application to its service version
-        env:
-          SERVICES: ${{ needs.setup.outputs.services }}
-          BUNDLE: ${{ steps.bake.outputs.manifestsBundle }}
-        run: |
-          for row in $(echo "$SERVICES" | jq -r '.[] | "\(.service)=\(.sha)"'); do
-            name="${row%%=*}" sha="${row##*=}" \
-              yq -i '(select(.kind == "Application" and .metadata.name == strenv(name)) | .spec.image) |= sub(":[^:]*$", ":sha-" + strenv(sha))' "$BUNDLE"
-          done
-          echo "pinned images ->"
-          yq '.metadata.name + " " + .spec.image' "$BUNDLE"
+          cluster-name: "${{ steps.aks.outputs.cluster }}"
+          resource-group: "${{ steps.aks.outputs.resource-group }}"
+          admin: "true"
+          use-kubelogin: "true"
 
       - name: Ensure namespace ${{ matrix.org }}
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy
-        uses: azure/k8s-deploy@v5
+        uses: azure/k8s-deploy@v6.0.0
         with:
+          action: deploy
+          manifests: ${{ steps.substitute.outputs.manifests }}
+          images: ${{ steps.image_tags.outputs.images }}
+          pull-images: false
           namespace: ${{ matrix.org }}
-          manifests: ${{ steps.bake.outputs.manifestsBundle }}
