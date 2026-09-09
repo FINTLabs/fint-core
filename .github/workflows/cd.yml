@@ -149,7 +149,7 @@ jobs:
 
       - uses: azure/use-kubelogin@v1
         with:
-          kubelogin-version: "0.2.19"
+          kubelogin-version: "v0.0.26"
 
       - name: Set the target cluster
         uses: azure/aks-set-context@v5.0.0
