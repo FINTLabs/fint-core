@@ -19,11 +19,11 @@ class EventTopicEnsurer(
     fun ensureEventTopics() =
         with(adapterKafkaProperties) {
             listOf(
-                TopicNamesConstants.HEARTBEAT_EVENT_NAME to heartbeatRetentionTime,
-                TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME to registerRetentionTime,
-                TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME to fullSyncRetentionTime,
-                TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME to deltaSyncRetentionTime,
-                TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME to deleteSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_HEARTBEAT to heartbeatRetentionTime,
+                TopicNamesConstants.ADAPTER_CONTRACT to registerRetentionTime,
+                TopicNamesConstants.ADAPTER_FULL_SYNC to fullSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELTA_SYNC to deltaSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELETE_SYNC to deleteSyncRetentionTime,
             ).forEach { (eventName, retentionTime) ->
                 kafkaTopicService.createOrModifyEventTopic(
                     KafkaTopicNames.eventTopic(providerProperties.orgId, eventName),

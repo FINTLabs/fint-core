@@ -30,7 +30,6 @@ spring:
     driver-class-name: org.postgresql.Driver
   config:
     import:
-      - classpath:components.yaml
       - classpath:cleanup-topics.yaml
       - classpath:shared-mongodb.yaml
   threads:

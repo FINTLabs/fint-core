@@ -28,7 +28,7 @@ class RequestFintEventProducerTest {
         producer.publish(event)
 
         verify {
-            kafkaTemplate.send("fintlabs.fint-core.fint-felleskomponent-event-request", "corr-1", event)
+            kafkaTemplate.send("novari-no.fint-core.fint-felleskomponent-event-request", "corr-1", event)
         }
     }
 }

@@ -5,5 +5,5 @@ object EventTopics {
 
     fun responseTopic(): String = topicName("response")
 
-    private fun topicName(suffix: String): String = "fintlabs.fint-core.fint-felleskomponent-event-$suffix"
+    private fun topicName(suffix: String): String = "novari-no.fint-core.fint-felleskomponent-event-$suffix"
 }

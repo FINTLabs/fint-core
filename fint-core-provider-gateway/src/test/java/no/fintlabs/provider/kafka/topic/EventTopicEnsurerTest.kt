@@ -39,15 +39,15 @@ class EventTopicEnsurerTest {
         sut.ensureEventTopics()
 
         listOf(
-            TopicNamesConstants.HEARTBEAT_EVENT_NAME,
-            TopicNamesConstants.ADAPTER_REGISTER_EVENT_NAME,
-            TopicNamesConstants.ADAPTER_FULL_SYNC_EVENT_NAME,
-            TopicNamesConstants.ADAPTER_DELTA_SYNC_EVENT_NAME,
-            TopicNamesConstants.ADAPTER_DELETE_SYNC_EVENT_NAME,
+            TopicNamesConstants.ADAPTER_HEARTBEAT,
+            TopicNamesConstants.ADAPTER_CONTRACT,
+            TopicNamesConstants.ADAPTER_FULL_SYNC,
+            TopicNamesConstants.ADAPTER_DELTA_SYNC,
+            TopicNamesConstants.ADAPTER_DELETE_SYNC,
         ).forEach { eventName ->
             verify(exactly = 1) {
                 kafkaTopicService.createOrModifyEventTopic(
-                    "fintlabs-no.fint-core.event.$eventName",
+                    "fintlabs-no.fint-core.$eventName",
                     any(),
                     any(),
                 )
