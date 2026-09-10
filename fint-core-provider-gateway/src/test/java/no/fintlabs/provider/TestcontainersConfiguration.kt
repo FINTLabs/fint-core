@@ -14,5 +14,5 @@ class TestcontainersConfiguration {
 
     @Bean
     @ServiceConnection
-    fun mongoDbContainer(): MongoDBContainer = MongoDBContainer("mongo:7.0").withReplicaSet()
+    fun mongoDbContainer(): MongoDBContainer = mongoTestContainer()
 }
