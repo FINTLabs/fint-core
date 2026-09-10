@@ -57,10 +57,14 @@ class BufferReader(
     private fun ConsumerRecord<String, String>.toIngest(coordinate: ResourceCoordinate): ResourceIngest? {
         if (headers().isSyncMarker()) return null
 
-        return ResourceIngest(
+        val resourceId = extractIdentifier()
+        val timestamp = headers().extractTimestamp()
+        val json = value() ?: return ResourceIngest.Delete(coordinate, resourceId, timestamp)
+
+        return ResourceIngest.Save(
             coordinate = coordinate,
             resourceId = extractIdentifier(),
-            resource = value()?.let { objectMapper.readValue(it, coordinate.toResourceClass()) },
+            resource = objectMapper.readValue(json, coordinate.toResourceClass()),
             timestamp = headers().extractTimestamp(),
         )
     }

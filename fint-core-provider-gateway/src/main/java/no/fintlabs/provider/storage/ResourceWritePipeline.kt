@@ -10,12 +10,24 @@ import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
 
-data class ResourceIngest(
-    val coordinate: ResourceCoordinate,
-    val resourceId: String,
-    val resource: FintResource?,
-    val timestamp: Instant,
-)
+sealed interface ResourceIngest {
+    val coordinate: ResourceCoordinate
+    val resourceId: String
+    val timestamp: Instant
+
+    data class Save(
+        val resource: FintResource,
+        override val coordinate: ResourceCoordinate,
+        override val resourceId: String,
+        override val timestamp: Instant,
+    ) : ResourceIngest
+
+    data class Delete(
+        override val coordinate: ResourceCoordinate,
+        override val resourceId: String,
+        override val timestamp: Instant,
+    ) : ResourceIngest
+}
 
 /**
  * A class that focuses on inserting and deleting resources and its related relation edges.
@@ -40,12 +52,20 @@ class ResourceWritePipeline(
     fun applyAll(ingests: List<ResourceIngest>) {
         if (ingests.isEmpty()) return
 
+        saveAll(ingests.filterIsInstance<ResourceIngest.Save>())
+    }
+
+    private fun saveAll(ingests: List<ResourceIngest.Save>) {
         ingests.forEach { it.resource.removeSelfLinks() }
+
         resourceStore.saveAll(ingests.toResourceWrites())
         relationEdgeStore.saveAll(ingests.toRelationEdgeWrites())
     }
 
-    private fun List<ResourceIngest>.toResourceWrites() =
+    private fun deleteAll(ingests: List<ResourceIngest.Delete>) {
+    }
+
+    private fun List<ResourceIngest.Save>.toResourceWrites() =
         map {
             ResourceWrite(
                 resourceId = it.resourceId,
@@ -55,7 +75,7 @@ class ResourceWritePipeline(
             )
         }
 
-    private fun List<ResourceIngest>.toRelationEdgeWrites() =
+    private fun List<ResourceIngest.Save>.toRelationEdgeWrites() =
         flatMap { ingest ->
             RelationEdgeFactory
                 .createRelationEdges(ingest.coordinate, ingest.resourceId, ingest.resource)
