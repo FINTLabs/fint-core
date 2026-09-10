@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component
 class EventTopicEnsurer(
     private val adapterKafkaProperties: AdapterKafkaProperties,
     private val kafkaTopicService: KafkaTopicService,
-    private val providerProperties: ProviderProperties,
 ) {
     @EventListener(ApplicationReadyEvent::class)
     fun ensureEventTopics() =
@@ -26,7 +25,7 @@ class EventTopicEnsurer(
                 TopicNamesConstants.ADAPTER_DELETE_SYNC to deleteSyncRetentionTime,
             ).forEach { (eventName, retentionTime) ->
                 kafkaTopicService.createOrModifyEventTopic(
-                    KafkaTopicNames.eventTopic(providerProperties.orgId, eventName),
+                    KafkaTopicNames.eventTopic(eventName),
                     partitions,
                     retentionTime,
                 )

@@ -2,6 +2,7 @@ package no.fintlabs.utils
 
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.consumer.config.ConsumerConfiguration
+import no.novari.core.shared.kafka.EventTopics
 import no.novari.core.shared.kafka.KafkaTopicNames
 import org.springframework.boot.test.context.TestComponent
 import org.springframework.kafka.core.KafkaTemplate
@@ -15,10 +16,7 @@ class ResponseEventProducer(
 ) {
     fun publish(response: ResponseFintEvent): CompletableFuture<SendResult<String, ResponseFintEvent>> =
         kafkaTemplate.send(
-            KafkaTopicNames.eventTopic(
-                consumerConfig.orgId,
-                "${consumerConfig.domain}-${consumerConfig.packageName}-response",
-            ),
+            EventTopics.responseTopic(),
             response.corrId,
             response,
         )
