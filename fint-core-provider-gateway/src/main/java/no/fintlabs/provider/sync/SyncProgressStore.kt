@@ -21,7 +21,7 @@ class SyncProgressStore(
         template.indexOps(COLLECTION_NAME).createIndex(
             Index()
                 .on("updatedAt", Sort.Direction.ASC)
-                .named("sync_progress_ttl")
+                .named("progress_ttl_idx")
                 .expire(TTL),
         )
     }

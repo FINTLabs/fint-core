@@ -3,6 +3,7 @@ package no.fintlabs.provider.sync
 import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.models.sync.SyncType
+import no.fintlabs.provider.mongoTestContainer
 import no.fintlabs.provider.storage.EvictionService
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Query
-import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import kotlin.test.assertEquals
@@ -42,7 +42,7 @@ class SyncEvictionIT {
     companion object {
         @Container
         @JvmStatic
-        val MONGO: MongoDBContainer = MongoDBContainer("mongo:7.0")
+        val MONGO = mongoTestContainer()
 
         private const val BEFORE = 1_000L
         private const val DURING = 2_000L
