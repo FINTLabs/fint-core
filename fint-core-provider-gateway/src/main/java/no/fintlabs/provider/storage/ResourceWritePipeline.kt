@@ -13,7 +13,7 @@ import java.time.Instant
 data class ResourceIngest(
     val coordinate: ResourceCoordinate,
     val resourceId: String,
-    val resource: FintResource,
+    val resource: FintResource?,
     val timestamp: Instant,
 )
 
@@ -46,6 +46,8 @@ class ResourceWritePipeline(
         resourceStore.saveAll(ingests.toResourceWrites())
         relationEdgeStore.saveAll(ingests.toRelationEdgeWrites())
     }
+
+    fun deleteAll(purges: List<ResourceIngest>)
 
     private fun List<ResourceIngest>.toResourceWrites() =
         map {
