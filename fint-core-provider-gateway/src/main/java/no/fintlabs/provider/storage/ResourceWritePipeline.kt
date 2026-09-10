@@ -18,10 +18,8 @@ data class ResourceIngest(
 )
 
 /**
- * The one way a resource lands in storage: self links stripped, the resource upserted, and its
- * relation edges extracted and upserted. The buffer reader applies sync batches through this
- * and the provider's event response path applies single writes through it, so the two write
- * paths cannot drift apart.
+ * A class that focuses on inserting and deleting resources and its related relation edges.
+ * This exists because events and buffered resources has the same logic for insertion/deletion.
  */
 @Service
 class ResourceWritePipeline(
@@ -46,8 +44,6 @@ class ResourceWritePipeline(
         resourceStore.saveAll(ingests.toResourceWrites())
         relationEdgeStore.saveAll(ingests.toRelationEdgeWrites())
     }
-
-    fun deleteAll(purges: List<ResourceIngest>)
 
     private fun List<ResourceIngest>.toResourceWrites() =
         map {
