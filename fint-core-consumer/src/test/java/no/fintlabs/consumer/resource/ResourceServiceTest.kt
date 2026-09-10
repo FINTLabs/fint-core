@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
 import org.junit.jupiter.api.assertThrows
+import org.springframework.data.mongodb.core.query.Criteria
 import java.time.Instant
 
 class ResourceServiceTest {
@@ -77,6 +78,32 @@ class ResourceServiceTest {
             resourceStore.findPage(null, 2, 0, collectionName)
         }
         assertEquals(2, result.size)
+    }
+
+    @Test
+    fun `sinceTimeStamp 0 reads the page without a lastModified filter`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 2, 0, collectionName) } returns emptyList()
+
+        resourceService.getResources(resourceCoordinate, 2, 0, 0L, null)
+
+        verify(exactly = 1) { resourceStore.findPage(null, 2, 0, collectionName) }
+    }
+
+    @Test
+    fun `a positive sinceTimeStamp filters on lastModified`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val filters = mutableListOf<Criteria?>()
+        every { resourceStore.findPage(captureNullable(filters), 2, 0, collectionName) } returns emptyList()
+
+        resourceService.getResources(resourceCoordinate, 2, 0, 1723456789L, null)
+
+        val filter = filters.single()
+        assertNotNull(filter)
+        assertEquals(
+            Document("lastModified", Document("\$gte", Instant.ofEpochMilli(1723456789L))),
+            filter.criteriaObject,
+        )
     }
 
     // TODO: implement filtering
