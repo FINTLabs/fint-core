@@ -117,5 +117,11 @@ class ResourceService(
     private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
         map { it.toFintResource(resourceCoordinate) }
 
-    private fun Long?.toCriteria() = this?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(this)) }
+    /**
+     * Only a positive `sinceTimeStamp` filters on `lastModified`. The controller defaults the
+     * parameter to 0, and a filter on "modified since 1970" matches every document while still
+     * steering Mongo towards the `lastModified` index, which cannot serve the list order.
+     */
+    private fun Long?.toCriteria() =
+        this?.takeIf { it > 0 }?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(it)) }
 }

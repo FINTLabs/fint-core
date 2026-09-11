@@ -145,12 +145,7 @@ class ResourceStore(
         size: Int,
         offset: Long,
         collectionName: String,
-    ): List<ResourceEntry> {
-        val query = baseQuery(filter)
-        val pageQuery = Query.of(query).skip(offset).limit(size)
-
-        return template.find<ResourceEntry>(pageQuery, collectionName)
-    }
+    ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset), collectionName)
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long =
         template.exactCount(
@@ -201,17 +196,36 @@ class ResourceStore(
         return template.remove(query, collectionName).deletedCount
     }
 
-    private fun baseQuery(filter: Criteria?): Query =
+    /**
+     * The query behind every list read. Results are ordered by `createdAt` and then `_id`, so a
+     * resource keeps its place in the list when it is updated, and two resources created in the
+     * same millisecond always come back in the same order. The `created_at_id` index has the same
+     * shape, which lets Mongo walk the index instead of sorting the whole collection.
+     */
+    internal fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
             with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
         }
+
+    internal fun pageQuery(
+        filter: Criteria?,
+        size: Int,
+        offset: Long,
+    ): Query = Query.of(baseQuery(filter)).skip(offset).limit(size)
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
 
         template.indexOps(collectionName).createIndex(
             Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+        )
+
+        template.indexOps(collectionName).createIndex(
+            Index()
+                .on("createdAt", Sort.Direction.ASC)
+                .on("_id", Sort.Direction.ASC)
+                .named("created_at_id"),
         )
     }
 }
