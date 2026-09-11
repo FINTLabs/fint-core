@@ -3,21 +3,21 @@ package no.novari.core.shared.store
 import no.novari.fint.core.model.FintResource
 import java.time.Instant
 
-sealed interface ResourceOperation {
+sealed interface ResourceWrite {
     val resourceId: String
     val collectionName: String
     val timestamp: Instant
 }
 
-data class ResourceWrite(
+data class Save(
     override val resourceId: String,
     override val collectionName: String,
     val resource: FintResource,
     override val timestamp: Instant = Instant.now(),
-) : ResourceOperation
+) : ResourceWrite
 
-data class ResourceDelete(
+data class Delete(
     override val resourceId: String,
     override val collectionName: String,
     override val timestamp: Instant = Instant.now(),
-) : ResourceOperation
+) : ResourceWrite

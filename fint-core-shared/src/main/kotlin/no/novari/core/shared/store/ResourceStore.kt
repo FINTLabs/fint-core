@@ -35,7 +35,7 @@ class ResourceStore(
      * both have the exact same timestamp, the new one wins. The original `createdAt` value is
      * always kept.
      */
-    fun applyAll(operations: List<ResourceOperation>) =
+    fun applyAll(operations: List<ResourceWrite>) =
         operations
             .groupBy { it.collectionName }
             .forEach { (collectionName, collectionOperations) ->
@@ -51,14 +51,14 @@ class ResourceStore(
                 bulkOps.execute()
             }
 
-    fun saveAll(writes: List<ResourceWrite>) = applyAll(writes)
+    fun saveAll(writes: List<Save>) = applyAll(writes)
 
-    private fun BulkOperations.add(operation: ResourceOperation) {
+    private fun BulkOperations.add(operation: ResourceWrite) {
         val byId = Query.query(Criteria.where("_id").`is`(operation.resourceId))
 
         when (operation) {
-            is ResourceWrite -> upsert(byId, operation.toGuardedUpdate())
-            is ResourceDelete -> remove(byId.addCriteria(notNewerThan(operation.timestamp)))
+            is Save -> upsert(byId, operation.toGuardedUpdate())
+            is Delete -> remove(byId.addCriteria(notNewerThan(operation.timestamp)))
         }
     }
 
@@ -67,7 +67,7 @@ class ResourceStore(
     /**
      * Only updates the document if its newer than the existing document.
      */
-    private fun ResourceWrite.toGuardedUpdate(): AggregationUpdate {
+    private fun Save.toGuardedUpdate(): AggregationUpdate {
         val incomingTimestamp = Date.from(timestamp)
         val identifierDocuments =
             resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }

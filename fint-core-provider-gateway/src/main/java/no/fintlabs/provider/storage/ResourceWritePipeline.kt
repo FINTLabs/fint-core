@@ -4,10 +4,10 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
-import no.novari.core.shared.store.ResourceDelete
-import no.novari.core.shared.store.ResourceOperation
+import no.novari.core.shared.store.Delete
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
+import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -59,10 +59,10 @@ class ResourceWritePipeline(
         relationEdgeStore.saveAll(saves.toRelationEdgeWrites())
     }
 
-    private fun ResourceIngest.toResourceOperation(): ResourceOperation =
+    private fun ResourceIngest.toResourceOperation(): ResourceWrite =
         when (this) {
             is ResourceIngest.Save -> {
-                ResourceWrite(
+                Save(
                     resourceId = resourceId,
                     collectionName = coordinate.toCollectionName(),
                     resource = resource,
@@ -71,7 +71,7 @@ class ResourceWritePipeline(
             }
 
             is ResourceIngest.Delete -> {
-                ResourceDelete(
+                Delete(
                     resourceId = resourceId,
                     collectionName = coordinate.toCollectionName(),
                     timestamp = timestamp,
