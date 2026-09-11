@@ -55,11 +55,11 @@ class ResourceWritePipeline(
         val saves = ingests.filterIsInstance<ResourceIngest.Save>()
         saves.forEach { it.resource.removeSelfLinks() }
 
-        resourceStore.applyAll(ingests.map { it.toResourceOperation() })
+        resourceStore.applyAll(ingests.map { it.toResourceWrite() })
         relationEdgeStore.saveAll(saves.toRelationEdgeWrites())
     }
 
-    private fun ResourceIngest.toResourceOperation(): ResourceWrite =
+    private fun ResourceIngest.toResourceWrite(): ResourceWrite =
         when (this) {
             is ResourceIngest.Save -> {
                 Save(
