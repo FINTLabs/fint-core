@@ -4,6 +4,8 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
+import no.novari.core.shared.store.ResourceDelete
+import no.novari.core.shared.store.ResourceOperation
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
 import no.novari.fint.core.model.FintResource
@@ -50,29 +52,31 @@ class ResourceWritePipeline(
     fun apply(ingest: ResourceIngest) = applyAll(listOf(ingest))
 
     fun applyAll(ingests: List<ResourceIngest>) {
-        if (ingests.isEmpty()) return
+        val saves = ingests.filterIsInstance<ResourceIngest.Save>()
+        saves.forEach { it.resource.removeSelfLinks() }
 
-        saveAll(ingests.filterIsInstance<ResourceIngest.Save>())
+        resourceStore.applyAll(ingests.map { it.toResourceOperation() })
+        relationEdgeStore.saveAll(saves.toRelationEdgeWrites())
     }
 
-    private fun saveAll(ingests: List<ResourceIngest.Save>) {
-        ingests.forEach { it.resource.removeSelfLinks() }
+    private fun ResourceIngest.toResourceOperation(): ResourceOperation =
+        when (this) {
+            is ResourceIngest.Save -> {
+                ResourceWrite(
+                    resourceId = resourceId,
+                    collectionName = coordinate.toCollectionName(),
+                    resource = resource,
+                    timestamp = timestamp,
+                )
+            }
 
-        resourceStore.saveAll(ingests.toResourceWrites())
-        relationEdgeStore.saveAll(ingests.toRelationEdgeWrites())
-    }
-
-    private fun deleteAll(ingests: List<ResourceIngest.Delete>) {
-    }
-
-    private fun List<ResourceIngest.Save>.toResourceWrites() =
-        map {
-            ResourceWrite(
-                resourceId = it.resourceId,
-                collectionName = it.coordinate.toCollectionName(),
-                resource = it.resource,
-                timestamp = it.timestamp,
-            )
+            is ResourceIngest.Delete -> {
+                ResourceDelete(
+                    resourceId = resourceId,
+                    collectionName = coordinate.toCollectionName(),
+                    timestamp = timestamp,
+                )
+            }
         }
 
     private fun List<ResourceIngest.Save>.toRelationEdgeWrites() =
