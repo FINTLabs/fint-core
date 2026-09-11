@@ -13,11 +13,11 @@ data class Save(
     override val resourceId: String,
     override val collectionName: String,
     val resource: FintResource,
-    override val timestamp: Instant = Instant.now(),
+    override val timestamp: Instant,
 ) : ResourceWrite
 
 data class Delete(
     override val resourceId: String,
     override val collectionName: String,
-    override val timestamp: Instant = Instant.now(),
+    override val timestamp: Instant,
 ) : ResourceWrite
