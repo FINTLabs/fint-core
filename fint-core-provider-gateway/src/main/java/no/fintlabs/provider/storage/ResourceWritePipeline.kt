@@ -56,7 +56,7 @@ class ResourceWritePipeline(
         saves.forEach { it.resource.removeSelfLinks() }
 
         resourceStore.applyAll(ingests.map { it.toResourceWrite() })
-        relationEdgeStore.saveAll(saves.toRelationEdgeWrites())
+        relationEdgeStore.applyAll(ingests.flatMap { it.toRelationEdgeWrites() })
     }
 
     private fun ResourceIngest.toResourceWrite(): ResourceWrite =
@@ -79,10 +79,19 @@ class ResourceWritePipeline(
             }
         }
 
-    private fun List<ResourceIngest.Save>.toRelationEdgeWrites() =
-        flatMap { ingest ->
-            RelationEdgeFactory
-                .createRelationEdges(ingest.coordinate, ingest.resourceId, ingest.resource)
-                .map { RelationEdgeWrite(ingest.coordinate.toEdgeCollectionName(), it) }
+    private fun ResourceIngest.toRelationEdgeWrites(): List<RelationEdgeWrite> {
+        val collectionName = coordinate.toEdgeCollectionName()
+
+        return when (this) {
+            is ResourceIngest.Save -> {
+                RelationEdgeFactory
+                    .createRelationEdges(coordinate, resourceId, resource)
+                    .map { RelationEdgeWrite.Save(collectionName, it) }
+            }
+
+            is ResourceIngest.Delete -> {
+                listOf(RelationEdgeWrite.Delete(collectionName, coordinate.toResourceUri(), resourceId))
+            }
         }
+    }
 }
