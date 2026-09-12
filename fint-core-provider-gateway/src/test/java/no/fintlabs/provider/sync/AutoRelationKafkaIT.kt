@@ -7,8 +7,8 @@ import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.ProviderAppIT
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
-import org.bson.Document
 import org.awaitility.kotlin.await
+import org.bson.Document
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -142,7 +142,17 @@ class AutoRelationKafkaIT(
         type: SyncType,
         entry: SyncPageEntry,
     ) = SyncPage(
-        SyncPageMetadata("test", corrId, "fintlabs-no", 1L, 1L, 1L, 1L, "beta.felleskomponent.no/utdanning/elev", 1782300748715L),
+        SyncPageMetadata(
+            "test",
+            corrId,
+            "fintlabs-no",
+            1L,
+            1L,
+            1L,
+            1L,
+            "beta.felleskomponent.no/utdanning/elev",
+            1782300748715L,
+        ),
         listOf(entry),
         type,
     )
