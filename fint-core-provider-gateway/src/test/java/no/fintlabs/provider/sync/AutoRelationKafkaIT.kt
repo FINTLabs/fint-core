@@ -8,6 +8,7 @@ import no.fintlabs.provider.ProviderAppIT
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
 import org.awaitility.kotlin.await
+import org.bson.Document
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -17,6 +18,8 @@ import org.springframework.data.mongodb.core.query.Query.query
 import java.time.Duration
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The broker-level half of autorelation: an adapter-shaped payload with an href link goes
@@ -99,4 +102,63 @@ class AutoRelationKafkaIT(
             assertNotNull(edge.createdAt)
         }
     }
+
+    @Test
+    fun `a delete sync removes the resource and the edges it created`() {
+        val edgeCollection = "fintlabs_no_relation_edges"
+        val resourceCollection = "fintlabs_no_utdanning_elev_elevforhold"
+        val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elevforhold")
+        val saved =
+            SyncPageEntry.of(
+                "EF-DEL",
+                mapOf(
+                    "systemId" to mapOf("identifikatorverdi" to "EF-DEL"),
+                    "_links" to
+                        mapOf(
+                            "elev" to
+                                listOf(
+                                    mapOf("href" to "https://api.felleskomponent.no/utdanning/elev/elev/elevnummer/E-789"),
+                                ),
+                        ),
+                ),
+            )
+
+        writer.sendSyncEntity(syncPage("corr-id-delete-save", SyncType.DELTA, saved), saved, coordinate).get()
+        await.atMost(Duration.ofSeconds(10)).untilAsserted {
+            assertNotNull(mongoTemplate.findById("EF-DEL", Document::class.java, resourceCollection))
+            assertEquals(1, edgesFrom("EF-DEL", edgeCollection).size)
+        }
+
+        val deleted = SyncPageEntry.of("EF-DEL", null)
+        writer.sendSyncEntity(syncPage("corr-id-delete", SyncType.DELETE, deleted), deleted, coordinate).get()
+        await.atMost(Duration.ofSeconds(10)).untilAsserted {
+            assertNull(mongoTemplate.findById("EF-DEL", Document::class.java, resourceCollection))
+            assertTrue(edgesFrom("EF-DEL", edgeCollection).isEmpty())
+        }
+    }
+
+    private fun syncPage(
+        corrId: String,
+        type: SyncType,
+        entry: SyncPageEntry,
+    ) = SyncPage(
+        SyncPageMetadata(
+            "test",
+            corrId,
+            "fintlabs-no",
+            1L,
+            1L,
+            1L,
+            1L,
+            "beta.felleskomponent.no/utdanning/elev",
+            1782300748715L,
+        ),
+        listOf(entry),
+        type,
+    )
+
+    private fun edgesFrom(
+        sourceId: String,
+        edgeCollection: String,
+    ): List<RelationEdge> = mongoTemplate.find(query(where("sourceId").`is`(sourceId)), RelationEdge::class.java, edgeCollection)
 }

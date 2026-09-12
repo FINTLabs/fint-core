@@ -91,7 +91,7 @@ class ResponseEventService(
             )
 
         resourceWritePipeline.apply(
-            ResourceIngest(
+            ResourceIngest.Save(
                 coordinate = coordinate,
                 resourceId = response.value.identifier,
                 resource = storageMapper.convertValue(response.value.resource, coordinate.toResourceClass()),

@@ -50,27 +50,23 @@ class BufferReader(
     }
 
     private fun ConsumerRecord<String, String>.toBufferedRecord(): BufferedRecord {
-        val headers = headers()
-        val coordinate = headers.toResourceCoordinate()
+        val coordinate = headers().toResourceCoordinate()
+        return BufferedRecord(ingest = toIngest(coordinate), sync = toSyncRecord(coordinate))
+    }
 
-        if (headers.isSyncMarker()) return BufferedRecord(ingest = null, sync = toSyncRecord(coordinate))
+    private fun ConsumerRecord<String, String>.toIngest(coordinate: ResourceCoordinate): ResourceIngest? {
+        if (headers().isSyncMarker()) return null
 
-        val json = value()
-        if (json == null) {
-            // TODO: Since json is null we should delete it (tombstone)
-            log.warn("Skipping delition for key '{}' until the delete phase lands", key())
-            return BufferedRecord(ingest = null, sync = null)
-        }
+        val resourceId = extractIdentifier()
+        val timestamp = headers().extractTimestamp()
+        val json = value() ?: return ResourceIngest.Delete(coordinate, resourceId, timestamp)
 
-        val ingest =
-            ResourceIngest(
-                coordinate = coordinate,
-                resourceId = extractIdentifier(),
-                resource = objectMapper.readValue(json, coordinate.toResourceClass()),
-                timestamp = headers.extractTimestamp(),
-            )
-
-        return BufferedRecord(ingest = ingest, sync = toSyncRecord(coordinate))
+        return ResourceIngest.Save(
+            coordinate = coordinate,
+            resourceId = extractIdentifier(),
+            resource = objectMapper.readValue(json, coordinate.toResourceClass()),
+            timestamp = headers().extractTimestamp(),
+        )
     }
 
     private fun ConsumerRecord<String, String>.toSyncRecord(coordinate: ResourceCoordinate): SyncRecord? =
