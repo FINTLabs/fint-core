@@ -30,7 +30,7 @@ class EndpointsControllerTest {
         val domainName = "utdanning"
         val packageName = "vurdering"
         every {
-            endpointsService.packageOverview(domainName, packageName)
+            endpointsService.componentOverview(domainName, packageName)
         } returns
             linkedMapOf(
                 "karakterverdi" to
@@ -75,7 +75,7 @@ class EndpointsControllerTest {
             )
 
         verify(exactly = 1) {
-            endpointsService.packageOverview(domainName, packageName)
+            endpointsService.componentOverview(domainName, packageName)
         }
     }
 }

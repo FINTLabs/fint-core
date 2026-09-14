@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController
 /**
  * This controller gives an overview over which endpoints are available
  * For example if you query /utdanning/vurdering, it should give an overview of what resoures
- * are available in that package
+ * are available in that component.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}")
@@ -19,5 +19,5 @@ class EndpointsController(
     fun resources(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
-    ) = endpointsService.packageOverview(domainName, packageName)
+    ) = endpointsService.componentOverview(domainName, packageName)
 }

@@ -29,7 +29,7 @@ class EndpointsServiceTest {
                 .toSet()
 
         val result =
-            endpointsService.packageOverview(
+            endpointsService.componentOverview(
                 domainName = domainName,
                 packageName = packageName,
             )

@@ -19,7 +19,7 @@ class EndpointsService(
     private val consumerConfiguration: ConsumerConfiguration,
 ) {
     /**
-     * Gives an overview of the available endpoints in a certain package.
+     * Gives an overview of the available endpoints in a certain FINT-component.
      * Example:
      * {
      *      "karakterverdi": {
@@ -42,7 +42,7 @@ class EndpointsService(
      * }
      *
      */
-    fun packageOverview(
+    fun componentOverview(
         domainName: String,
         packageName: String,
     ): ResourceEndpointsResponse =
