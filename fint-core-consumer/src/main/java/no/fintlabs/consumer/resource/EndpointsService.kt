@@ -64,15 +64,10 @@ class EndpointsService(
 
             resourceRef.resourceName to
                 ResourceEndpointsDto(
-                    lastUpdatedUrl =
-                        collectionUrl + EndpointsConstants.LAST_UPDATED,
-                    cacheSizeUrl =
-                        collectionUrl + EndpointsConstants.CACHE_SIZE,
+                    lastUpdatedUrl = collectionUrl + EndpointsConstants.LAST_UPDATED,
+                    cacheSizeUrl = collectionUrl + EndpointsConstants.CACHE_SIZE,
                     collectionUrl = collectionUrl,
-                    oneUrl =
-                        metadata.idFields.map { idField ->
-                            "$collectionUrl/${idField.lowercase()}/{id:.+}"
-                        },
+                    oneUrl = metadata.idFields.map { idField -> "$collectionUrl/${idField.lowercase()}/{id:.+}" },
                 )
         }
 }
