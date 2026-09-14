@@ -56,11 +56,8 @@ class EndpointsService(
                     ),
                 )
 
-            val resourcePath =
-                requireNotNull(metadata.pathIn("$domainName/$packageName"))
-
-            val collectionUrl =
-                "${consumerConfiguration.baseUrl}/$resourcePath"
+            val resourcePath = requireNotNull(metadata.pathIn("$domainName/$packageName"))
+            val collectionUrl = "${consumerConfiguration.baseUrl}/$resourcePath"
 
             resourceRef.resourceName to
                 ResourceEndpointsDto(
