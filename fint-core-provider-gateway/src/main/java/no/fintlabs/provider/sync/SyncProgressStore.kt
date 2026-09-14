@@ -18,6 +18,7 @@ class SyncProgressStore(
     private val template: MongoTemplate,
 ) {
     init {
+        // Should crash if index is named something else.
         template.indexOps(COLLECTION_NAME).createIndex(
             Index()
                 .on("updatedAt", Sort.Direction.ASC)

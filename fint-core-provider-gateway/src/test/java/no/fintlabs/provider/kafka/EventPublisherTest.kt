@@ -18,7 +18,6 @@ class EventPublisherTest {
     private val publisher =
         EventPublisher(
             kafkaTemplate,
-            ProviderProperties(orgIdValue = "fintlabs.no", baseUrl = ""),
             "provider-test",
         )
 
@@ -32,7 +31,7 @@ class EventPublisherTest {
         publisher.publish("provider-error", "error-id", "payload")
 
         with(record.captured) {
-            assertThat(topic()).isEqualTo("fintlabs-no.fint-core.provider-error")
+            assertThat(topic()).isEqualTo("novari-no.fint-core.provider-error")
             assertThat(key()).isEqualTo("error-id")
             assertThat(value()).isEqualTo("payload")
             assertThat(

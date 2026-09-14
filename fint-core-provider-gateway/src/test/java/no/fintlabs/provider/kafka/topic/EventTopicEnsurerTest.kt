@@ -23,7 +23,6 @@ class EventTopicEnsurerTest {
             EventTopicEnsurer(
                 adapterKafkaProperties,
                 kafkaTopicService,
-                ProviderProperties(orgIdValue = "fintlabs.no", baseUrl = ""),
             )
     }
 
@@ -47,7 +46,7 @@ class EventTopicEnsurerTest {
         ).forEach { eventName ->
             verify(exactly = 1) {
                 kafkaTopicService.createOrModifyEventTopic(
-                    "fintlabs-no.fint-core.$eventName",
+                    "novari-no.fint-core.$eventName",
                     any(),
                     any(),
                 )

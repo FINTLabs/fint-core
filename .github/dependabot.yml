@@ -5,6 +5,7 @@
 version: 2
 updates:
   - package-ecosystem: "gradle"
+    target-branch: "develop"
     directories:
       - "/"
       - "/buildSrc"
@@ -54,6 +55,7 @@ updates:
           - "patch"
 
   - package-ecosystem: "docker"
+    target-branch: "develop"
     directories:
       - "/fint-core-consumer"
       - "/fint-core-provider-gateway"
@@ -75,6 +77,7 @@ updates:
           - "*"
 
   - package-ecosystem: "docker-compose"
+    target-branch: "develop"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -94,6 +97,7 @@ updates:
           - "*"
 
   - package-ecosystem: "github-actions"
+    target-branch: "develop"
     directory: "/"
     schedule:
       interval: "weekly"

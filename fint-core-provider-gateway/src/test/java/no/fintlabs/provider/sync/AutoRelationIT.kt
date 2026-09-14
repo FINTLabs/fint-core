@@ -2,6 +2,7 @@ package no.fintlabs.provider.sync
 
 import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import no.fintlabs.provider.mongoTestContainer
 import no.fintlabs.provider.storage.EvictionService
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
@@ -27,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Query
-import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.Instant
@@ -48,7 +48,7 @@ class AutoRelationIT {
     companion object {
         @Container
         @JvmStatic
-        val MONGO: MongoDBContainer = MongoDBContainer("mongo:7.0")
+        val MONGO = mongoTestContainer()
     }
 
     private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "autorelation-it") }
