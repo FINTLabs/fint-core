@@ -6,10 +6,12 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class EndpointsServiceTest {
+    private val baseUrl = "https://beta.felleskomponent.no"
+
     private val endpointsService =
         EndpointsService(
             ConsumerConfiguration(
-                baseUrl = "https://beta.felleskomponent.no",
+                baseUrl = baseUrl,
                 orgIdValue = "fintlabs.no",
                 domain = "utdanning",
                 packageName = "vurdering",
@@ -18,23 +20,43 @@ class EndpointsServiceTest {
         )
 
     @Test
-    fun `package overview contains exactly the resources returned by FintModel`() {
-        val domainName = "utdanning"
-        val packageName = "vurdering"
-
-        val resourceRefs = FintModel.refsIn(domainName, packageName)
-        val expectedResourceNames =
-            resourceRefs
-                .map { it.resourceName }
+    fun `the overview has one entry per resource the model serves in the component`() {
+        val expected =
+            FintModel
+                .resourcesIn("utdanning", "vurdering")
+                .map { it.ref.resourceName }
                 .toSet()
 
-        val result =
-            endpointsService.componentOverview(
-                domainName = domainName,
-                packageName = packageName,
-            )
+        val result = endpointsService.componentOverview("utdanning", "vurdering")
 
-        assertEquals(expectedResourceNames, result.keys)
-        assertEquals(resourceRefs.size, result.size)
+        assertEquals(expected, result.keys)
+    }
+
+    @Test
+    fun `every url for a resource is built from the base url and the served path`() {
+        val result = endpointsService.componentOverview("utdanning", "vurdering")
+
+        val karakterverdi = result.getValue("karakterverdi")
+        assertEquals("$baseUrl/utdanning/vurdering/karakterverdi", karakterverdi.collectionUrl)
+        assertEquals("$baseUrl/utdanning/vurdering/karakterverdi/last-updated", karakterverdi.lastUpdatedUrl)
+        assertEquals("$baseUrl/utdanning/vurdering/karakterverdi/cache/size", karakterverdi.cacheSizeUrl)
+        assertEquals(listOf("$baseUrl/utdanning/vurdering/karakterverdi/systemid/{id:.+}"), karakterverdi.oneUrl)
+    }
+
+    @Test
+    fun `a common resource is served under the component it is reached from`() {
+        val result = endpointsService.componentOverview("utdanning", "elev")
+
+        val person = result.getValue("person")
+        assertEquals("$baseUrl/utdanning/elev/person", person.collectionUrl)
+        assertEquals(listOf("$baseUrl/utdanning/elev/person/fodselsnummer/{id:.+}"), person.oneUrl)
+    }
+
+    @Test
+    fun `an iso code list keeps its extra path segment in the urls but not in the key`() {
+        val result = endpointsService.componentOverview("felles", "kodeverk")
+
+        val landkode = result.getValue("landkode")
+        assertEquals("$baseUrl/felles/kodeverk/iso/landkode", landkode.collectionUrl)
     }
 }

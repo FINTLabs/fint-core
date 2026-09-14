@@ -46,20 +46,10 @@ class EndpointsService(
         domainName: String,
         packageName: String,
     ): ResourceEndpointsResponse =
-        FintModel.refsIn(domainName, packageName).associate { resourceRef ->
-            val metadata =
-                requireNotNull(
-                    FintModel.byPath(
-                        resourceRef.domainName,
-                        resourceRef.packageName,
-                        resourceRef.resourceName,
-                    ),
-                )
+        FintModel.resourcesIn(domainName, packageName).associate { (path, ref, metadata) ->
+            val collectionUrl = "${consumerConfiguration.baseUrl}/$path"
 
-            val resourcePath = requireNotNull(metadata.pathIn("$domainName/$packageName"))
-            val collectionUrl = "${consumerConfiguration.baseUrl}/$resourcePath"
-
-            resourceRef.resourceName to
+            ref.resourceName to
                 ResourceEndpointsDto(
                     lastUpdatedUrl = collectionUrl + EndpointsConstants.LAST_UPDATED,
                     cacheSizeUrl = collectionUrl + EndpointsConstants.CACHE_SIZE,
