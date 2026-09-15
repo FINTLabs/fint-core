@@ -9,6 +9,7 @@ import no.fintlabs.provider.event.NoRequestFoundException
 import no.fintlabs.provider.storage.ResourceIngest
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.fintlabs.provider.sync.InvalidSyncPageEntryException
+import no.fintlabs.provider.sync.MongoTransactions
 import no.novari.core.shared.event.ClaimOutcome
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
@@ -40,6 +41,7 @@ class ResponseEventService(
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val mongoTransactionTemplate: TransactionTemplate,
     private val clock: Clock,
+    private val transactions: MongoTransactions,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val storageMapper = FintJson.storageMapper()
@@ -62,7 +64,7 @@ class ResponseEventService(
         resourceWritePipeline.prepare(stored.toCoordinate())
 
         val outcome =
-            inTransactionWithRetry {
+            transactions.run {
                 val claim = eventStore.markAnswered(responseFintEvent, collectionName)
                 if (claim == ClaimOutcome.Claimed) persistEntity(stored.request, responseFintEvent)
                 claim
