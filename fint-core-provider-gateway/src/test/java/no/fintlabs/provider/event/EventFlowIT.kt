@@ -13,7 +13,7 @@ import no.novari.core.shared.event.toEventCollectionName
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
-import no.novari.core.shared.store.ResourceWrite
+import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.assertj.core.api.Assertions.assertThat
@@ -230,14 +230,14 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         val stale = Elev(systemId = Identifikator(identifikatorverdi = "123"), elevnummer = Identifikator(identifikatorverdi = "E-1"))
 
         val freshTime = Instant.ofEpochMilli(System.currentTimeMillis())
-        resourceStore.saveAll(listOf(ResourceWrite("123", resourceCollection, fresh, freshTime)))
-        resourceStore.saveAll(listOf(ResourceWrite("123", resourceCollection, stale, freshTime.minusSeconds(60))))
+        resourceStore.saveAll(listOf(Save("123", resourceCollection, fresh, freshTime)))
+        resourceStore.saveAll(listOf(Save("123", resourceCollection, stale, freshTime.minusSeconds(60))))
 
         val afterStale = resourceStore.findByResourceId("123", resourceCollection)
         assertThat(afterStale!!.lastModified).isEqualTo(freshTime)
         assertThat(afterStale.identifiers).hasSize(1)
 
-        resourceStore.saveAll(listOf(ResourceWrite("123", resourceCollection, stale, freshTime.plusSeconds(60))))
+        resourceStore.saveAll(listOf(Save("123", resourceCollection, stale, freshTime.plusSeconds(60))))
 
         val afterNewer = resourceStore.findByResourceId("123", resourceCollection)
         assertThat(afterNewer!!.lastModified).isEqualTo(freshTime.plusSeconds(60))

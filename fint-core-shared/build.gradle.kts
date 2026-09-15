@@ -5,6 +5,8 @@ plugins {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
     implementation("org.springframework.boot:spring-boot-starter")
+
+    testImplementation("org.testcontainers:testcontainers-mongodb")
 }
 
 tasks.named("bootJar") { enabled = false }

@@ -115,7 +115,7 @@ class AutoRelationIT {
     }
 
     @Test
-    fun `a tombstone (resource delition) is skipped without failing the batch`() {
+    fun `a tombstone for a resource that was never stored does not fail the batch`() {
         bufferReader.readMessage(
             listOf(
                 elevforholdRecord(resourceId = "EF-GONE", resource = null),
@@ -127,6 +127,20 @@ class AutoRelationIT {
         assertNull(
             mongoTemplate.findById("EF-GONE", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"),
         )
+    }
+
+    @Test
+    fun `a tombstone removes the edges the resource created and leaves other sources alone`() {
+        bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123"), elevforholdRecord(resourceId = "EF-999")))
+        assertEquals(4, allEdges().size)
+
+        bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123", resource = null)))
+
+        val remaining = allEdges()
+        assertEquals(2, remaining.size)
+        assertTrue(remaining.all { it.sourceId == "EF-999" })
+        assertNull(mongoTemplate.findById("EF-123", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
+        assertNotNull(mongoTemplate.findById("EF-999", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
     }
 
     @Test
@@ -167,8 +181,8 @@ class AutoRelationIT {
         assertTrue(unrelated.isEmpty())
     }
 
-    private fun elevforhold() =
-        Elevforhold(systemId = Identifikator(identifikatorverdi = "EF-123")).apply {
+    private fun elevforhold(systemId: String = "EF-123") =
+        Elevforhold(systemId = Identifikator(identifikatorverdi = systemId)).apply {
             addLink("elev", Link("elevnummer", "E-456"))
             addLink("skole", Link("skolenummer", "S-1"))
             addLink("fravarsregistreringer", Link("systemid", "FR-1"))
@@ -177,7 +191,7 @@ class AutoRelationIT {
 
     private fun elevforholdRecord(
         resourceId: String = "EF-123",
-        resource: Elevforhold? = elevforhold(),
+        resource: Elevforhold? = elevforhold(resourceId),
     ): ConsumerRecord<String, String> =
         ConsumerRecord<String, String>(
             "buffer-topic",
