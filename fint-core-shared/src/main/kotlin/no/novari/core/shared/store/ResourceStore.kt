@@ -1,7 +1,6 @@
 package no.novari.core.shared.store
 
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.fint.core.model.FintResource
 import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
@@ -17,56 +16,58 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
 ) {
+    private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
+
+    fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
+
     /**
-     * Inserts or updates a batch of resources, grouped by collection. Each write only takes
-     * effect if it isn't older than what's already stored, so a slow writer working through a
-     * backlog can never overwrite a newer write that already came in another way. If both writes
-     * have the exact same timestamp, the new one wins. The original `createdAt` value is always
-     * kept.
+     * Applies a batch of writes and deletes, grouped by collection. If the batch holds several
+     * operations for the same id, only the one with the newest timestamp is applied. Each
+     * operation also checks the stored `lastModified`, so a slow writer working through a
+     * backlog can never overwrite or delete a newer write that already came in another way. If
+     * both have the exact same timestamp, the new one wins. The original `createdAt` value is
+     * always kept.
      */
-    fun saveAll(writes: List<ResourceWrite>) {
-        if (writes.isEmpty()) return
-
-        writes
+    fun applyAll(operations: List<ResourceWrite>) =
+        operations
             .groupBy { it.collectionName }
-            .forEach { (collectionName, collectionWrites) ->
-                val latestWritesById = collectionWrites.associateBy { it.resourceId }
+            .forEach { (collectionName, collectionOperations) ->
+                ensureIndexes(collectionName)
 
-                val bulkOps =
-                    template.bulkOps(
-                        BulkOperations.BulkMode.UNORDERED,
-                        collectionName,
-                    )
+                val latestById =
+                    collectionOperations
+                        .sortedBy { it.timestamp }
+                        .associateBy { it.resourceId }
 
-                latestWritesById.values.forEach { write ->
-                    val query = Query.query(Criteria.where("_id").`is`(write.resourceId))
-                    bulkOps.upsert(query, write.toGuardedUpdate())
-                }
-
+                val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
+                latestById.values.forEach { bulkOps.add(it) }
                 bulkOps.execute()
             }
+
+    fun saveAll(writes: List<Save>) = applyAll(writes)
+
+    private fun BulkOperations.add(operation: ResourceWrite) {
+        val byId = Query.query(Criteria.where("_id").`is`(operation.resourceId))
+
+        when (operation) {
+            is Save -> upsert(byId, operation.toGuardedUpdate())
+            is Delete -> remove(byId.addCriteria(notNewerThan(operation.timestamp)))
+        }
     }
 
+    private fun notNewerThan(timestamp: Instant) = Criteria.where("lastModified").lte(Date.from(timestamp))
+
     /**
-     * Builds the update that enforces the "don't overwrite a newer write" rule from [saveAll].
-     * This check has to live inside the update itself and not the query, because of how upsert
-     * works: if the query matches, Mongo updates the document; if it doesn't, Mongo inserts a new
-     * one. Putting the timestamp check in the query would make an old write look like "no match",
-     * so Mongo would try to insert a second document with the same id and fail. Instead, the
-     * query only matches on id, and each field in the update uses `$cond` to decide for itself
-     * whether to keep the stored value or take the new one.
-     *
-     * Every field uses the exact same condition (via `keepUnlessStale`), so the write always
-     * applies fully or not at all. There's no way to end up with a document that's part old and
-     * part new.
+     * Only updates the document if its newer than the existing document.
      */
-    private fun ResourceWrite.toGuardedUpdate(): AggregationUpdate {
+    private fun Save.toGuardedUpdate(): AggregationUpdate {
         val incomingTimestamp = Date.from(timestamp)
         val identifierDocuments =
             resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }
@@ -173,9 +174,46 @@ class ResourceStore(
             ?.lastModified
     }
 
+    fun findIdentitiesOlderThan(
+        threshold: Instant,
+        collectionName: String,
+    ): List<ResourceIdentity> {
+        val query = Query.query(Criteria.where("lastModified").lt(Date.from(threshold)))
+        query.fields().include("identifiers")
+
+        return template.find(query, ResourceIdentity::class.java, collectionName)
+    }
+
+    fun deleteStaleByIds(
+        ids: Collection<String>,
+        threshold: Instant,
+        collectionName: String,
+    ): Long {
+        if (ids.isEmpty()) return 0
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("_id")
+                    .`in`(ids)
+                    .and("lastModified")
+                    .lt(Date.from(threshold)),
+            )
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
     private fun baseQuery(filter: Criteria?): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
             with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
         }
+
+    private fun ensureIndexes(collectionName: String) {
+        if (!indexedCollections.add(collectionName)) return
+
+        template.indexOps(collectionName).createIndex(
+            Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+        )
+    }
 }

@@ -6,10 +6,8 @@ import java.time.Duration
 @ConfigurationProperties(prefix = "fint.provider.kafka")
 data class KafkaProperties(
     val replicas: Int = 2,
-    val entity: EntityKafkaProperties = EntityKafkaProperties(),
     val adapter: AdapterKafkaProperties = AdapterKafkaProperties(),
     val event: EventKafkaProperties = EventKafkaProperties(),
-    val relationUpdate: RelationUpdateKafkaProperties = RelationUpdateKafkaProperties(),
 )
 
 data class EventKafkaProperties(
@@ -26,16 +24,6 @@ data class ProducerProperties(
 
 data class ConsumerProperties(
     val concurrency: Int = 1,
-)
-
-data class EntityKafkaProperties(
-    val partitions: Int = 6,
-    val retentionTime: Duration = Duration.ofDays(30),
-)
-
-data class RelationUpdateKafkaProperties(
-    val partitions: Int = 6,
-    val retentionTime: Duration = Duration.ofDays(30),
 )
 
 data class AdapterKafkaProperties(

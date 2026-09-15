@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   changes:
@@ -14,25 +14,16 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            shared: &shared
-              - 'fint-core-shared/**'
-              - 'buildSrc/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-              - 'gradle.properties'
-              - 'gradle/**'
-              - 'gradlew'
-              - 'gradlew.bat'
-            consumer:
-              - *shared
-              - 'fint-core-consumer/**'
-            provider:
-              - *shared
-              - 'fint-core-provider-gateway/**'
+          fetch-depth: 0
+      - id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          else
+            base="${{ github.event.before }}"
+          fi
+          .github/scripts/changed-services.sh "$base" HEAD | tee -a "$GITHUB_OUTPUT"
 
   consumer:
     needs: changes
@@ -73,7 +64,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :fint-core-shared:check
 
-  # Single gate for branch protection: green when nothing failed (skipped == ok).
   ci-ok:
     needs: [consumer, provider, shared]
     if: always()

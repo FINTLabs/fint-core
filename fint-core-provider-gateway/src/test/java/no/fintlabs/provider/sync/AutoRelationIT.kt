@@ -1,6 +1,9 @@
 package no.fintlabs.provider.sync
 
 import com.mongodb.client.MongoClients
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import no.fintlabs.provider.mongoTestContainer
+import no.fintlabs.provider.storage.EvictionService
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
@@ -25,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.query.Query
-import org.testcontainers.containers.MongoDBContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.Instant
@@ -46,13 +48,20 @@ class AutoRelationIT {
     companion object {
         @Container
         @JvmStatic
-        val MONGO: MongoDBContainer = MongoDBContainer("mongo:7.0")
+        val MONGO = mongoTestContainer()
     }
 
     private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "autorelation-it") }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val bufferReader by lazy { BufferReader(ResourceWritePipeline(resourceStore, relationEdgeStore)) }
+    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()) }
+    private val syncProgressStore by lazy { SyncProgressStore(mongoTemplate) }
+    private val bufferReader by lazy {
+        BufferReader(
+            ResourceWritePipeline(resourceStore, relationEdgeStore),
+            SyncCompletionTracker(syncProgressStore, evictionService),
+        )
+    }
 
     private val edgeCollection = "fintlabs_no_relation_edges"
     private val storageMapper = FintJson.storageMapper()
@@ -106,7 +115,7 @@ class AutoRelationIT {
     }
 
     @Test
-    fun `a tombstone (resource delition) is skipped without failing the batch`() {
+    fun `a tombstone for a resource that was never stored does not fail the batch`() {
         bufferReader.readMessage(
             listOf(
                 elevforholdRecord(resourceId = "EF-GONE", resource = null),
@@ -118,6 +127,20 @@ class AutoRelationIT {
         assertNull(
             mongoTemplate.findById("EF-GONE", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"),
         )
+    }
+
+    @Test
+    fun `a tombstone removes the edges the resource created and leaves other sources alone`() {
+        bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123"), elevforholdRecord(resourceId = "EF-999")))
+        assertEquals(4, allEdges().size)
+
+        bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123", resource = null)))
+
+        val remaining = allEdges()
+        assertEquals(2, remaining.size)
+        assertTrue(remaining.all { it.sourceId == "EF-999" })
+        assertNull(mongoTemplate.findById("EF-123", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
+        assertNotNull(mongoTemplate.findById("EF-999", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
     }
 
     @Test
@@ -158,8 +181,8 @@ class AutoRelationIT {
         assertTrue(unrelated.isEmpty())
     }
 
-    private fun elevforhold() =
-        Elevforhold(systemId = Identifikator(identifikatorverdi = "EF-123")).apply {
+    private fun elevforhold(systemId: String = "EF-123") =
+        Elevforhold(systemId = Identifikator(identifikatorverdi = systemId)).apply {
             addLink("elev", Link("elevnummer", "E-456"))
             addLink("skole", Link("skolenummer", "S-1"))
             addLink("fravarsregistreringer", Link("systemid", "FR-1"))
@@ -168,7 +191,7 @@ class AutoRelationIT {
 
     private fun elevforholdRecord(
         resourceId: String = "EF-123",
-        resource: Elevforhold? = elevforhold(),
+        resource: Elevforhold? = elevforhold(resourceId),
     ): ConsumerRecord<String, String> =
         ConsumerRecord<String, String>(
             "buffer-topic",

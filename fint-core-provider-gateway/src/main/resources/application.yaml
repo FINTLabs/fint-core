@@ -1,6 +1,6 @@
 fint:
   provider:
-    org-id: fintlabs.no
+    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     buffer:
       topic: ${fint.provider.org-id}
       consumer:
@@ -22,7 +22,7 @@ spring:
       dialect: org.hibernate.dialect.PostgreSQLDialect
       enable_lazy_load_no_trans: true
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
   datasource:
     url: ${fint.database.url}
     username: ${fint.database.username}
@@ -30,9 +30,10 @@ spring:
     driver-class-name: org.postgresql.Driver
   config:
     import:
-      - classpath:components.yaml
       - classpath:cleanup-topics.yaml
       - classpath:shared-mongodb.yaml
+  mongodb:
+    database: fint
   threads:
     virtual:
       enabled: true

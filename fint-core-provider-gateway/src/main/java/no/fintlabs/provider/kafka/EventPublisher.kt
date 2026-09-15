@@ -17,7 +17,6 @@ import java.util.concurrent.CompletableFuture
 @Service
 class EventPublisher(
     private val kafkaTemplate: KafkaTemplate<String, Any>,
-    private val providerProperties: ProviderProperties,
     @param:Value("\${spring.application.name:provider}") private val applicationName: String,
 ) {
     fun publish(
@@ -30,7 +29,7 @@ class EventPublisher(
         key: String?,
         value: Any,
     ): CompletableFuture<SendResult<String, Any>> {
-        val topic = KafkaTopicNames.eventTopic(providerProperties.orgId, eventName)
+        val topic = KafkaTopicNames.eventTopic(eventName)
         val record = ProducerRecord<String, Any>(topic, key, value)
         record.headers().add(
             RecordHeader(ORIGIN_APPLICATION_ID, applicationName.toByteArray(StandardCharsets.UTF_8)),

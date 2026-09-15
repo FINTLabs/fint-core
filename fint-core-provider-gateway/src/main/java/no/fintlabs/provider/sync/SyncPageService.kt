@@ -3,13 +3,13 @@ package no.fintlabs.provider.sync
 import lombok.RequiredArgsConstructor
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncType
+import no.fintlabs.provider.kafka.topic.TopicNamesConstants
 import no.novari.core.shared.model.ResourceCoordinate
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.concurrent.CompletableFuture
 import kotlin.time.measureTime
 
-@RequiredArgsConstructor
 @Service
 class SyncPageService(
     private val bufferWriter: BufferWriter,
@@ -29,9 +29,7 @@ class SyncPageService(
         // This lets us see in Status-Service when we have processed this page
         syncPage.metadata.time = System.currentTimeMillis()
 
-        val syncType = syncPage.syncType.toString().lowercase()
-        val eventName = "adapter-$syncType-sync"
-        metaDataKafkaProducer.send(syncPage.metadata, eventName) // Send to Status-Service
+        metaDataKafkaProducer.send(syncPage.metadata, syncPage.syncType.toEventName()) // Send to Status-Service
 
         sendToBuffer(syncPage, coords)
     }
@@ -40,6 +38,8 @@ class SyncPageService(
         page: SyncPage,
         coords: ResourceCoordinate,
     ) {
+        if (page.isEmptyFullSync()) return sendSyncResetMarker(page, coords)
+
         val futures =
             page.resources.map { syncPageEntry ->
                 bufferWriter
@@ -48,6 +48,30 @@ class SyncPageService(
             }
         CompletableFuture.allOf(*futures.toTypedArray()).join()
     }
+
+    private fun sendSyncResetMarker(
+        page: SyncPage,
+        coords: ResourceCoordinate,
+    ) {
+        log.info(
+            "Full sync {} for {} carries no resources, sending reset marker",
+            page.metadata.corrId,
+            page.metadata.uriRef,
+        )
+        bufferWriter
+            .sendSyncResetMarker(page, coords)
+            .whenComplete { _, throwable -> logSendOutcome(page, throwable) }
+            .join()
+    }
+
+    private fun SyncPage.isEmptyFullSync() = syncType == SyncType.FULL && metadata.totalSize == 0L
+
+    private fun SyncType.toEventName() =
+        when (this) {
+            SyncType.FULL -> TopicNamesConstants.ADAPTER_FULL_SYNC
+            SyncType.DELTA -> TopicNamesConstants.ADAPTER_DELTA_SYNC
+            SyncType.DELETE -> TopicNamesConstants.ADAPTER_DELETE_SYNC
+        }
 
     private fun logSendOutcome(
         page: SyncPage,

@@ -4,6 +4,7 @@ server:
     context-path: /provider
 
 fint:
+  org-id: novari.no
   provider:
     kafka:
       replicas: 1

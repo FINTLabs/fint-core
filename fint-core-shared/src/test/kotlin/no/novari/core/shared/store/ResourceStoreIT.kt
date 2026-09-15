@@ -1,92 +1,131 @@
 package no.novari.core.shared.store
 
 import com.mongodb.client.MongoClients
-import org.bson.Document
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.BeforeAll
+import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
+import no.novari.fint.core.model.utdanning.elev.Elev
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
-import org.springframework.data.mongodb.core.query.Criteria
+import org.testcontainers.junit.jupiter.Container
+import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.mongodb.MongoDBContainer
 import java.time.Instant
-import java.util.Date
-import kotlin.test.assertEquals
 
-/**
- * Tests the store methods behind `total_items`. Five entries are stored with timestamps 10 to 50.
- * A timestamp filter uses `lastModified >= since`, so the entry exactly at the timestamp is
- * included. The count and the page use the same filter, so the count always matches what the
- * page shows.
- */
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Testcontainers
 class ResourceStoreIT {
-    private val mongo = MongoDBContainer("mongo:7.0")
-    private lateinit var template: MongoTemplate
-    private lateinit var store: ResourceStore
-    private val collection = "fintlabs_no_utdanning_elev_elev"
+    private val store = ResourceStore(template, FintResourceBsonConverter())
 
-    @BeforeAll
-    fun start() {
-        mongo.start()
-        template = MongoTemplate(SimpleMongoClientDatabaseFactory(MongoClients.create(mongo.connectionString), "test"))
-        store = ResourceStore(template, FintResourceBsonConverter())
+    companion object {
+        @Container
+        val mongo = MongoDBContainer("mongo:8.0.4")
+
+        private val collection = "test_org_no_utdanning_elev_elev"
+        private val otherCollection = "other_org_no_utdanning_elev_elev"
+        private val base = Instant.parse("2026-09-11T10:00:00Z")
+        private val template by lazy { MongoTemplate(MongoClients.create(mongo.connectionString), "test") }
     }
-
-    @AfterAll
-    fun stop() = mongo.stop()
 
     @BeforeEach
-    fun seed() {
+    fun dropCollections() {
         template.dropCollection(collection)
-        listOf("A" to 10L, "B" to 20L, "C" to 30L, "D" to 40L, "E" to 50L).forEach { (id, timestamp) ->
-            template.save(
-                Document("_id", id)
-                    .append("data", Document())
-                    .append("identifiers", emptyList<Document>())
-                    .append("createdAt", Date.from(Instant.ofEpochMilli(timestamp)))
-                    .append("lastModified", Date.from(Instant.ofEpochMilli(timestamp))),
-                collection,
+        template.dropCollection(otherCollection)
+    }
+
+    @Test
+    fun `a delete older than the stored write leaves the document unchanged`() {
+        store.saveAll(listOf(save("1", base)))
+
+        store.applyAll(listOf(Delete("1", collection, base.minusSeconds(60))))
+
+        val entry = store.findByResourceId("1", collection)
+        assertThat(entry!!.lastModified).isEqualTo(base)
+    }
+
+    @Test
+    fun `a delete newer than the stored write removes the document`() {
+        store.saveAll(listOf(save("1", base)))
+
+        store.applyAll(listOf(Delete("1", collection, base.plusSeconds(60))))
+
+        assertThat(store.findByResourceId("1", collection)).isNull()
+    }
+
+    @Test
+    fun `a delete with the same timestamp as the stored write removes the document`() {
+        store.saveAll(listOf(save("1", base)))
+
+        store.applyAll(listOf(Delete("1", collection, base)))
+
+        assertThat(store.findByResourceId("1", collection)).isNull()
+    }
+
+    @Test
+    fun `in one batch a newer save wins over an older delete listed after it`() {
+        store.applyAll(
+            listOf(
+                save("1", base.plusSeconds(60)),
+                Delete("1", collection, base),
+            ),
+        )
+
+        val entry = store.findByResourceId("1", collection)
+        assertThat(entry!!.lastModified).isEqualTo(base.plusSeconds(60))
+    }
+
+    @Test
+    fun `in one batch a newer delete wins over an older save listed after it`() {
+        store.applyAll(
+            listOf(
+                Delete("1", collection, base.plusSeconds(60)),
+                save("1", base),
+            ),
+        )
+
+        assertThat(store.findByResourceId("1", collection)).isNull()
+    }
+
+    @Test
+    fun `in one batch two saves for the same id keep the newer one regardless of order`() {
+        val newer =
+            Elev(
+                systemId = Identifikator(identifikatorverdi = "1"),
+                elevnummer = Identifikator(identifikatorverdi = "E-1"),
             )
-        }
+
+        store.applyAll(
+            listOf(
+                Save("1", collection, newer, base.plusSeconds(60)),
+                save("1", base),
+            ),
+        )
+
+        val entry = store.findByResourceId("1", collection)
+        assertThat(entry!!.lastModified).isEqualTo(base.plusSeconds(60))
+        assertThat(entry.identifiers).hasSize(2)
     }
 
     @Test
-    fun `count without criteria is the collection size`() {
-        assertEquals(5, store.count(null, collection))
+    fun `a delete for an id that was never stored does nothing`() {
+        store.applyAll(listOf(Delete("missing", collection, base)))
+
+        assertThat(template.getCollection(collection).countDocuments()).isZero()
     }
 
     @Test
-    fun `count with a timestamp includes entries at the boundary`() {
-        assertEquals(3, store.count(since(30), collection))
+    fun `a delete in one collection does not touch the same id in another collection`() {
+        store.saveAll(listOf(save("1", base), Save("1", otherCollection, elev("1"), base)))
+
+        store.applyAll(listOf(Delete("1", otherCollection, base.plusSeconds(60))))
+
+        assertThat(store.findByResourceId("1", collection)).isNotNull()
+        assertThat(store.findByResourceId("1", otherCollection)).isNull()
     }
 
-    @Test
-    fun `count with a timestamp after every entry is 0`() {
-        assertEquals(0, store.count(since(100), collection))
-    }
+    private fun save(
+        id: String,
+        timestamp: Instant,
+    ) = Save(id, collection, elev(id), timestamp)
 
-    @Test
-    fun `a page without timestamp skips by offset`() {
-        assertEquals(listOf("C", "D"), store.findPage(null, 2, 2, collection).map { it.id })
-    }
-
-    @Test
-    fun `a page with a timestamp starts at the boundary`() {
-        assertEquals(listOf("C", "D"), store.findPage(since(30), 2, 0, collection).map { it.id })
-    }
-
-    @Test
-    fun `offset counts from the timestamp, not from the start of the collection`() {
-        assertEquals(listOf("E"), store.findPage(since(30), 2, 2, collection).map { it.id })
-    }
-
-    @Test
-    fun `findAll with a timestamp returns everything from the timestamp onward`() {
-        assertEquals(listOf("C", "D", "E"), store.findAll(since(30), collection).map { it.id })
-    }
-
-    private fun since(timestamp: Long) = Criteria.where("lastModified").gte(Instant.ofEpochMilli(timestamp))
+    private fun elev(id: String) = Elev(systemId = Identifikator(identifikatorverdi = id))
 }

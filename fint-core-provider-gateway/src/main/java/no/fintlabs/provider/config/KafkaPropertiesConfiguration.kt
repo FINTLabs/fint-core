@@ -8,9 +8,6 @@ class KafkaPropertiesConfiguration(
     private val kafkaProperties: KafkaProperties,
 ) {
     @Bean
-    fun entityKafkaProperties(): EntityKafkaProperties = kafkaProperties.entity
-
-    @Bean
     fun adapterKafkaProperties(): AdapterKafkaProperties = kafkaProperties.adapter
 
     @Bean
@@ -24,7 +21,4 @@ class KafkaPropertiesConfiguration(
 
     @Bean
     fun requestConsumerProperties(): ConsumerProperties = kafkaProperties.event.requestConsumer
-
-    @Bean
-    fun relationUpdateKafkaProperties(): RelationUpdateKafkaProperties = kafkaProperties.relationUpdate
 }

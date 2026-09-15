@@ -8,14 +8,25 @@ import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
+import org.springframework.data.mongodb.core.query.UpdateDefinition
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
-data class RelationEdgeWrite(
-    val collectionName: String,
-    val edge: RelationEdge,
-)
+sealed interface RelationEdgeWrite {
+    val collectionName: String
+
+    data class Save(
+        override val collectionName: String,
+        val edge: RelationEdge,
+    ) : RelationEdgeWrite
+
+    data class Delete(
+        override val collectionName: String,
+        val sourceType: String,
+        val sourceId: String,
+    ) : RelationEdgeWrite
+}
 
 @Service
 class RelationEdgeStore(
@@ -33,10 +44,10 @@ class RelationEdgeStore(
      * after a re-sync, has no extra effect: `createdAt` is only set on the first insert, which is
      * why this uses [Update] instead of replacing the whole document.
      */
-    fun saveAll(writes: List<RelationEdgeWrite>) {
+    fun applyAll(writes: List<RelationEdgeWrite>) {
         if (writes.isEmpty()) return
 
-        val now = Instant.now()
+        val timestamp = Instant.now()
 
         writes
             .groupBy { it.collectionName }
@@ -44,35 +55,102 @@ class RelationEdgeStore(
                 ensureIndexes(collectionName)
 
                 val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
-
-                collectionWrites
-                    .map { it.edge }
-                    .associateBy { it.id }
-                    .values
-                    .forEach { edge ->
-                        val query = Query.query(Criteria.where("_id").`is`(edge.id))
-                        val update =
-                            Update()
-                                .set("sourceIdField", edge.sourceIdField)
-                                .set("sourceIdValue", edge.sourceIdValue)
-                                .set("inverseName", edge.inverseName)
-                                .set("targetType", edge.targetType)
-                                .set("targetIdField", edge.targetIdField)
-                                .set("targetIdValue", edge.targetIdValue)
-                                .setOnInsert("createdAt", now)
-                        bulkOps.upsert(query, update)
-                    }
-
+                collectionWrites.forEach { bulkOps.add(it, timestamp) }
                 bulkOps.execute()
             }
     }
+
+    private fun BulkOperations.add(
+        write: RelationEdgeWrite,
+        timestamp: Instant,
+    ): BulkOperations =
+        when (write) {
+            is RelationEdgeWrite.Save -> {
+                upsert(Query.query(Criteria.where("_id").`is`(write.edge.id)), write.edge.toUpdate(timestamp))
+            }
+
+            is RelationEdgeWrite.Delete -> {
+                remove(
+                    Query.query(
+                        Criteria
+                            .where("sourceType")
+                            .`is`(write.sourceType)
+                            .and("sourceId")
+                            .`is`(write.sourceId),
+                    ),
+                )
+            }
+        }
+
+    private fun RelationEdge.toUpdate(timestamp: Instant): UpdateDefinition =
+        Update()
+            .set("sourceType", sourceType)
+            .set("sourceId", sourceId)
+            .set("sourceIdField", sourceIdField)
+            .set("sourceIdValue", sourceIdValue)
+            .set("inverseName", inverseName)
+            .set("targetType", targetType)
+            .set("targetIdField", targetIdField)
+            .set("targetIdValue", targetIdValue)
+            .setOnInsert("createdAt", timestamp)
 
     fun findByTargets(
         collectionName: String,
         targetType: String,
         identifiers: Collection<IdentifierRef>,
     ): List<RelationEdge> {
-        if (identifiers.isEmpty()) return emptyList()
+        val query = targetQuery(targetType, identifiers) ?: return emptyList()
+        return template.find(query, RelationEdge::class.java, collectionName)
+    }
+
+    fun findAllByTargetType(
+        collectionName: String,
+        targetType: String,
+    ): List<RelationEdge> =
+        template.find(
+            Query.query(Criteria.where("targetType").`is`(targetType)),
+            RelationEdge::class.java,
+            collectionName,
+        )
+
+    fun deleteBySources(
+        collectionName: String,
+        sourceType: String,
+        sourceIds: Collection<String>,
+    ): Long {
+        if (sourceIds.isEmpty()) return 0
+
+        ensureIndexes(collectionName)
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("sourceType")
+                    .`is`(sourceType)
+                    .and("sourceId")
+                    .`in`(sourceIds.distinct()),
+            )
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
+    fun deleteByTargets(
+        collectionName: String,
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+    ): Long {
+        val query = targetQuery(targetType, identifiers) ?: return 0
+
+        ensureIndexes(collectionName)
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
+    private fun targetQuery(
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+    ): Query? {
+        if (identifiers.isEmpty()) return null
 
         val branches =
             identifiers
@@ -87,19 +165,8 @@ class RelationEdgeStore(
                         .`in`(values.distinct())
                 }
 
-        val query = Query.query(Criteria().orOperator(branches))
-        return template.find(query, RelationEdge::class.java, collectionName)
+        return Query.query(Criteria().orOperator(branches))
     }
-
-    fun findAllByTargetType(
-        collectionName: String,
-        targetType: String,
-    ): List<RelationEdge> =
-        template.find(
-            Query.query(Criteria.where("targetType").`is`(targetType)),
-            RelationEdge::class.java,
-            collectionName,
-        )
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -110,6 +177,13 @@ class RelationEdgeStore(
                 .on("targetIdField", Sort.Direction.ASC)
                 .on("targetIdValue", Sort.Direction.ASC)
                 .named("target_lookup"),
+        )
+
+        template.indexOps(collectionName).createIndex(
+            Index()
+                .on("sourceType", Sort.Direction.ASC)
+                .on("sourceId", Sort.Direction.ASC)
+                .named("source_lookup"),
         )
     }
 }

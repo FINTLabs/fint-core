@@ -231,6 +231,8 @@ class ResourceServiceTest {
                             targetIdField = "systemid",
                             targetIdValue = systemId,
                         ),
+                    sourceType = "utdanning/vurdering/fravarsregistrering",
+                    sourceId = "FR-9",
                     sourceIdField = "systemid",
                     sourceIdValue = "FR-9",
                     inverseName = "fravarsregistrering",
