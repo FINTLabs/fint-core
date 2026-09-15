@@ -1,7 +1,7 @@
 package no.fintlabs.provider.sync
 
 import com.mongodb.MongoException
-import com.sun.org.slf4j.internal.LoggerFactory
+import org.slf4j.LoggerFactory
 import org.springframework.data.mongodb.MongoDatabaseFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.support.TransactionSynchronizationManager
