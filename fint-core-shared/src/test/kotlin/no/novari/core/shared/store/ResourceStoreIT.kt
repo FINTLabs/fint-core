@@ -18,7 +18,7 @@ class ResourceStoreIT {
 
     companion object {
         @Container
-        val mongo = MongoDBContainer("mongo:7.0")
+        val mongo = MongoDBContainer("mongo:8.0.4")
 
         private val collection = "test_org_no_utdanning_elev_elev"
         private val otherCollection = "other_org_no_utdanning_elev_elev"
