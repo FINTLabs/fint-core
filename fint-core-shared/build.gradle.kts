@@ -11,3 +11,7 @@ dependencies {
 
 tasks.named("bootJar") { enabled = false }
 tasks.named("jar") { enabled = true }
+
+tasks.test {
+    (project.findProperty("benchmark.documents") as String?)?.let { systemProperty("benchmark.documents", it) }
+}
