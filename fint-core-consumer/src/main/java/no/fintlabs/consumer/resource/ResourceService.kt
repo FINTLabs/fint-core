@@ -29,19 +29,23 @@ class ResourceService(
         offset: Long,
         sinceTimeStamp: Long?,
         filter: String?,
-    ): FintResourcesResponse { // Can return an empty response
-        val criteria = sinceTimeStamp.toCriteria()
+    ): FintResourcesResponse {
+        val since = sinceTimeStamp?.takeIf { it > 0 } ?: 0L
+        val sinceCriteria = since.toCriteria()
+        val collectionName = resourceCoordinate.toCollectionName()
+        val paged = size > 0
+
         val entries: List<ResourceEntry> =
-            if (size == 0) {
-                // TODO: can be removed in the future once we force pagination in the API
-                resourceStore.findAll(criteria, resourceCoordinate.toCollectionName())
+            if (paged) {
+                resourceStore.findPage(sinceCriteria, size, offset, collectionName)
             } else {
-                resourceStore.findPage(criteria, size, offset, resourceCoordinate.toCollectionName())
+                // TODO: can be removed in the future once we force pagination in the API
+                resourceStore.findAll(sinceCriteria, collectionName)
             }
+        val totalItems = if (paged) resourceStore.count(sinceCriteria, collectionName).toInt() else entries.size
 
         val resources = entries.toFintResources(resourceCoordinate)
-        val fullDump = size == 0 && (sinceTimeStamp == null || sinceTimeStamp == 0L)
-        mergeRelationEdges(resourceCoordinate, entries, resources, fullDump)
+        mergeRelationEdges(resourceCoordinate, entries, resources, fullDump = !paged && since == 0L)
 
         return createFintResourcesResponse(
             consumerConfiguration.baseUrl,
@@ -49,7 +53,8 @@ class ResourceService(
             resources,
             offset,
             size,
-            resources.size,
+            totalItems,
+            since,
         )
     }
 
@@ -117,5 +122,6 @@ class ResourceService(
     private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
         map { it.toFintResource(resourceCoordinate) }
 
-    private fun Long?.toCriteria() = this?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(this)) }
+    private fun Long.toCriteria(): Criteria? =
+        takeIf { it > 0 }?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(it)) }
 }
