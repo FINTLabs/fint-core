@@ -142,17 +142,27 @@ class ResourceStore(
     ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset), collectionName)
 
     /**
-     * Counts the entries that match [filter]. When [filter] is null, every entry in the collection
-     * is counted. Paged reads use this number as `total_items`, so [findPage] and this method must
-     * be called with the same filter.
+     * Counts the entries that match [filter]. Paged reads use this number as `total_items` and
+     * `/cache/size` reports it too, so [findPage] and this method must be called with the same
+     * filter.
+     *
+     * Without a filter the number is read from the counter Mongo keeps for the collection. Mongo
+     * updates that counter on every insert and delete, and reading it takes the same time no
+     * matter how many entries the collection holds, where counting the documents would scan all
+     * of them. The counter is only wrong after a Mongo crash, by roughly the writes from the last
+     * minute before the crash, until `validate` has run on the collection. With a filter the
+     * matching documents are counted. The consumer's `sinceTimeStamp` filter is served by the
+     * `last_modified` index.
      */
     fun count(
         filter: Criteria?,
         collectionName: String,
-    ): Long {
-        val query = Query().apply { filter?.let { addCriteria(it) } }
-        return template.exactCount(query, ResourceEntry::class.java, collectionName)
-    }
+    ): Long =
+        if (filter == null) {
+            template.estimatedCount(collectionName)
+        } else {
+            template.exactCount(Query.query(filter), ResourceEntry::class.java, collectionName)
+        }
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
 
