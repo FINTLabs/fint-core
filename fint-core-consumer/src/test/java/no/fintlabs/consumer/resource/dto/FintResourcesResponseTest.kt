@@ -15,6 +15,7 @@ class FintResourcesResponseTest {
         offset: Long,
         size: Int,
         totalItems: Int,
+        sinceTimeStamp: Long = 0,
     ) = createFintResourcesResponse(
         baseUrl,
         resourceUri,
@@ -22,6 +23,7 @@ class FintResourcesResponseTest {
         offset,
         size,
         totalItems,
+        sinceTimeStamp,
     )
 
     // If only one page, should only have self
@@ -94,6 +96,46 @@ class FintResourcesResponseTest {
         val links = page(entryCount = 4, offset = 0, size = 0, totalItems = 4).links
 
         assertEquals(1, links.size)
+        assertEquals("$baseUrl/$resourceUri", links["self"]?.single()?.href)
+    }
+
+    @Test
+    fun `pagination links keep sinceTimeStamp`() {
+        val links = page(entryCount = 5, offset = 5, size = 5, totalItems = 12, sinceTimeStamp = 1000).links
+
+        assertEquals("$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=5&size=5", links["self"]?.single()?.href)
+        assertEquals("$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=0&size=5", links["prev"]?.single()?.href)
+        assertEquals("$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=10&size=5", links["next"]?.single()?.href)
+    }
+
+    @Test
+    fun `no next link when everything since the timestamp fits on one page`() {
+        val links = page(entryCount = 3, offset = 0, size = 10, totalItems = 3, sinceTimeStamp = 1000).links
+
+        assertEquals(setOf("self"), links.keys)
+    }
+
+    @Test
+    fun `size 0 with sinceTimeStamp gives an unpaged self link that keeps the timestamp`() {
+        val links = page(entryCount = 3, offset = 0, size = 0, totalItems = 3, sinceTimeStamp = 1000).links
+
+        assertEquals(setOf("self"), links.keys)
+        assertEquals("$baseUrl/$resourceUri?sinceTimeStamp=1000", links["self"]?.single()?.href)
+    }
+
+    @Test
+    fun `links without sinceTimeStamp are unchanged`() {
+        val links = page(entryCount = 10, offset = 0, size = 10, totalItems = 100).links
+
+        assertEquals(setOf("self", "next"), links.keys)
+        assertEquals("$baseUrl/$resourceUri?offset=0&size=10", links["self"]?.single()?.href)
+        assertEquals("$baseUrl/$resourceUri?offset=10&size=10", links["next"]?.single()?.href)
+    }
+
+    @Test
+    fun `a negative size is unpaged`() {
+        val links = page(entryCount = 3, offset = 7, size = -1, totalItems = 3).links
+
         assertEquals("$baseUrl/$resourceUri", links["self"]?.single()?.href)
     }
 }

@@ -4,24 +4,36 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
+import no.novari.core.shared.store.Delete
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.ResourceWrite
+import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
 
-data class ResourceIngest(
-    val coordinate: ResourceCoordinate,
-    val resourceId: String,
-    val resource: FintResource,
-    val timestamp: Instant,
-)
+sealed interface ResourceIngest {
+    val coordinate: ResourceCoordinate
+    val resourceId: String
+    val timestamp: Instant
+
+    data class Save(
+        val resource: FintResource,
+        override val coordinate: ResourceCoordinate,
+        override val resourceId: String,
+        override val timestamp: Instant,
+    ) : ResourceIngest
+
+    data class Delete(
+        override val coordinate: ResourceCoordinate,
+        override val resourceId: String,
+        override val timestamp: Instant,
+    ) : ResourceIngest
+}
 
 /**
- * The one way a resource lands in storage: self links stripped, the resource upserted, and its
- * relation edges extracted and upserted. The buffer reader applies sync batches through this
- * and the provider's event response path applies single writes through it, so the two write
- * paths cannot drift apart.
+ * A class that focuses on inserting and deleting resources and its related relation edges.
+ * This exists because events and buffered resources has the same logic for insertion/deletion.
  */
 @Service
 class ResourceWritePipeline(
@@ -40,27 +52,46 @@ class ResourceWritePipeline(
     fun apply(ingest: ResourceIngest) = applyAll(listOf(ingest))
 
     fun applyAll(ingests: List<ResourceIngest>) {
-        if (ingests.isEmpty()) return
+        val saves = ingests.filterIsInstance<ResourceIngest.Save>()
+        saves.forEach { it.resource.removeSelfLinks() }
 
-        ingests.forEach { it.resource.removeSelfLinks() }
-        resourceStore.saveAll(ingests.toResourceWrites())
-        relationEdgeStore.saveAll(ingests.toRelationEdgeWrites())
+        resourceStore.applyAll(ingests.map { it.toResourceWrite() })
+        relationEdgeStore.applyAll(ingests.flatMap { it.toRelationEdgeWrites() })
     }
 
-    private fun List<ResourceIngest>.toResourceWrites() =
-        map {
-            ResourceWrite(
-                resourceId = it.resourceId,
-                collectionName = it.coordinate.toCollectionName(),
-                resource = it.resource,
-                timestamp = it.timestamp,
-            )
+    private fun ResourceIngest.toResourceWrite(): ResourceWrite =
+        when (this) {
+            is ResourceIngest.Save -> {
+                Save(
+                    resourceId = resourceId,
+                    collectionName = coordinate.toCollectionName(),
+                    resource = resource,
+                    timestamp = timestamp,
+                )
+            }
+
+            is ResourceIngest.Delete -> {
+                Delete(
+                    resourceId = resourceId,
+                    collectionName = coordinate.toCollectionName(),
+                    timestamp = timestamp,
+                )
+            }
         }
 
-    private fun List<ResourceIngest>.toRelationEdgeWrites() =
-        flatMap { ingest ->
-            RelationEdgeFactory
-                .createRelationEdges(ingest.coordinate, ingest.resourceId, ingest.resource)
-                .map { RelationEdgeWrite(ingest.coordinate.toEdgeCollectionName(), it) }
+    private fun ResourceIngest.toRelationEdgeWrites(): List<RelationEdgeWrite> {
+        val collectionName = coordinate.toEdgeCollectionName()
+
+        return when (this) {
+            is ResourceIngest.Save -> {
+                RelationEdgeFactory
+                    .createRelationEdges(coordinate, resourceId, resource)
+                    .map { RelationEdgeWrite.Save(collectionName, it) }
+            }
+
+            is ResourceIngest.Delete -> {
+                listOf(RelationEdgeWrite.Delete(collectionName, coordinate.toResourceUri(), resourceId))
+            }
         }
+    }
 }
