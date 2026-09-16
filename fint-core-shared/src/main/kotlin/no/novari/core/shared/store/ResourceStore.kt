@@ -2,7 +2,6 @@ package no.novari.core.shared.store
 
 import no.novari.core.shared.model.ResourceCoordinate
 import org.bson.Document
-import org.springframework.data.annotation.Id
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -19,11 +18,6 @@ import java.time.Instant
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
-data class ResourceTimestamp(
-    @Id val id: String,
-    val lastModified: Instant,
-)
-
 @Service
 class ResourceStore(
     private val template: MongoTemplate,
@@ -34,13 +28,17 @@ class ResourceStore(
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
-     * Applies a batch of writes and deletes, grouped by collection. If the batch holds several
-     * operations for the same id, only the one with the newest timestamp is applied.
-     * Each operation also checks the stored `lastModified`, so a late resource cannot update a newer one.
-     * If both have the exact same timestamp, the new one wins. The original `createdAt` value is
+     * Applies a batch of writes and deletes, grouped by collection, and returns the writes that
+     * took effect. If the batch holds several operations for the same id, only the one with the
+     * newest timestamp is applied. A write takes effect unless the store already holds a newer
+     * `lastModified` for that id, so a late resource can never update or delete a newer one. If
+     * both have the exact same timestamp, the new one wins. The original `createdAt` value is
      * always kept.
+     *
+     * The store reads the stored timestamps first and only sends the writes that will take
+     * effect. The returned list is only trustworthy inside a Mongo transaction.
      */
-    fun applyAll(writes: List<ResourceWrite>) =
+    fun applyAll(writes: List<ResourceWrite>): List<ResourceWrite> =
         writes
             .groupBy { it.collectionName }
             .flatMap { (collectionName, collectionWrites) -> applyToCollection(collectionName, collectionWrites) }
@@ -78,7 +76,7 @@ class ResourceStore(
     private fun ResourceWrite.takesEffect(storedLastModified: Instant?): Boolean =
         storedLastModified == null || !storedLastModified.isAfter(timestamp)
 
-    fun saveAll(writes: List<Save>) = applyAll(writes)
+    fun saveAll(writes: List<Save>): List<ResourceWrite> = applyAll(writes)
 
     private fun BulkOperations.add(operation: ResourceWrite) {
         val byId = Query.query(Criteria.where("_id").`is`(operation.resourceId))

@@ -1,6 +1,5 @@
 package no.fintlabs.provider.storage
 
-import no.fintlabs.provider.sync.MongoTransactions
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
@@ -33,8 +32,9 @@ sealed interface ResourceIngest {
 }
 
 /**
- * A class that focuses on inserting and deleting resources and its related relation edges.
- * This exists because events and buffered resources has the same logic for insertion/deletion.
+ * Writes resources and the relation edges they own. Events and buffered sync records share
+ * this path. One batch is one Mongo transaction. The resources are applied first, and edges
+ * are derived only from the writes the store reports as taken effect.
  */
 @Service
 class ResourceWritePipeline(
@@ -43,8 +43,10 @@ class ResourceWritePipeline(
     private val transactions: MongoTransactions,
 ) {
     /**
-     * Creates the indexes a later [apply] will need. Index creation is not allowed inside a
-     * Mongo transaction, so a caller that applies within one must call this first, outside it.
+     * Creates the indexes a later [applyAll] will need. Index creation is not allowed inside a
+     * Mongo transaction. [applyAll] calls this itself before opening its transaction, so only a
+     * caller that wraps the pipeline in a transaction of its own has to call it first, outside
+     * that transaction.
      */
     fun prepare(coordinate: ResourceCoordinate) {
         resourceStore.prepareCollection(coordinate.toCollectionName())
@@ -60,7 +62,7 @@ class ResourceWritePipeline(
         coordinates.values.forEach(::prepare)
         ingests.filterIsInstance<ResourceIngest.Save>().forEach { it.resource.removeSelfLinks() }
 
-        transactions.run {
+        transactions.inTransaction {
             val effective = resourceStore.applyAll(ingests.map { it.toResourceWrite() })
             val edgeWrites = effective.flatMap { it.toRelationEdgeWrites(coordinates.getValue(it.collectionName)) }
             relationEdgeStore.applyAll(edgeWrites)
