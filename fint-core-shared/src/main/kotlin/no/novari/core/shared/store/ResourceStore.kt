@@ -234,10 +234,15 @@ class ResourceStore(
      * same millisecond always come back in the same order. The `created_at_id` index has the same
      * shape, which lets Mongo walk the index instead of sorting the whole collection.
      */
-    internal fun baseQuery(filter: Criteria?): Query =
+    internal fun baseQuery(filter: Criteria?): Query = orderedQuery(filter, Sort.Direction.ASC)
+
+    private fun orderedQuery(
+        filter: Criteria?,
+        direction: Sort.Direction,
+    ): Query =
         Query().apply {
             filter?.let { addCriteria(it) }
-            with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
+            with(Sort.by(direction, "createdAt", "_id"))
         }
 
     internal fun pageQuery(
