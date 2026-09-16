@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.models.sync.SyncType
 import no.fintlabs.provider.mongoTestContainer
 import no.fintlabs.provider.storage.EvictionService
+import no.fintlabs.provider.storage.MongoTransactions
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
@@ -31,8 +32,11 @@ import no.novari.fint.core.model.utdanning.elev.Elevforhold
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
 import org.springframework.data.mongodb.core.query.Query
+import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import kotlin.test.assertEquals
@@ -50,12 +54,14 @@ class SyncEvictionIT {
         private const val AFTER = 3_000L
     }
 
-    private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "eviction-it") }
+    private val factory by lazy { SimpleMongoClientDatabaseFactory(MongoClients.create(MONGO.connectionString), "eviction-it") }
+    private val mongoTemplate by lazy { MongoTemplate(factory) }
+    private val transactions by lazy { MongoTransactions(TransactionTemplate(MongoTransactionManager(factory)), factory) }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
     private val bufferReader by lazy {
         BufferReader(
-            ResourceWritePipeline(resourceStore, relationEdgeStore),
+            ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
             SyncCompletionTracker(
                 SyncProgressStore(mongoTemplate),
                 EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()),

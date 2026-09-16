@@ -28,30 +28,55 @@ class ResourceStore(
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
-     * Applies a batch of writes and deletes, grouped by collection. If the batch holds several
-     * operations for the same id, only the one with the newest timestamp is applied. Each
-     * operation also checks the stored `lastModified`, so a slow writer working through a
-     * backlog can never overwrite or delete a newer write that already came in another way. If
+     * Applies a batch of writes and deletes, grouped by collection, and returns the writes that
+     * took effect. If the batch holds several operations for the same id, only the one with the
+     * newest timestamp is applied. A write takes effect unless the store already holds a newer
+     * `lastModified` for that id, so a late resource can never update or delete a newer one. If
      * both have the exact same timestamp, the new one wins. The original `createdAt` value is
      * always kept.
+     *
+     * The store reads the stored timestamps first and only sends the writes that will take
+     * effect. The returned list is only trustworthy inside a Mongo transaction.
      */
-    fun applyAll(operations: List<ResourceWrite>) =
-        operations
+    fun applyAll(writes: List<ResourceWrite>): List<ResourceWrite> =
+        writes
             .groupBy { it.collectionName }
-            .forEach { (collectionName, collectionOperations) ->
-                ensureIndexes(collectionName)
+            .flatMap { (collectionName, collectionWrites) -> applyToCollection(collectionName, collectionWrites) }
 
-                val latestById =
-                    collectionOperations
-                        .sortedBy { it.timestamp }
-                        .associateBy { it.resourceId }
+    private fun applyToCollection(
+        collectionName: String,
+        writes: List<ResourceWrite>,
+    ): List<ResourceWrite> {
+        ensureIndexes(collectionName)
 
-                val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
-                latestById.values.forEach { bulkOps.add(it) }
-                bulkOps.execute()
-            }
+        val latestById = writes.sortedBy { it.timestamp }.associateBy { it.resourceId }
+        val storedLastModified = findLastModified(latestById.keys, collectionName)
+        val effective = latestById.values.filter { it.takesEffect(storedLastModified[it.resourceId]) }
+        if (effective.isEmpty()) return effective
 
-    fun saveAll(writes: List<Save>) = applyAll(writes)
+        val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
+        effective.forEach { bulkOps.add(it) }
+        bulkOps.execute()
+
+        return effective
+    }
+
+    private fun findLastModified(
+        ids: Collection<String>,
+        collectionName: String,
+    ): Map<String, Instant> {
+        val query = Query.query(Criteria.where("_id").`in`(ids))
+        query.fields().include("lastModified")
+
+        return template
+            .find(query, ResourceTimestamp::class.java, collectionName)
+            .associate { it.id to it.lastModified }
+    }
+
+    private fun ResourceWrite.takesEffect(storedLastModified: Instant?): Boolean =
+        storedLastModified == null || !storedLastModified.isAfter(timestamp)
+
+    fun saveAll(writes: List<Save>): List<ResourceWrite> = applyAll(writes)
 
     private fun BulkOperations.add(operation: ResourceWrite) {
         val byId = Query.query(Criteria.where("_id").`is`(operation.resourceId))

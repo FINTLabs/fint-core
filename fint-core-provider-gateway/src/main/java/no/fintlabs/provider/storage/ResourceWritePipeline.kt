@@ -32,17 +32,21 @@ sealed interface ResourceIngest {
 }
 
 /**
- * A class that focuses on inserting and deleting resources and its related relation edges.
- * This exists because events and buffered resources has the same logic for insertion/deletion.
+ * Writes resources and the relation edges they own. Events and buffered sync records share
+ * this path. One batch is one Mongo transaction. The resources are applied first, and edges
+ * are derived only from the writes the store reports as taken effect.
  */
 @Service
 class ResourceWritePipeline(
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
+    private val transactions: MongoTransactions,
 ) {
     /**
-     * Creates the indexes a later [apply] will need. Index creation is not allowed inside a
-     * Mongo transaction, so a caller that applies within one must call this first, outside it.
+     * Creates the indexes a later [applyAll] will need. Index creation is not allowed inside a
+     * Mongo transaction. [applyAll] calls this itself before opening its transaction, so only a
+     * caller that wraps the pipeline in a transaction of its own has to call it first, outside
+     * that transaction.
      */
     fun prepare(coordinate: ResourceCoordinate) {
         resourceStore.prepareCollection(coordinate.toCollectionName())
@@ -52,44 +56,36 @@ class ResourceWritePipeline(
     fun apply(ingest: ResourceIngest) = applyAll(listOf(ingest))
 
     fun applyAll(ingests: List<ResourceIngest>) {
-        val saves = ingests.filterIsInstance<ResourceIngest.Save>()
-        saves.forEach { it.resource.removeSelfLinks() }
+        if (ingests.isEmpty()) return
 
-        resourceStore.applyAll(ingests.map { it.toResourceWrite() })
-        relationEdgeStore.applyAll(ingests.flatMap { it.toRelationEdgeWrites() })
+        val coordinates = ingests.associateBy({ it.coordinate.toCollectionName() }, { it.coordinate })
+        coordinates.values.forEach(::prepare)
+        ingests.filterIsInstance<ResourceIngest.Save>().forEach { it.resource.removeSelfLinks() }
+
+        transactions.inTransaction {
+            val effective = resourceStore.applyAll(ingests.map { it.toResourceWrite() })
+            val edgeWrites = effective.flatMap { it.toRelationEdgeWrites(coordinates.getValue(it.collectionName)) }
+            relationEdgeStore.applyAll(edgeWrites)
+        }
     }
 
     private fun ResourceIngest.toResourceWrite(): ResourceWrite =
         when (this) {
-            is ResourceIngest.Save -> {
-                Save(
-                    resourceId = resourceId,
-                    collectionName = coordinate.toCollectionName(),
-                    resource = resource,
-                    timestamp = timestamp,
-                )
-            }
-
-            is ResourceIngest.Delete -> {
-                Delete(
-                    resourceId = resourceId,
-                    collectionName = coordinate.toCollectionName(),
-                    timestamp = timestamp,
-                )
-            }
+            is ResourceIngest.Save -> Save(resourceId, coordinate.toCollectionName(), resource, timestamp)
+            is ResourceIngest.Delete -> Delete(resourceId, coordinate.toCollectionName(), timestamp)
         }
 
-    private fun ResourceIngest.toRelationEdgeWrites(): List<RelationEdgeWrite> {
+    private fun ResourceWrite.toRelationEdgeWrites(coordinate: ResourceCoordinate): List<RelationEdgeWrite> {
         val collectionName = coordinate.toEdgeCollectionName()
 
         return when (this) {
-            is ResourceIngest.Save -> {
+            is Save -> {
                 RelationEdgeFactory
                     .createRelationEdges(coordinate, resourceId, resource)
                     .map { RelationEdgeWrite.Save(collectionName, it) }
             }
 
-            is ResourceIngest.Delete -> {
+            is Delete -> {
                 listOf(RelationEdgeWrite.Delete(collectionName, coordinate.toResourceUri(), resourceId))
             }
         }

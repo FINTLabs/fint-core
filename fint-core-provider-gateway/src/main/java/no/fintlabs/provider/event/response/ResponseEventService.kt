@@ -1,11 +1,11 @@
 package no.fintlabs.provider.event.response
 
-import com.mongodb.MongoException
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.provider.event.InvalidResponseFintEventException
 import no.fintlabs.provider.event.NoRequestFoundException
+import no.fintlabs.provider.storage.MongoTransactions
 import no.fintlabs.provider.storage.ResourceIngest
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.fintlabs.provider.sync.InvalidSyncPageEntryException
@@ -20,7 +20,6 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 
@@ -38,8 +37,8 @@ class ResponseEventService(
     private val eventStore: EventStore,
     private val resourceWritePipeline: ResourceWritePipeline,
     private val responseFintEventProducer: ResponseFintEventProducer,
-    private val mongoTransactionTemplate: TransactionTemplate,
     private val clock: Clock,
+    private val transactions: MongoTransactions,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val storageMapper = FintJson.storageMapper()
@@ -62,7 +61,7 @@ class ResponseEventService(
         resourceWritePipeline.prepare(stored.toCoordinate())
 
         val outcome =
-            inTransactionWithRetry {
+            transactions.inTransaction {
                 val claim = eventStore.markAnswered(responseFintEvent, collectionName)
                 if (claim == ClaimOutcome.Claimed) persistEntity(stored.request, responseFintEvent)
                 claim
@@ -99,40 +98,6 @@ class ResponseEventService(
             ),
         )
     }
-
-    /**
-     * Runs the block inside one Mongo transaction, retrying up to [TRANSACTION_ATTEMPTS] times
-     * when Mongo flags the failure as transient (for example a write conflict with the expiry
-     * sweeper). Any other failure, or running out of attempts, rethrows and rolls back.
-     *
-     * The `!!` is there because [TransactionTemplate.execute] is a Java API that only returns
-     * null when the callback itself returns null. Our block always returns a value, and Spring
-     * reports rollback and errors by throwing, never by returning null, so null cannot happen
-     * here.
-     */
-    private fun <T> inTransactionWithRetry(block: () -> T): T {
-        var attempts = 0
-        while (true) {
-            try {
-                return mongoTransactionTemplate.execute { block() }!!
-            } catch (exception: RuntimeException) {
-                attempts++
-                if (attempts >= TRANSACTION_ATTEMPTS || !exception.isTransientTransactionError()) throw exception
-                logger.warn("Retrying Mongo transaction after transient error (attempt {})", attempts, exception)
-            }
-        }
-    }
-
-    /**
-     * Walks the cause chain (this, cause, cause of cause, and so on) and returns true if any
-     * exception in it is a [MongoException] labeled transient. [generateSequence] builds that
-     * chain lazily: it starts with this and keeps calling `it.cause` until it hits null. Needed
-     * because Spring wraps the driver's exception, so the label is rarely on the outermost one.
-     */
-    private fun Throwable.isTransientTransactionError(): Boolean =
-        generateSequence(this) { it.cause }.any {
-            (it as? MongoException)?.hasErrorLabel(MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL) == true
-        }
 
     // TODO: Use Jakatra validation in fint-core-infra-models instead
     private fun validateEvent(response: ResponseFintEvent) {
@@ -175,8 +140,4 @@ class ResponseEventService(
             request.packageName,
             request.resourceName,
         )
-
-    companion object {
-        private const val TRANSACTION_ATTEMPTS = 3
-    }
 }
