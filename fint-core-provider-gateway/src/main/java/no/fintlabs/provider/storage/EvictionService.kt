@@ -24,10 +24,7 @@ class EvictionService(
 
     /**
      * Removes the resources a completed full sync did not carry, together with the relation
-     * edges those resources own. Edges pointing at an evicted resource stay: the sources that
-     * declared them still exist and still link to it, and an edge is only read when its target
-     * is served, so it costs nothing while the target is gone and serves the back-link again
-     * the moment the target comes back.
+     * edges those resources own.
      */
     fun evict(
         coordinate: ResourceCoordinate,
