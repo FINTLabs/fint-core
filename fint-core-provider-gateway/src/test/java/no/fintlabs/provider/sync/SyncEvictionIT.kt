@@ -19,6 +19,7 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
+import no.novari.core.shared.relation.mergeInto
 import no.novari.core.shared.store.FintResourceBsonConverter
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
@@ -46,6 +47,7 @@ class SyncEvictionIT {
 
         private const val BEFORE = 1_000L
         private const val DURING = 2_000L
+        private const val AFTER = 3_000L
     }
 
     private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "eviction-it") }
@@ -111,7 +113,7 @@ class SyncEvictionIT {
     }
 
     @Test
-    fun `edges pointing at an evicted resource go too`() {
+    fun `edges pointing at an evicted resource stay because their sources still declare the link`() {
         bufferReader.readMessage(
             listOf(
                 elevforholdRecord("EF-1", writtenAt = BEFORE, elevnummer = "E-GONE"),
@@ -119,22 +121,39 @@ class SyncEvictionIT {
                 elevRecord("E-KEEP", writtenAt = BEFORE),
             ),
         )
-        assertEquals(1, edgesTargeting("elevnummer", "E-GONE").size)
 
         bufferReader.readMessage(
             listOf(elevRecord("E-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
         )
 
         assertEquals(listOf("E-KEEP"), storedIds(elevCollection))
-        assertTrue(
-            edgesTargeting("elevnummer", "E-GONE").isEmpty(),
-            "an edge whose target is gone would never render again, and nothing else would remove it",
+        assertEquals(listOf("EF-1"), storedIds(elevforholdCollection))
+        assertEquals(listOf("EF-1"), edgesTargeting("elevnummer", "E-GONE").map { it.sourceId })
+    }
+
+    @Test
+    fun `a resource that comes back after eviction is served with its back-links at once`() {
+        bufferReader.readMessage(
+            listOf(
+                elevforholdRecord("EF-1", writtenAt = BEFORE, elevnummer = "E-BACK"),
+                elevRecord("E-BACK", writtenAt = BEFORE),
+                elevRecord("E-KEEP", writtenAt = BEFORE),
+            ),
         )
-        assertEquals(
-            listOf("EF-1"),
-            storedIds(elevforholdCollection),
-            "the Elevforhold that owned the edge is untouched, only the edge went",
+        bufferReader.readMessage(
+            listOf(elevRecord("E-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
         )
+        assertEquals(listOf("E-KEEP"), storedIds(elevCollection))
+
+        bufferReader.readMessage(
+            listOf(elevRecord("E-BACK", writtenAt = AFTER, sync = SyncMetadataFixture("S-2", SyncType.DELTA, totalSize = 1))),
+        )
+
+        val entry = resourceStore.findByResourceId("E-BACK", elevCollection)!!
+        val elev = Elev(elevnummer = Identifikator(identifikatorverdi = "E-BACK"))
+        edgesTargeting("elevnummer", "E-BACK").mergeInto(listOf(entry to (elev as FintResource)))
+
+        assertEquals(listOf("systemid" to "EF-1"), elev.links["elevforhold"]?.map { it.idField to it.idValue })
     }
 
     @Test
