@@ -4,12 +4,15 @@ import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.provider.mongoTestContainer
 import no.fintlabs.provider.storage.EvictionService
+import no.fintlabs.provider.storage.MongoTransactions
 import no.fintlabs.provider.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.kafka.EntityHeaders.DOMAIN_NAME
+import no.novari.core.shared.kafka.EntityHeaders.LAST_MODIFIED
 import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
+import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.mergeInto
@@ -26,8 +29,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.bson.Document
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
 import org.springframework.data.mongodb.core.query.Query
+import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.Instant
@@ -51,14 +57,16 @@ class AutoRelationIT {
         val MONGO = mongoTestContainer()
     }
 
-    private val mongoTemplate by lazy { MongoTemplate(MongoClients.create(MONGO.connectionString), "autorelation-it") }
+    private val factory by lazy { SimpleMongoClientDatabaseFactory(MongoClients.create(MONGO.connectionString), "autorelation-it") }
+    private val mongoTemplate by lazy { MongoTemplate(factory) }
+    private val transactions by lazy { MongoTransactions(TransactionTemplate(MongoTransactionManager(factory)), factory) }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
     private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()) }
     private val syncProgressStore by lazy { SyncProgressStore(mongoTemplate) }
     private val bufferReader by lazy {
         BufferReader(
-            ResourceWritePipeline(resourceStore, relationEdgeStore),
+            ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
             SyncCompletionTracker(syncProgressStore, evictionService),
         )
     }
@@ -181,17 +189,43 @@ class AutoRelationIT {
         assertTrue(unrelated.isEmpty())
     }
 
-    private fun elevforhold(systemId: String = "EF-123") =
-        Elevforhold(systemId = Identifikator(identifikatorverdi = systemId)).apply {
-            addLink("elev", Link("elevnummer", "E-456"))
-            addLink("skole", Link("skolenummer", "S-1"))
-            addLink("fravarsregistreringer", Link("systemid", "FR-1"))
-            addLink("kategori", Link("systemid", "K-1"))
-        }
+    @Test
+    fun `a batch holding an old and a new version of the same source derives edges only from the new version`() {
+        bufferReader.readMessage(
+            listOf(
+                elevforholdRecord(resource = elevforhold(elevLink = "E-NEW"), lastModified = 2_000L),
+                elevforholdRecord(resource = elevforhold(elevLink = "E-OLD"), lastModified = 1_000L),
+            ),
+        )
+
+        val elevTargets = allEdges().filter { it.targetType == "utdanning/elev/elev" }.map { it.targetIdValue }
+        assertEquals(listOf("E-NEW"), elevTargets)
+    }
+
+    @Test
+    fun `a tombstone older than the stored resource leaves the resource and its edges alone`() {
+        bufferReader.readMessage(listOf(elevforholdRecord(lastModified = 2_000L)))
+
+        bufferReader.readMessage(listOf(elevforholdRecord(resource = null, lastModified = 1_000L)))
+
+        assertEquals(2, allEdges().size)
+        assertNotNull(mongoTemplate.findById("EF-123", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
+    }
+
+    private fun elevforhold(
+        systemId: String = "EF-123",
+        elevLink: String = "E-456",
+    ) = Elevforhold(systemId = Identifikator(identifikatorverdi = systemId)).apply {
+        addLink("elev", Link("elevnummer", elevLink))
+        addLink("skole", Link("skolenummer", "S-1"))
+        addLink("fravarsregistreringer", Link("systemid", "FR-1"))
+        addLink("kategori", Link("systemid", "K-1"))
+    }
 
     private fun elevforholdRecord(
         resourceId: String = "EF-123",
         resource: Elevforhold? = elevforhold(resourceId),
+        lastModified: Long? = null,
     ): ConsumerRecord<String, String> =
         ConsumerRecord<String, String>(
             "buffer-topic",
@@ -204,6 +238,7 @@ class AutoRelationIT {
             headers().add(DOMAIN_NAME, "utdanning".toByteArray())
             headers().add(PACKAGE_NAME, "elev".toByteArray())
             headers().add(RESOURCE_NAME, "elevforhold".toByteArray())
+            lastModified?.let { headers().add(LAST_MODIFIED, it.toHeaderBytes()) }
         }
 
     private fun allEdges(): List<RelationEdge> = mongoTemplate.find(Query(), RelationEdge::class.java, edgeCollection)

@@ -122,10 +122,75 @@ class ResourceStoreIT {
         assertThat(store.findByResourceId("1", otherCollection)).isNull()
     }
 
+    @Test
+    fun `applyAll returns the writes that took effect and leaves out a save older than the stored one`() {
+        store.saveAll(listOf(save("1", base)))
+        val fresh = save("2", base)
+
+        val effective = store.applyAll(listOf(save("1", base.minusSeconds(60)), fresh))
+
+        assertThat(effective).containsExactly(fresh)
+    }
+
+    @Test
+    fun `applyAll returns only the newest of two saves for the same id`() {
+        val newest = save("1", base.plusSeconds(60))
+
+        val effective = store.applyAll(listOf(save("1", base), newest))
+
+        assertThat(effective).containsExactly(newest)
+    }
+
+    @Test
+    fun `applyAll leaves out a delete older than the stored write`() {
+        store.saveAll(listOf(save("1", base)))
+
+        val effective = store.applyAll(listOf(Delete("1", collection, base.minusSeconds(60))))
+
+        assertThat(effective).isEmpty()
+    }
+
+    @Test
+    fun `applyAll returns a delete for an id that was never stored`() {
+        val delete = Delete("missing", collection, base)
+
+        val effective = store.applyAll(listOf(delete))
+
+        assertThat(effective).containsExactly(delete)
+    }
+
+    @Test
+    fun `a save less than a millisecond newer than the stored write takes effect and is stored`() {
+        store.saveAll(listOf(save("1", base)))
+        val slightlyNewer = Save("1", collection, elevWithNumber("1"), base.plusNanos(500_000))
+
+        val effective = store.applyAll(listOf(slightlyNewer))
+
+        assertThat(effective).containsExactly(slightlyNewer)
+        assertThat(store.findByResourceId("1", collection)!!.identifiers).hasSize(2)
+    }
+
+    @Test
+    fun `a save less than a millisecond older than the stored write is left out and not stored`() {
+        store.saveAll(listOf(save("1", base.plusMillis(1))))
+        val slightlyOlder = Save("1", collection, elevWithNumber("1"), base.plusNanos(999_999))
+
+        val effective = store.applyAll(listOf(slightlyOlder))
+
+        assertThat(effective).isEmpty()
+        assertThat(store.findByResourceId("1", collection)!!.identifiers).hasSize(1)
+    }
+
     private fun save(
         id: String,
         timestamp: Instant,
     ) = Save(id, collection, elev(id), timestamp)
+
+    private fun elevWithNumber(id: String) =
+        Elev(
+            systemId = Identifikator(identifikatorverdi = id),
+            elevnummer = Identifikator(identifikatorverdi = "E-$id"),
+        )
 
     private fun elev(id: String) = Elev(systemId = Identifikator(identifikatorverdi = id))
 }
