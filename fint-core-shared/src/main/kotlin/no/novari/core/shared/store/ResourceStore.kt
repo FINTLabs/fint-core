@@ -25,6 +25,11 @@ class ResourceStore(
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
 
+    companion object {
+        const val CREATED_AT_ID_INDEX = "created_at_id"
+        const val LAST_MODIFIED_INDEX = "last_modified"
+    }
+
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
@@ -244,14 +249,14 @@ class ResourceStore(
         if (!indexedCollections.add(collectionName)) return
 
         template.indexOps(collectionName).createIndex(
-            Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+            Index().on("lastModified", Sort.Direction.ASC).named(LAST_MODIFIED_INDEX),
         )
 
         template.indexOps(collectionName).createIndex(
             Index()
                 .on("createdAt", Sort.Direction.ASC)
                 .on("_id", Sort.Direction.ASC)
-                .named("created_at_id"),
+                .named(CREATED_AT_ID_INDEX),
         )
     }
 }
