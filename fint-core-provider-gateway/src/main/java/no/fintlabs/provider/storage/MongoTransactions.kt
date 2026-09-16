@@ -14,6 +14,10 @@ class MongoTransactions(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    companion object {
+        private const val MAX_ATTEMPTS = 5
+    }
+
     /**
      * Runs a block inside one Mongo transaction. When Mongo flags the failure as transient, for
      * example a write conflict with another writer, the whole block runs again from the start, up
@@ -46,8 +50,4 @@ class MongoTransactions(
         generateSequence(this) { it.cause }.any {
             (it as? MongoException)?.hasErrorLabel(MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL) == true
         }
-
-    companion object {
-        private const val MAX_ATTEMPTS = 5
-    }
 }
