@@ -18,7 +18,8 @@ import java.time.Instant
  * timestamps 10 to 50. A timestamp filter uses `lastModified >= since`, so the entry exactly at
  * the timestamp is included. The count and the page use the same filter, so the count always
  * matches what the page shows. Pages are ordered by `createdAt`, so an entry that is updated
- * later keeps its place in the order.
+ * later keeps its place in the order. One test deletes an entry and checks that the count
+ * without a filter follows.
  */
 @Testcontainers
 class ResourceStorePagingIT {
@@ -45,6 +46,13 @@ class ResourceStorePagingIT {
     @Test
     fun `count without criteria is the collection size`() {
         assertThat(store.count(null, collection)).isEqualTo(5)
+    }
+
+    @Test
+    fun `count without criteria follows a delete`() {
+        store.applyAll(listOf(Delete("A", collection, Instant.ofEpochMilli(100))))
+
+        assertThat(store.count(null, collection)).isEqualTo(4)
     }
 
     @Test
