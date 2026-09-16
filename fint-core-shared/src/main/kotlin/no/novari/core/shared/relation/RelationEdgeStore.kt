@@ -134,18 +134,6 @@ class RelationEdgeStore(
         return template.remove(query, collectionName).deletedCount
     }
 
-    fun deleteByTargets(
-        collectionName: String,
-        targetType: String,
-        identifiers: Collection<IdentifierRef>,
-    ): Long {
-        val query = targetQuery(targetType, identifiers) ?: return 0
-
-        ensureIndexes(collectionName)
-
-        return template.remove(query, collectionName).deletedCount
-    }
-
     private fun targetQuery(
         targetType: String,
         identifiers: Collection<IdentifierRef>,

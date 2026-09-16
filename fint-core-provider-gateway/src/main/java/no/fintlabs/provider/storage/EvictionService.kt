@@ -4,7 +4,6 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdgeStore
-import no.novari.core.shared.store.ResourceIdentity
 import no.novari.core.shared.store.ResourceStore
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -23,6 +22,13 @@ class EvictionService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Removes the resources a completed full sync did not carry, together with the relation
+     * edges those resources own. Edges pointing at an evicted resource stay: the sources that
+     * declared them still exist and still link to it, and an edge is only read when its target
+     * is served, so it costs nothing while the target is gone and serves the back-link again
+     * the moment the target comes back.
+     */
     fun evict(
         coordinate: ResourceCoordinate,
         threshold: Instant,
@@ -32,7 +38,7 @@ class EvictionService(
         val resourceType = coordinate.toResourceUri()
 
         val doomed = resourceStore.findIdentitiesOlderThan(threshold, collectionName)
-        val edges = deleteEdges(edgeCollectionName, resourceType, doomed)
+        val edges = relationEdgeStore.deleteBySources(edgeCollectionName, resourceType, doomed.map { it.id })
         val resources = resourceStore.deleteStaleByIds(doomed.map { it.id }, threshold, collectionName)
 
         record(resourceType, resources, edges)
@@ -46,14 +52,6 @@ class EvictionService(
 
         return EvictionResult(resources, edges)
     }
-
-    private fun deleteEdges(
-        edgeCollectionName: String,
-        resourceType: String,
-        doomed: List<ResourceIdentity>,
-    ): Long =
-        relationEdgeStore.deleteBySources(edgeCollectionName, resourceType, doomed.map { it.id }) +
-            relationEdgeStore.deleteByTargets(edgeCollectionName, resourceType, doomed.flatMap { it.identifiers })
 
     private fun record(
         resourceType: String,
