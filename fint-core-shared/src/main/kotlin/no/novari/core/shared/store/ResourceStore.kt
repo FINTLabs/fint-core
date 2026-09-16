@@ -169,7 +169,8 @@ class ResourceStore(
         size: Int,
         offset: Long,
         collectionName: String,
-    ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset), collectionName)
+        hint: String = CREATED_AT_ID_INDEX,
+    ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset, hint), collectionName)
 
     /**
      * Counts the entries that match [filter]. Paged reads use the number as `total_items` and
@@ -243,7 +244,13 @@ class ResourceStore(
         filter: Criteria?,
         size: Int,
         offset: Long,
-    ): Query = Query.of(baseQuery(filter)).skip(offset).limit(size)
+        hint: String = CREATED_AT_ID_INDEX,
+    ): Query =
+        Query
+            .of(baseQuery(filter))
+            .skip(offset)
+            .limit(size)
+            .withHint(hint)
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
