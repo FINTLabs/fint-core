@@ -169,19 +169,14 @@ class ResourceStore(
     /**
      * Counts the entries that match [filter]. Paged reads use the number as `total_items` and
      * `/cache/size` reports it too, so use the same filter as [findPage].
-     *
-     * Without a filter the number comes from the collection's statistics, which is fast but can
-     * lag slightly behind the latest writes. With a filter the matching documents are counted.
      */
     fun count(
         filter: Criteria?,
         collectionName: String,
-    ): Long =
-        if (filter == null) {
-            template.estimatedCount(collectionName)
-        } else {
-            template.exactCount(Query.query(filter), ResourceEntry::class.java, collectionName)
-        }
+    ): Long {
+        val query = Query().apply { filter?.let { addCriteria(it) } }
+        return template.exactCount(query, ResourceEntry::class.java, collectionName)
+    }
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
 
