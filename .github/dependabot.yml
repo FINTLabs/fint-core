@@ -10,7 +10,7 @@ updates:
       - "/"
       - "/buildSrc"
       - "/fint-core-client-api"
-      - "/fint-core-provider-gateway"
+      - "/fint-core-adapter-gateway"
       - "/fint-core-shared"
     schedule:
       interval: "weekly"
@@ -58,7 +58,7 @@ updates:
     target-branch: "develop"
     directories:
       - "/fint-core-client-api"
-      - "/fint-core-provider-gateway"
+      - "/fint-core-adapter-gateway"
     schedule:
       interval: "weekly"
       day: "tuesday"

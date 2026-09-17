@@ -9,4 +9,4 @@ dependencyResolutionManagement {
     }
 }
 
-include("fint-core-client-api", "fint-core-provider-gateway", "fint-core-shared")
+include("fint-core-client-api", "fint-core-adapter-gateway", "fint-core-shared")

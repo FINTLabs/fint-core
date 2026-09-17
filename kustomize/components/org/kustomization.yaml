@@ -20,7 +20,7 @@ replacements:
           - spec.ingress.routes.0.headers.x-org-id
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
@@ -33,7 +33,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.headers.x-allowed-asset-ids
 
@@ -50,7 +50,7 @@ replacements:
           - metadata.namespace
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - metadata.namespace
       - select:
@@ -63,7 +63,7 @@ replacements:
           index: 0
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.kafka.acls.6.topic
         options:
@@ -86,7 +86,7 @@ replacements:
           index: 1
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - metadata.labels.[app.kubernetes.io/instance]
         options:
@@ -106,7 +106,7 @@ replacements:
           - spec.onePassword.itemPath
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.onePassword.itemPath
 
@@ -135,6 +135,6 @@ replacements:
           - spec.ingress.routes.0.host
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.host
