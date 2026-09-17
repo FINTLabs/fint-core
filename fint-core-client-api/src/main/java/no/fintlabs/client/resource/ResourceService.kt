@@ -27,11 +27,9 @@ class ResourceService(
     private val storageMapper = FintJson.storageMapper()
 
     /**
-     * Serves a list read. A positive `sinceTimeStamp` limits the read to resources modified at or
-     * after it. The controller defaults the `size` parameter to 0, which means no limit. A `size` above
-     * zero makes the read paged. A paged read with a [cursor] starts from the bookmark in the
-     * cursor and only uses [offset] to report the position, without one it skips [offset]
-     * entries. One entry more than the page is read, so the `next` link never depends on a count.
+     * Serves a list read. A `size` above zero gives one page, otherwise everything. A positive
+     * `sinceTimeStamp` keeps only resources modified at or after it. A page with a [cursor] starts
+     * where the cursor points; without one it skips [offset] entries.
      */
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
