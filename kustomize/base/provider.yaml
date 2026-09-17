@@ -1,11 +1,11 @@
 apiVersion: fintlabs.no/v1alpha1
 kind: Application
 metadata:
-  name: fint-core-provider-gateway
+  name: fint-core-adapter-gateway
   namespace: REPLACE-DASHED
   labels:
-    app.kubernetes.io/name: fint-core-provider-gateway
-    app.kubernetes.io/instance: fint-core-provider-gateway_REPLACE
+    app.kubernetes.io/name: fint-core-adapter-gateway
+    app.kubernetes.io/instance: fint-core-adapter-gateway_REPLACE
     app.kubernetes.io/version: latest
     app.kubernetes.io/component: provider
     app.kubernetes.io/part-of: fint-core
@@ -14,7 +14,7 @@ metadata:
 spec:
   port: 8080
   orgId: REPLACE
-  image: ghcr.io/fintlabs/fint-core-provider-gateway-db:REPLACE
+  image: ghcr.io/fintlabs/fint-core-adapter-gateway-db:REPLACE
   onePassword:
     itemPath: REPLACE
   env:

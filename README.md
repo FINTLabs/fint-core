@@ -5,8 +5,8 @@ Monorepo for the FINT core platform that brokers FINT resources between adapters
 
 | Module | Role |
 |---|---|
-| `fint-core-provider-gateway` | Adapter-facing service. **Sole writer** of FINT resources: handles sync ingest, autorelation, and eviction into MongoDB. |
-| `fint-core-consumer` | Client-facing service. **Read-only** over the resource store. |
+| `fint-core-adapter-gateway` | Adapter-facing service. **Sole writer** of FINT resources: handles sync ingest, autorelation, and eviction into MongoDB. |
+| `fint-core-client-api` | Client-facing service. **Read-only** over the resource store. |
 | `fint-core-shared` | Shared library: the JSON contracts and all `_links` handling, the Mongo resource store, Kafka header codecs. Depended on by both services; see [its README](fint-core-shared/README.md). |
 
 The platform runs **per org** (one provider + one consumer per org, each with its
@@ -38,7 +38,7 @@ Examples:
 | `v1.0.0-rc.1-4.0.30-my-branch` | Branch test build |
 
 The full version string (everything after the leading `v`) becomes the Docker
-image tag, e.g. `ghcr.io/<owner>/fint-core-consumer-db:1.0.0-rc.1-4.0.30`.
+image tag, e.g. `ghcr.io/<owner>/fint-core-client-api-db:1.0.0-rc.1-4.0.30`.
 
 ### What a tag deploys
 
@@ -72,8 +72,8 @@ This is how alpha and branch builds reach a cluster.
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`. It is
 **path-filtered** so unrelated changes don't rebuild everything:
 
-- A change under `fint-core-consumer/**` tests only the consumer.
-- A change under `fint-core-provider-gateway/**` tests only the provider.
+- A change under `fint-core-client-api/**` tests only the consumer.
+- A change under `fint-core-adapter-gateway/**` tests only the provider.
 - A change to the shared module (`fint-core-shared/**`) or root Gradle
   files tests **all three** (both services plus the shared module's own job).
 
@@ -156,8 +156,8 @@ and a toxiproxy in front of Mongo for latency testing.
 
 ```
 docker compose up -d
-./gradlew :fint-core-provider-gateway:bootRun
-./gradlew :fint-core-consumer:bootRun
+./gradlew :fint-core-adapter-gateway:bootRun
+./gradlew :fint-core-client-api:bootRun
 ```
 
 ---
@@ -170,11 +170,11 @@ multi-module project (root `settings.gradle.kts` plus `fint-core-shared`). Run
 these from the repo root:
 
 ```
-docker build -f fint-core-provider-gateway/Dockerfile -t fint-core-provider-gateway .
-docker build -f fint-core-consumer/Dockerfile -t fint-core-consumer .
+docker build -f fint-core-adapter-gateway/Dockerfile -t fint-core-adapter-gateway .
+docker build -f fint-core-client-api/Dockerfile -t fint-core-client-api .
 ```
 
 Each Dockerfile scopes its Gradle build to its own module's `bootJar` task
-(`:fint-core-provider-gateway:bootJar` / `:fint-core-consumer:bootJar`), so it
+(`:fint-core-adapter-gateway:bootJar` / `:fint-core-client-api:bootJar`), so it
 pulls in `fint-core-shared` as needed but never builds the sibling service. This
 is the same command CD runs (see the CD section above), just without the push.
