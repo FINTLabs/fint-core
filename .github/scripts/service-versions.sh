@@ -7,5 +7,5 @@ last_commit() {
   git log -1 --abbrev=7 --format=%h -- $1
 }
 
-echo "consumer=$(last_commit "$CONSUMER_PATHS")"
-echo "provider=$(last_commit "$PROVIDER_PATHS")"
+echo "client=$(last_commit "$CLIENT_PATHS")"
+echo "adapter_gateway=$(last_commit "$ADAPTER_GATEWAY_PATHS")"

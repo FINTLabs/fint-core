@@ -33,9 +33,9 @@ jobs:
         id: services
         run: |
           eval "$(.github/scripts/service-versions.sh)"
-          echo "consumer=$consumer provider=$provider"
-          jq -nc --arg c "$consumer" --arg p "$provider" \
-            '[{service:"fint-core-client-api", image:"fint-core-client-api-db", sha:$c}, {service:"fint-core-adapter-gateway", image:"fint-core-adapter-gateway-db", sha:$p}]' \
+          echo "client=$client adapter-gateway=$adapter_gateway"
+          jq -nc --arg c "$client" --arg a "$adapter_gateway" \
+            '[{service:"fint-core-client-api", image:"fint-core-client-api-db", sha:$c}, {service:"fint-core-adapter-gateway", image:"fint-core-adapter-gateway-db", sha:$a}]' \
             | sed 's/^/services=/' >> "$GITHUB_OUTPUT"
 
       - name: Discover org overlays

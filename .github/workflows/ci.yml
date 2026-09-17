@@ -9,8 +9,8 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      consumer: ${{ steps.filter.outputs.consumer }}
-      provider: ${{ steps.filter.outputs.provider }}
+      client: ${{ steps.filter.outputs.client }}
+      adapter-gateway: ${{ steps.filter.outputs['adapter-gateway'] }}
       shared: ${{ steps.filter.outputs.shared }}
     steps:
       - uses: actions/checkout@v5
@@ -25,9 +25,9 @@ jobs:
           fi
           .github/scripts/changed-services.sh "$base" HEAD | tee -a "$GITHUB_OUTPUT"
 
-  consumer:
+  client:
     needs: changes
-    if: ${{ needs.changes.outputs.consumer == 'true' }}
+    if: ${{ needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -38,9 +38,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :fint-core-client-api:check
 
-  provider:
+  adapter-gateway:
     needs: changes
-    if: ${{ needs.changes.outputs.provider == 'true' }}
+    if: ${{ needs.changes.outputs['adapter-gateway'] == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -65,12 +65,12 @@ jobs:
       - run: ./gradlew :fint-core-shared:check
 
   ci-ok:
-    needs: [consumer, provider, shared]
+    needs: [client, adapter-gateway, shared]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ] || [ "${{ needs.shared.result }}" = "failure" ]; then
+          if [ "${{ needs.client.result }}" = "failure" ] || [ "${{ needs['adapter-gateway'].result }}" = "failure" ] || [ "${{ needs.shared.result }}" = "failure" ]; then
             echo "a module check failed"
             exit 1
           fi
