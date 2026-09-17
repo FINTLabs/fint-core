@@ -172,6 +172,48 @@ class ResourceStore(
         hint: String = CREATED_AT_ID_INDEX,
     ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset, hint), collectionName)
 
+    fun findPageAfter(
+        anchor: PageAnchor?,
+        filter: Criteria?,
+        size: Int,
+        collectionName: String,
+        hint: String = CREATED_AT_ID_INDEX,
+    ): List<ResourceEntry> {
+        if (anchor == null) {
+            return template.find<ResourceEntry>(
+                baseQuery(filter).limit(size).withHint(hint),
+                collectionName,
+            )
+        }
+
+        val createdAt = Date.from(anchor.createdAt)
+        val sameTimestamp =
+            template.find<ResourceEntry>(
+                baseQuery(filter)
+                    .addCriteria(
+                        Criteria
+                            .where("createdAt")
+                            .`is`(createdAt)
+                            .and("_id")
+                            .gt(anchor.id),
+                    ).limit(size)
+                    .withHint(hint),
+                collectionName,
+            )
+        if (sameTimestamp.size >= size) return sameTimestamp
+
+        val later =
+            template.find<ResourceEntry>(
+                baseQuery(filter)
+                    .addCriteria(Criteria.where("createdAt").gt(createdAt))
+                    .limit(size - sameTimestamp.size)
+                    .withHint(hint),
+                collectionName,
+            )
+
+        return sameTimestamp + later
+    }
+
     /**
      * Counts the entries that match [filter]. Paged reads use the number as `total_items` and
      * `/cache/size` reports it too, so use the same filter as [findPage].
