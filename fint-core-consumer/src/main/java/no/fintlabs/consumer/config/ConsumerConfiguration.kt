@@ -17,7 +17,6 @@ data class ConsumerConfiguration(
     val autorelation: AutorelationConfig = AutorelationConfig(),
     val coreVersionHeader: String = "2",
     val kafka: KafkaConfiguration = KafkaConfiguration(),
-    val paging: PagingProperties = PagingProperties(),
 ) {
     init {
         require(baseUrl == baseUrl.lowercase()) { "baseUrl must be lowercase: $baseUrl" }
@@ -44,10 +43,6 @@ data class ConsumerConfiguration(
         matchesComponent(domainName, packageName) &&
             this.orgId.matches(orgId)
 }
-
-data class PagingProperties(
-    val deltaHintThreshold: Int = 50_000,
-)
 
 // TODO: Cleanup configuration
 data class KafkaConfiguration(
