@@ -12,6 +12,10 @@ import org.springframework.context.event.EventListener
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.stereotype.Component
 
+/**
+ * This exists to verify that any of our new indexes gets applied to every collection that already exists
+ * [ResourceStore] will handle the indexing only on insert, so it will also apply them on new collections.
+ */
 @Component
 @ConditionalOnProperty(prefix = "fint.provider", name = ["ensure-indexes"], havingValue = "true", matchIfMissing = true)
 class ResourceIndexEnsurer(
