@@ -16,6 +16,7 @@ import no.fintlabs.consumer.resource.event.RequestStatusService
 import no.fintlabs.consumer.resource.event.RequestValidated
 import no.fintlabs.consumer.resource.event.ResourceCreated
 import no.fintlabs.consumer.resource.event.ResourceDeleted
+import no.fintlabs.consumer.resource.paging.PageCursor
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
@@ -51,6 +52,7 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestParam(required = false, name = "\$filter") filter: String?,
         @RequestHeader("x-org-id") orgId: String,
+        @RequestParam(required = false) cursor: PageCursor?,
     ): ResponseEntity<FintResourcesResponse> =
         resourceService
             .getResources(
@@ -59,6 +61,7 @@ class ResourceController(
                 offset,
                 sinceTimeStamp,
                 filter,
+                cursor,
             ).let { ResponseEntity.ok(it) }
 
     @PostMapping("/\$query")
@@ -71,8 +74,9 @@ class ResourceController(
         @RequestParam(defaultValue = "0") sinceTimeStamp: Long,
         @RequestBody(required = false) filter: String?,
         @RequestHeader("x-org-id") orgId: String,
+        @RequestParam(required = false) cursor: PageCursor?,
     ): ResponseEntity<FintResourcesResponse> =
-        getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId)
+        getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId, cursor)
 
     @GetMapping(EndpointsConstants.BY_ID)
     fun getResourceById(

@@ -3,6 +3,7 @@ package no.fintlabs.consumer.resource
 import no.fintlabs.consumer.config.ConsumerConfiguration
 import no.fintlabs.consumer.resource.dto.FintResourcesResponse
 import no.fintlabs.consumer.resource.dto.createFintResourcesResponse
+import no.fintlabs.consumer.resource.paging.PageCursor
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
@@ -29,6 +30,7 @@ class ResourceService(
         offset: Long,
         sinceTimeStamp: Long?,
         filter: String?,
+        cursor: PageCursor? = null,
     ): FintResourcesResponse {
         val since = sinceTimeStamp?.takeIf { it > 0 } ?: 0L
         val sinceCriteria = since.toCriteria()
