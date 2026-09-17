@@ -133,6 +133,49 @@ class FintResourcesResponseTest {
     }
 
     @Test
+    fun `next and prev carry the cursor after offset, and size and self repeats the request cursor`() {
+        val links =
+            createFintResourcesResponse(
+                baseUrl,
+                resourceUri,
+                (1..4).map { mapOf("n" to it) },
+                offset = 4,
+                size = 4,
+                totalItems = 12,
+                sinceTimeStamp = 1000,
+                hasNext = true,
+                nextCursor = "NEXT",
+                prevCursor = "PREV",
+                selfCursor = "SELF",
+            ).links
+
+        assertEquals(
+            "$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=4&size=4&cursor=SELF",
+            links["self"]?.single()?.href,
+        )
+        assertEquals(
+            "$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=0&size=4&cursor=PREV",
+            links["prev"]?.single()?.href,
+        )
+        assertEquals(
+            "$baseUrl/$resourceUri?sinceTimeStamp=1000&offset=8&size=4&cursor=NEXT",
+            links["next"]?.single()?.href,
+        )
+    }
+
+    @Test
+    fun `hasNext decides the next link, not the total`() {
+        val entries = (1..4).map { mapOf("n" to it) }
+
+        val withoutNext = createFintResourcesResponse(baseUrl, resourceUri, entries, 0, 4, 100, hasNext = false).links
+        val withNext = createFintResourcesResponse(baseUrl, resourceUri, entries, 0, 4, 4, hasNext = true).links
+
+        assertEquals(setOf("self"), withoutNext.keys)
+        assertEquals(setOf("self", "next"), withNext.keys)
+        assertEquals("$baseUrl/$resourceUri?offset=4&size=4", withNext["next"]?.single()?.href)
+    }
+
+    @Test
     fun `a negative size is unpaged`() {
         val links = page(entryCount = 3, offset = 7, size = -1, totalItems = 3).links
 

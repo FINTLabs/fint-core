@@ -1,14 +1,12 @@
 package no.novari.core.shared.store
 
 import com.mongodb.client.MongoClients
-import no.novari.core.shared.store.ResourceStore.Companion.LAST_MODIFIED_INDEX
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.mongodb.core.query.Criteria
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.mongodb.MongoDBContainer
@@ -87,17 +85,19 @@ class ResourceStoreCursorIT {
 
     @Test
     fun `a page after an anchor stays inside the timestamp filter`() {
-        assertThat(ids(store.findPageAfter(anchor("B1"), since(30), 2, collection))).containsExactly("C", "D")
-        assertThat(ids(store.findPageAfter(anchor("C"), since(30), 2, collection))).containsExactly("D", "E")
+        assertThat(ids(store.findPageAfter(anchor("B1"), since(30, 3), 2, collection))).containsExactly("C", "D")
+        assertThat(ids(store.findPageAfter(anchor("C"), since(30, 3), 2, collection))).containsExactly("D", "E")
     }
 
     @Test
-    fun `a page after an anchor gives the same rows with the lastModified index as hint`() {
-        val withDefaultHint = ids(store.findPageAfter(anchor("B1"), since(30), 3, collection))
-        val withLastModifiedHint = ids(store.findPageAfter(anchor("B1"), since(30), 3, collection, LAST_MODIFIED_INDEX))
+    fun `a page after an anchor gives the same rows whichever index serves the filter`() {
+        val storeReadingThroughCreatedAt = ResourceStore(template, FintResourceBsonConverter(), deltaHintThreshold = 0)
 
-        assertThat(withLastModifiedHint).containsExactly("C", "D", "E")
-        assertThat(withLastModifiedHint).isEqualTo(withDefaultHint)
+        val throughLastModified = ids(store.findPageAfter(anchor("B1"), since(30, 3), 3, collection))
+        val throughCreatedAt = ids(storeReadingThroughCreatedAt.findPageAfter(anchor("B1"), since(30, 3), 3, collection))
+
+        assertThat(throughLastModified).containsExactly("C", "D", "E")
+        assertThat(throughCreatedAt).isEqualTo(throughLastModified)
     }
 
     @Test
@@ -125,7 +125,7 @@ class ResourceStoreCursorIT {
 
     @Test
     fun `a page before an anchor stays inside the timestamp filter`() {
-        assertThat(ids(store.findPageBefore(anchor("E"), since(30), 3, collection))).containsExactly("C", "D")
+        assertThat(ids(store.findPageBefore(anchor("E"), since(30, 3), 3, collection))).containsExactly("C", "D")
     }
 
     private fun anchor(id: String): PageAnchor {
@@ -133,7 +133,10 @@ class ResourceStoreCursorIT {
         return PageAnchor(entry.createdAt, entry.id)
     }
 
-    private fun since(timestamp: Long) = Criteria.where("lastModified").gte(Instant.ofEpochMilli(timestamp))
+    private fun since(
+        timestamp: Long,
+        matches: Long,
+    ) = SinceFilter(Instant.ofEpochMilli(timestamp), matches)
 
     private fun ids(entries: List<ResourceEntry>) = entries.map { it.id }
 
