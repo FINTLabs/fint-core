@@ -214,6 +214,43 @@ class ResourceStore(
         return sameTimestamp + later
     }
 
+    fun findPageBefore(
+        anchor: PageAnchor,
+        filter: Criteria?,
+        size: Int,
+        collectionName: String,
+        hint: String = CREATED_AT_ID_INDEX,
+    ): List<ResourceEntry> {
+        val createdAt = Date.from(anchor.createdAt)
+        val sameTimestamp =
+            template.find<ResourceEntry>(
+                orderedQuery(filter, Sort.Direction.DESC)
+                    .addCriteria(
+                        Criteria
+                            .where("createdAt")
+                            .`is`(createdAt)
+                            .and("_id")
+                            .lt(anchor.id),
+                    ).limit(size)
+                    .withHint(hint),
+                collectionName,
+            )
+        val earlier =
+            if (sameTimestamp.size >= size) {
+                emptyList()
+            } else {
+                template.find<ResourceEntry>(
+                    orderedQuery(filter, Sort.Direction.DESC)
+                        .addCriteria(Criteria.where("createdAt").lt(createdAt))
+                        .limit(size - sameTimestamp.size)
+                        .withHint(hint),
+                    collectionName,
+                )
+            }
+
+        return (sameTimestamp + earlier).reversed()
+    }
+
     /**
      * Counts the entries that match [filter]. Paged reads use the number as `total_items` and
      * `/cache/size` reports it too, so use the same filter as [findPage].
