@@ -1,0 +1,21 @@
+fint:
+  relation:
+    base-url: https://test.felleskomponent.no
+  consumer:
+    pod-url: http://fint-core-client-api-${fint.consumer.domain}-${fint.consumer.package}:8080
+    writeable: klasse
+    domain: utdanning
+    package: elev
+    org-id: fintlabs.no
+
+spring:
+  kafka:
+    consumer:
+      group-id: fint-core-client-api
+      auto-offset-reset: earliest
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+logging:
+  level:
+    org.apache.kafka: OFF

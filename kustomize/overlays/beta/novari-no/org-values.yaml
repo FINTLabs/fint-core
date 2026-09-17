@@ -11,4 +11,4 @@ data:
   asset-regex: 're:(^|,)novari\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
-  onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-consumer-cluster-beta"
+  onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-client-api-cluster-beta"
