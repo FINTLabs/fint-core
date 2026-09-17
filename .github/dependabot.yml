@@ -9,7 +9,7 @@ updates:
     directories:
       - "/"
       - "/buildSrc"
-      - "/fint-core-consumer"
+      - "/fint-core-client-api"
       - "/fint-core-provider-gateway"
       - "/fint-core-shared"
     schedule:
@@ -57,7 +57,7 @@ updates:
   - package-ecosystem: "docker"
     target-branch: "develop"
     directories:
-      - "/fint-core-consumer"
+      - "/fint-core-client-api"
       - "/fint-core-provider-gateway"
     schedule:
       interval: "weekly"

@@ -13,7 +13,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
@@ -45,7 +45,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - metadata.namespace
       - select:
@@ -55,7 +55,7 @@ replacements:
           - metadata.namespace
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.kafka.acls.0.topic
         options:
@@ -78,7 +78,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - metadata.labels.[app.kubernetes.io/instance]
         options:
@@ -101,7 +101,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.onePassword.itemPath
       - select:
@@ -118,7 +118,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.env.[name=fint.relation.base-url].value
 
@@ -130,7 +130,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.ingress.routes.0.host
       - select:

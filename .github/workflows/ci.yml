@@ -36,7 +36,7 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :fint-core-consumer:check
+      - run: ./gradlew :fint-core-client-api:check
 
   provider:
     needs: changes
