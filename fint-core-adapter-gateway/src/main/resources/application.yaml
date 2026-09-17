@@ -38,6 +38,9 @@ spring:
     virtual:
       enabled: true
   kafka:
+    properties:
+      "[ssl.protocol]": TLSv1.3
+      "[ssl.enabled.protocols]": TLSv1.3
     security:
       protocol: SSL
     admin:
