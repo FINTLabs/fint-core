@@ -4,6 +4,7 @@ import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.paging.PageCursor
+import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
@@ -23,6 +24,7 @@ class ResourceService(
     private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
+    private val cursorCodec: PageCursorCodec,
 ) {
     private val storageMapper = FintJson.storageMapper()
 
@@ -74,9 +76,9 @@ class ResourceService(
             totalItems = totalItems.toInt(),
             sinceTimeStamp = since.toTimeStamp(),
             hasNext = page.hasNext,
-            nextCursor = page.nextCursor,
-            prevCursor = page.prevCursor,
-            selfCursor = cursor?.encode(),
+            nextCursor = page.next?.let(cursorCodec::encode),
+            prevCursor = page.prev?.let(cursorCodec::encode),
+            selfCursor = cursor?.let(cursorCodec::encode),
         )
     }
 
@@ -174,19 +176,19 @@ class ResourceService(
 }
 
 /**
- * One page of entries and the bookmarks a client needs to move on from it. [nextCursor] points at
- * the last entry, so following it reads what comes after this page. [prevCursor] points at the
- * first entry, so following it reads what comes before. Both are null for an empty page.
+ * One page of entries and the bookmarks a client needs to move on from it. [next] points at the
+ * last entry, so following it reads what comes after this page. [prev] points at the first entry,
+ * so following it reads what comes before. Both are null for an empty page.
  */
 private data class Page(
     val entries: List<ResourceEntry>,
     val hasNext: Boolean,
 ) {
-    val nextCursor: String?
-        get() = entries.lastOrNull()?.let { PageCursor(PageDirection.AFTER, it.toAnchor()).encode() }
+    val next: PageCursor?
+        get() = entries.lastOrNull()?.let { PageCursor(PageDirection.AFTER, it.toAnchor()) }
 
-    val prevCursor: String?
-        get() = entries.firstOrNull()?.let { PageCursor(PageDirection.BEFORE, it.toAnchor()).encode() }
+    val prev: PageCursor?
+        get() = entries.firstOrNull()?.let { PageCursor(PageDirection.BEFORE, it.toAnchor()) }
 }
 
 private fun ResourceEntry.toAnchor() = PageAnchor(createdAt, id)

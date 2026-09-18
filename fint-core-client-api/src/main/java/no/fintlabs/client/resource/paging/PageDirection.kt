@@ -1,8 +1,8 @@
 package no.fintlabs.client.resource.paging
 
 enum class PageDirection(
-    val code: String,
+    val code: Byte,
 ) {
-    AFTER("a"),
-    BEFORE("b"),
+    AFTER(1),
+    BEFORE(2),
 }

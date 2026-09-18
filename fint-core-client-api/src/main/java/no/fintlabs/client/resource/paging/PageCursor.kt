@@ -1,37 +1,44 @@
 package no.fintlabs.client.resource.paging
 
 import no.novari.core.shared.store.PageAnchor
+import java.nio.ByteBuffer
 import java.time.Instant
-import java.util.Base64
 
+/**
+ * A bookmark in a list read. [anchor] is the entry the bookmark points at and [direction] says
+ * whether the next read continues after it or before it. [PageCursorCodec] turns a cursor into
+ * the token clients see and back again.
+ */
 data class PageCursor(
     val direction: PageDirection,
     val anchor: PageAnchor,
 ) {
-    fun encode(): String =
-        listOf(direction.code, anchor.createdAt.toEpochMilli().toString(), anchor.id)
-            .joinToString(SEPERATOR)
-            .toByteArray(Charsets.UTF_8)
-            .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
+    fun toBytes(): ByteArray {
+        val id = anchor.id.toByteArray(Charsets.UTF_8)
+
+        return ByteBuffer
+            .allocate(HEADER_BYTES + id.size)
+            .put(direction.code)
+            .putLong(anchor.createdAt.toEpochMilli())
+            .put(id)
+            .array()
+    }
 
     companion object {
-        private const val SEPERATOR = "\u001f"
+        private const val HEADER_BYTES = Byte.SIZE_BYTES + Long.SIZE_BYTES
 
-        fun decode(token: String): PageCursor {
-            val decoded =
-                try {
-                    String(Base64.getUrlDecoder().decode(token), Charsets.UTF_8)
-                } catch (e: IllegalArgumentException) {
-                    throw IllegalArgumentException("Not a page cursor", e)
-                }
+        fun fromBytes(bytes: ByteArray): PageCursor {
+            require(bytes.size > HEADER_BYTES) { "Not a page cursor" }
 
-            val parts = decoded.split(SEPERATOR)
-            require(parts.size == 3 && parts[2].isNotEmpty()) { "Not a page cursor" }
+            val buffer = ByteBuffer.wrap(bytes)
+            val code = buffer.get()
             val direction =
-                PageDirection.entries.firstOrNull { it.code == parts[0] }
+                PageDirection.entries.firstOrNull { it.code == code }
                     ?: throw IllegalArgumentException("Not a page cursor")
-            val millis = parts[1].toLongOrNull() ?: throw IllegalArgumentException("Not a page cursor")
-            return PageCursor(direction, PageAnchor(Instant.ofEpochMilli(millis), parts[2]))
+            val createdAt = Instant.ofEpochMilli(buffer.getLong())
+            val id = String(bytes, HEADER_BYTES, bytes.size - HEADER_BYTES, Charsets.UTF_8)
+
+            return PageCursor(direction, PageAnchor(createdAt, id))
         }
     }
 }
