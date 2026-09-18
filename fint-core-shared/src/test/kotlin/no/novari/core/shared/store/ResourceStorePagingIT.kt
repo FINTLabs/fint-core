@@ -7,7 +7,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.data.mongodb.core.query.Criteria
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.mongodb.MongoDBContainer
@@ -19,7 +18,8 @@ import java.time.Instant
  * the timestamp is included. The count and the page use the same filter, so the count always
  * matches what the page shows. Pages are ordered by `createdAt`, so an entry that is updated
  * later keeps its place in the order. One test deletes an entry and checks that the count
- * without a filter follows.
+ * without a filter follows. A page read takes the timestamp together with the number of entries
+ * it matches, which is what the service gets back from the count.
  */
 @Testcontainers
 class ResourceStorePagingIT {
@@ -72,12 +72,12 @@ class ResourceStorePagingIT {
 
     @Test
     fun `a page with a timestamp starts at the boundary`() {
-        assertThat(ids(store.findPage(since(30), 2, 0, collection))).containsExactly("C", "D")
+        assertThat(ids(store.findPage(filter(30, 3), 2, 0, collection))).containsExactly("C", "D")
     }
 
     @Test
     fun `offset counts from the timestamp, not from the start of the collection`() {
-        assertThat(ids(store.findPage(since(30), 2, 2, collection))).containsExactly("E")
+        assertThat(ids(store.findPage(filter(30, 3), 2, 2, collection))).containsExactly("E")
     }
 
     @Test
@@ -90,10 +90,15 @@ class ResourceStorePagingIT {
         store.saveAll(listOf(save("A", 60)))
 
         assertThat(store.count(since(30), collection)).isEqualTo(4)
-        assertThat(ids(store.findPage(since(30), 2, 0, collection))).containsExactly("A", "C")
+        assertThat(ids(store.findPage(filter(30, 4), 2, 0, collection))).containsExactly("A", "C")
     }
 
-    private fun since(timestamp: Long) = Criteria.where("lastModified").gte(Instant.ofEpochMilli(timestamp))
+    private fun since(timestamp: Long): Instant = Instant.ofEpochMilli(timestamp)
+
+    private fun filter(
+        timestamp: Long,
+        matches: Long,
+    ) = SinceFilter(since(timestamp), matches)
 
     private fun ids(entries: List<ResourceEntry>) = entries.map { it.id }
 

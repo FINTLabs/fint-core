@@ -2,6 +2,7 @@ package no.novari.core.shared.store
 
 import no.novari.core.shared.model.ResourceCoordinate
 import org.bson.Document
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -22,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
+    @Value("\${fint.resource-store.delta-hint-threshold:50000}") private val deltaHintThreshold: Long = 50_000,
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
 
@@ -152,29 +154,109 @@ class ResourceStore(
     }
 
     fun findAll(
-        filter: Criteria?,
+        since: Instant?,
         collectionName: String,
-    ): List<ResourceEntry> {
-        val query = baseQuery(filter)
-        return template.find<ResourceEntry>(query, collectionName)
-    }
+    ): List<ResourceEntry> = template.find<ResourceEntry>(orderedQuery(since, Sort.Direction.ASC), collectionName)
 
+    /**
+     * Reads one page by skipping [offset] entries. Every skipped entry costs a document read, so a
+     * deep offset is slow. Pages read through [findPageAfter] and [findPageBefore] are not.
+     */
     fun findPage(
-        filter: Criteria?,
+        filter: SinceFilter?,
         size: Int,
         offset: Long,
         collectionName: String,
-    ): List<ResourceEntry> = template.find<ResourceEntry>(pageQuery(filter, size, offset), collectionName)
+    ): List<ResourceEntry> = find(orderedQuery(filter?.since, Sort.Direction.ASC).skip(offset), size, collectionName, hintFor(filter))
 
     /**
-     * Counts the entries that match [filter]. Paged reads use the number as `total_items` and
-     * `/cache/size` reports it too, so use the same filter as [findPage].
+     * Reads the [size] entries that follow [anchor], the last entry of the page the caller already
+     * has. Entries that share the anchor's timestamp and have a larger id come first, then the
+     * entries with a later timestamp. Without an anchor this is the first page.
+     */
+    fun findPageAfter(
+        anchor: PageAnchor?,
+        filter: SinceFilter?,
+        size: Int,
+        collectionName: String,
+    ): List<ResourceEntry> {
+        if (anchor == null) return find(orderedQuery(filter?.since, Sort.Direction.ASC), size, collectionName, hintFor(filter))
+
+        val createdAt = Date.from(anchor.createdAt)
+        val sameTimestamp =
+            find(
+                orderedQuery(filter?.since, Sort.Direction.ASC)
+                    .addCriteria(
+                        Criteria
+                            .where("createdAt")
+                            .`is`(createdAt)
+                            .and("_id")
+                            .gt(anchor.id),
+                    ),
+                size,
+                collectionName,
+                hintFor(filter),
+            )
+        if (sameTimestamp.size >= size) return sameTimestamp
+
+        val later =
+            find(
+                orderedQuery(filter?.since, Sort.Direction.ASC).addCriteria(Criteria.where("createdAt").gt(createdAt)),
+                size - sameTimestamp.size,
+                collectionName,
+                hintFor(filter),
+            )
+        return sameTimestamp + later
+    }
+
+    /**
+     * Reads the [size] entries before [anchor], the first entry of the page the caller already
+     * has. The read runs backwards, entries that share the anchor's timestamp and have a smaller
+     * id first, then earlier entries, and the result is turned around so it is ascending like
+     * every other page.
+     */
+    fun findPageBefore(
+        anchor: PageAnchor,
+        filter: SinceFilter?,
+        size: Int,
+        collectionName: String,
+    ): List<ResourceEntry> {
+        val createdAt = Date.from(anchor.createdAt)
+        val sameTimestamp =
+            find(
+                orderedQuery(filter?.since, Sort.Direction.DESC)
+                    .addCriteria(
+                        Criteria
+                            .where("createdAt")
+                            .`is`(createdAt)
+                            .and("_id")
+                            .lt(anchor.id),
+                    ),
+                size,
+                collectionName,
+                hintFor(filter),
+            )
+        if (sameTimestamp.size >= size) return sameTimestamp.reversed()
+
+        val earlier =
+            find(
+                orderedQuery(filter?.since, Sort.Direction.DESC).addCriteria(Criteria.where("createdAt").lt(createdAt)),
+                size - sameTimestamp.size,
+                collectionName,
+                hintFor(filter),
+            )
+        return (sameTimestamp + earlier).reversed()
+    }
+
+    /**
+     * Counts the entries modified at or after [since], or every entry when [since] is null. Paged
+     * reads use the number as `total_items` and `/cache/size` reports it too.
      */
     fun count(
-        filter: Criteria?,
+        since: Instant?,
         collectionName: String,
     ): Long {
-        val query = Query().apply { filter?.let { addCriteria(it) } }
+        val query = Query().apply { criteria(since)?.let { addCriteria(it) } }
         return template.exactCount(query, ResourceEntry::class.java, collectionName)
     }
 
@@ -226,32 +308,55 @@ class ResourceStore(
      * The query behind every list read. Results are ordered by `createdAt` and then `_id`, so a
      * resource keeps its place in the list when it is updated, and two resources created in the
      * same millisecond always come back in the same order. The `created_at_id` index has the same
-     * shape, which lets Mongo walk the index instead of sorting the whole collection.
+     * shape, which lets Mongo walk the index instead of sorting the whole collection. A [since]
+     * keeps only the entries modified at or after that instant.
      */
-    internal fun baseQuery(filter: Criteria?): Query =
+    private fun orderedQuery(
+        since: Instant?,
+        direction: Sort.Direction,
+    ): Query =
         Query().apply {
-            filter?.let { addCriteria(it) }
-            with(Sort.by(Sort.Direction.ASC, "createdAt", "_id"))
+            criteria(since)?.let { addCriteria(it) }
+            with(Sort.by(direction, "createdAt", "_id"))
         }
 
-    internal fun pageQuery(
-        filter: Criteria?,
-        size: Int,
-        offset: Long,
-    ): Query = Query.of(baseQuery(filter)).skip(offset).limit(size)
+    private fun criteria(since: Instant?): Criteria? = since?.let { Criteria.where("lastModified").gte(Date.from(it)) }
+
+    /**
+     * Picks the index a page is read through. Without a filter, or with one that matches many
+     * entries, the read walks `created_at_id` in page order and drops the entries the filter
+     * rejects. With a filter that matches few entries that walk visits most of the collection
+     * before it finds them, so the read goes through `last_modified` instead and sorts the few
+     * matches. The cut-over is `fint.resource-store.delta-hint-threshold`, 50 000 entries unless
+     * configured.
+     */
+    private fun hintFor(filter: SinceFilter?): String =
+        if (filter != null && filter.matches <= deltaHintThreshold) LAST_MODIFIED_INDEX else CREATED_AT_ID_INDEX
+
+    private fun find(
+        query: Query,
+        limit: Int,
+        collectionName: String,
+        hint: String,
+    ): List<ResourceEntry> = template.find<ResourceEntry>(query.limit(limit).withHint(hint), collectionName)
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
 
         template.indexOps(collectionName).createIndex(
-            Index().on("lastModified", Sort.Direction.ASC).named("last_modified"),
+            Index().on("lastModified", Sort.Direction.ASC).named(LAST_MODIFIED_INDEX),
         )
 
         template.indexOps(collectionName).createIndex(
             Index()
                 .on("createdAt", Sort.Direction.ASC)
                 .on("_id", Sort.Direction.ASC)
-                .named("created_at_id"),
+                .named(CREATED_AT_ID_INDEX),
         )
+    }
+
+    companion object {
+        const val CREATED_AT_ID_INDEX = "created_at_id"
+        const val LAST_MODIFIED_INDEX = "last_modified"
     }
 }
