@@ -41,8 +41,14 @@ class FintPathInterceptor : HandlerInterceptor {
     private fun HttpServletRequest.fetchVariables(): Map<String, String>? =
         getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE) as? Map<String, String>
 
-    private fun resourcePathExists(domainName: String, packageName: String, resourceName: String?): Boolean =
-        if (resourceName != null) FintModel.byPath(domainName, packageName, resourceName) != null
-        else FintModel.refsIn(domainName, packageName).isNotEmpty()
-
+    private fun resourcePathExists(
+        domainName: String,
+        packageName: String,
+        resourceName: String?,
+    ): Boolean =
+        return if (resourceName != null) {
+            FintModel.byPath(domainName, packageName, resourceName) != null
+        } else {
+            FintModel.refsIn(domainName, packageName).isNotEmpty()
+        }
 }
