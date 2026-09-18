@@ -10,6 +10,7 @@ import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
 import no.fintlabs.client.resource.paging.PageCursor
+import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageCursorConverter
 import no.fintlabs.client.resource.paging.PageDirection
 import no.novari.core.shared.json.FintJson
@@ -31,6 +32,7 @@ import java.time.Instant
 class ResourceControllerCursorTest {
     private val baseUrl = "https://api.felleskomponent.no"
     private val resourceService = mockk<ResourceService>()
+    private val cursorCodec = PageCursorCodec.withRandomKey()
 
     private val mockMvc =
         MockMvcBuilders
@@ -42,8 +44,9 @@ class ResourceControllerCursorTest {
                     consumerConfiguration(),
                     mockk<StatsService>(),
                 ),
-            ).setConversionService(DefaultFormattingConversionService().apply { addConverter(PageCursorConverter()) })
-            .setMessageConverters(JacksonJsonHttpMessageConverter(FintJson.responseMapper(baseUrl)))
+            ).setConversionService(
+                DefaultFormattingConversionService().apply { addConverter(PageCursorConverter(cursorCodec)) },
+            ).setMessageConverters(JacksonJsonHttpMessageConverter(FintJson.responseMapper(baseUrl)))
             .build()
 
     private val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "elevfravar")
@@ -56,7 +59,7 @@ class ResourceControllerCursorTest {
         mockMvc
             .perform(
                 get(
-                    "/utdanning/vurdering/elevfravar?size=2&offset=2&cursor=${cursor.encode()}",
+                    "/utdanning/vurdering/elevfravar?size=2&offset=2&cursor=${cursorCodec.encode(cursor)}",
                 ).header("x-org-id", "fintlabs.no"),
             ).andExpect(status().isOk)
 

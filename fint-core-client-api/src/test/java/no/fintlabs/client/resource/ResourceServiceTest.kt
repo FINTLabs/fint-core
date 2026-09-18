@@ -6,6 +6,7 @@ import io.mockk.verify
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.paging.PageCursor
+import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
@@ -37,11 +38,14 @@ class ResourceServiceTest {
             every { findAllByTargetType(any(), any()) } returns emptyList()
         }
 
+    private val cursorCodec = PageCursorCodec.withRandomKey()
+
     private val resourceService =
         ResourceService(
             consumerConfiguration = consumerConfiguration(),
             resourceStore = resourceStore,
             relationEdgeStore = relationEdgeStore,
+            cursorCodec = cursorCodec,
         )
 
     val resourceCoordinate =
@@ -290,6 +294,7 @@ class ResourceServiceTest {
                 consumerConfiguration = consumerConfiguration(autorelationEnabled = false),
                 resourceStore = resourceStore,
                 relationEdgeStore = relationEdgeStore,
+                cursorCodec = cursorCodec,
             )
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entry =
@@ -356,7 +361,14 @@ class ResourceServiceTest {
 
         assertEquals(2, result.size)
         assertEquals(setOf("self", "prev", "next"), result.links.keys)
-        assertEquals("$BASE?offset=2&size=2&cursor=${cursor.encode()}", result.links["self"]?.single()?.href)
+        assertEquals(cursor, cursorOf(result.links["self"]?.single()?.href))
+        assertEquals(
+            "$BASE?offset=2&size=2",
+            result.links["self"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
         assertEquals(
             PageCursor(PageDirection.AFTER, PageAnchor(Instant.EPOCH, "D")),
             cursorOf(result.links["next"]?.single()?.href),
@@ -458,7 +470,7 @@ class ResourceServiceTest {
             autorelation = AutorelationConfig(enabled = autorelationEnabled),
         )
 
-    private fun cursorOf(href: String?) = PageCursor.decode(href!!.substringAfter("cursor="))
+    private fun cursorOf(href: String?) = cursorCodec.decode(href!!.substringAfter("cursor="))
 
     private fun resourceEntry(id: String) =
         ResourceEntry(
