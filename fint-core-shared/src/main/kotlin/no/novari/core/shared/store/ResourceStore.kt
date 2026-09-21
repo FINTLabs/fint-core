@@ -1,8 +1,9 @@
 package no.novari.core.shared.store
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import no.novari.core.shared.model.ResourceCoordinate
 import org.bson.Document
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -23,9 +24,10 @@ import java.util.concurrent.ConcurrentHashMap
 class ResourceStore(
     private val template: MongoTemplate,
     private val bsonConverter: FintResourceBsonConverter,
-    @Value("\${fint.resource-store.delta-hint-threshold:50000}") private val deltaHintThreshold: Long = 50_000,
+    private val properties: ResourceStoreProperties = ResourceStoreProperties(),
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
+    private val sizeCache: Cache<String, Long> = Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
 
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
@@ -250,14 +252,20 @@ class ResourceStore(
 
     /**
      * Counts the entries modified at or after [since], or every entry when [since] is null. Paged
-     * reads use the number as `total_items` and `/cache/size` reports it too.
+     * reads use the number as `total_items` and `/cache/size` reports it too. The unfiltered count
+     * scans the whole collection, so it is cached per collection for
+     * [ResourceStoreProperties.countCacheTtl]. A filtered count always reads the database.
      */
     fun count(
         since: Instant?,
         collectionName: String,
     ): Long {
-        val query = Query().apply { criteria(since)?.let { addCriteria(it) } }
-        return template.exactCount(query, ResourceEntry::class.java, collectionName)
+        if (since != null) {
+            val query = Query().apply { criteria(since)?.let { addCriteria(it) } }
+            return template.exactCount(query, ResourceEntry::class.java, collectionName)
+        }
+
+        return sizeCache.get(collectionName) { template.exactCount(Query(), ResourceEntry::class.java, collectionName) }
     }
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
@@ -327,11 +335,10 @@ class ResourceStore(
      * entries, the read walks `created_at_id` in page order and drops the entries the filter
      * rejects. With a filter that matches few entries that walk visits most of the collection
      * before it finds them, so the read goes through `last_modified` instead and sorts the few
-     * matches. The cut-over is `fint.resource-store.delta-hint-threshold`, 50 000 entries unless
-     * configured.
+     * matches. The cut-over is [ResourceStoreProperties.deltaHintThreshold].
      */
     private fun hintFor(filter: SinceFilter?): String =
-        if (filter != null && filter.matches <= deltaHintThreshold) LAST_MODIFIED_INDEX else CREATED_AT_ID_INDEX
+        if (filter != null && filter.matches <= properties.deltaHintThreshold) LAST_MODIFIED_INDEX else CREATED_AT_ID_INDEX
 
     private fun find(
         query: Query,
