@@ -163,7 +163,7 @@ jobs:
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy
-        uses: azure/k8s-deploy@v7.0.0
+        uses: azure/k8s-deploy@v6.0.0
         with:
           action: deploy
           manifests: ${{ steps.substitute.outputs.manifests }}
