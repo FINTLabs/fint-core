@@ -1,5 +1,8 @@
 package no.fintlabs.client.resource
 
+import no.fint.antlr.FintFilterService
+import no.fint.antlr.exception.FilterException
+import no.fint.antlr.exception.InvalidSyntaxException
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
@@ -50,8 +53,9 @@ class ResourceService(
             }
         val totalItems = if (paged) resourceStore.count(sinceCriteria, collectionName).toInt() else entries.size
 
-        val resources = entries.toFintResources(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, entries, resources, fullDump = !paged && since == 0L)
+        val allResources = entries.toFintResources(resourceCoordinate)
+        mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = !paged && since == 0L)
+        val resources = filter?.let { filterResources(allResources, it) } ?: allResources
 
         return createFintResourcesResponse(
             consumerConfiguration.baseUrl,
@@ -121,6 +125,15 @@ class ResourceService(
 
         edges.mergeInto(entries.zip(resources))
     }
+
+    /**
+     * Runs an OData `$filter` expression against each resource's own getters. Must run after
+     * [mergeRelationEdges] to include all relatiosn.
+     */
+    private fun filterResources(
+        resources: List<FintResource>,
+        filter: String,
+    ): List<FintResource> = filterService.from(resources.stream(), filter).toList()
 
     private fun ResourceEntry.toFintResource(resourceCoordinate: ResourceCoordinate): FintResource =
         storageMapper.convertValue(data, resourceCoordinate.toResourceClass())
