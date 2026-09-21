@@ -3,6 +3,7 @@ package no.fintlabs.client.resource
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import no.fintlabs.client.config.FintPathInterceptor
 import no.novari.core.shared.json.FintJson
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
@@ -23,7 +24,9 @@ class EndpointsControllerTest {
                 JacksonJsonHttpMessageConverter(
                     FintJson.responseMapper("https://beta.felleskomponent.no"),
                 ),
-            ).build()
+            ).addInterceptors(FintPathInterceptor())
+            .setControllerAdvice(ResourceExceptionHandler())
+            .build()
 
     @Test
     fun `package endpoint returns resource overview as top-level object`() {
@@ -77,5 +80,23 @@ class EndpointsControllerTest {
         verify(exactly = 1) {
             endpointsService.componentOverview(domainName, packageName)
         }
+    }
+
+    @Test
+    fun `unknown domain returns 404 without reaching the service`() {
+        mockMvc
+            .perform(get("/nonsense/vurdering"))
+            .andExpect(status().isNotFound)
+
+        verify(exactly = 0) { endpointsService.componentOverview(any(), any()) }
+    }
+
+    @Test
+    fun `unknown package returns 404 without reaching the service`() {
+        mockMvc
+            .perform(get("/utdanning/nonsense"))
+            .andExpect(status().isNotFound)
+
+        verify(exactly = 0) { endpointsService.componentOverview(any(), any()) }
     }
 }

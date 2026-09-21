@@ -22,6 +22,7 @@ public class ResourceExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<?> resourceNotFound(ResourceNotFoundException ex) {
+        log.debug(ex.getMessage());
         return ResponseEntity.notFound().build();
     }
 
