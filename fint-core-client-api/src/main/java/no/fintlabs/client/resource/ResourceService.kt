@@ -7,15 +7,19 @@ import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.paging.PageCursor
+import no.fintlabs.client.resource.paging.PageCursorCodec
+import no.fintlabs.client.resource.paging.PageDirection
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.mergeInto
+import no.novari.core.shared.store.PageAnchor
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
+import no.novari.core.shared.store.SinceFilter
 import no.novari.fint.core.model.FintResource
-import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.stereotype.Service
 import java.time.Instant
 
@@ -24,47 +28,68 @@ class ResourceService(
     private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
+    private val cursorCodec: PageCursorCodec,
 ) {
     private val storageMapper = FintJson.storageMapper()
     private val filterService: FintFilterService = ODataFilterService()
 
+    /**
+     * Serves a list read. A `size` above zero gives one page, otherwise everything. A positive
+     * `sinceTimeStamp` keeps only resources modified at or after it. A page with a [cursor] starts
+     * where the cursor points; without one it skips [offset] entries.
+     */
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
         size: Int,
         offset: Long,
         sinceTimeStamp: Long?,
         filter: String?,
+        cursor: PageCursor? = null,
     ): FintResourcesResponse {
         if (filter != null && !filterService.validate(filter)) {
             throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
         }
 
-        val since = sinceTimeStamp?.takeIf { it > 0 } ?: 0L
-        val sinceCriteria = since.toCriteria()
+        val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
-        val paged = size > 0
+        val baseUrl = consumerConfiguration.baseUrl
+        val resourceUri = resourceCoordinate.toResourceUri()
 
-        val entries: List<ResourceEntry> =
-            if (paged) {
-                resourceStore.findPage(sinceCriteria, size, offset, collectionName)
-            } else {
-                // TODO: can be removed in the future once we force pagination in the API
-                resourceStore.findAll(sinceCriteria, collectionName)
-            }
-        val totalItems = if (paged) resourceStore.count(sinceCriteria, collectionName).toInt() else entries.size
+        if (size <= 0) {
+            val entries = resourceStore.findAll(since, collectionName)
+            val allResources = entries.toFintResources(resourceCoordinate)
+            mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = since == null)
+            val resources = filter?.let { filterResources(allResources, it) } ?: allResources
+            return createFintResourcesResponse(
+                baseUrl,
+                resourceUri,
+                resources,
+                offset,
+                size,
+                entries.size,
+                since.toTimeStamp(),
+            )
+        }
 
-        val allResources = entries.toFintResources(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = !paged && since == 0L)
+        val totalItems = resourceStore.count(since, collectionName)
+        val page =
+            readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
+        val allResources = page.entries.toFintResources(resourceCoordinate)
+        mergeRelationEdges(resourceCoordinate, page.entries, allResources, fullDump = false)
         val resources = filter?.let { filterResources(allResources, it) } ?: allResources
 
         return createFintResourcesResponse(
-            consumerConfiguration.baseUrl,
-            resourceCoordinate.toResourceUri(),
-            resources,
-            offset,
-            size,
-            totalItems,
-            since,
+            baseUrl = baseUrl,
+            resourceUri = resourceUri,
+            entries = resources,
+            offset = offset,
+            size = size,
+            totalItems = totalItems.toInt(),
+            sinceTimeStamp = since.toTimeStamp(),
+            hasNext = page.hasNext,
+            nextCursor = page.next?.let(cursorCodec::encode),
+            prevCursor = page.prev?.let(cursorCodec::encode),
+            selfCursor = cursor?.let(cursorCodec::encode),
         )
     }
 
@@ -90,6 +115,32 @@ class ResourceService(
         val resource = entry.toFintResource(resourceCoordinate)
         mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), fullDump = false)
         return resource
+    }
+
+    /**
+     * Reads one entry more than the page size. If that extra entry comes back, there is another
+     * page in the direction we read. It is dropped before the page is returned.
+     */
+    private fun readPage(
+        cursor: PageCursor?,
+        filter: SinceFilter?,
+        size: Int,
+        offset: Long,
+        totalItems: Long,
+        collectionName: String,
+    ): Page {
+        val rows =
+            when (cursor?.direction) {
+                null -> resourceStore.findPage(filter, size + 1, offset, collectionName)
+                PageDirection.AFTER -> resourceStore.findPageAfter(cursor.anchor, filter, size + 1, collectionName)
+                PageDirection.BEFORE -> resourceStore.findPageBefore(cursor.anchor, filter, size + 1, collectionName)
+            }
+        val hasNext = rows.size > size
+
+        return when (cursor?.direction) {
+            PageDirection.BEFORE -> Page(if (hasNext) rows.drop(1) else rows, hasNext = offset + size < totalItems)
+            else -> Page(if (hasNext) rows.dropLast(1) else rows, hasNext)
+        }
     }
 
     /**
@@ -141,11 +192,23 @@ class ResourceService(
     private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
         map { it.toFintResource(resourceCoordinate) }
 
-    /**
-     * Only a positive `sinceTimeStamp` filters on `lastModified`. The controller defaults the
-     * parameter to 0, and a filter on "modified since 1970" matches every document while still
-     * steering Mongo towards the `lastModified` index, which cannot serve the list order.
-     */
-    private fun Long.toCriteria(): Criteria? =
-        takeIf { it > 0 }?.let { Criteria.where("lastModified").gte(Instant.ofEpochMilli(it)) }
+    private fun Instant?.toTimeStamp(): Long = this?.toEpochMilli() ?: 0
 }
+
+/**
+ * One page of entries and the bookmarks a client needs to move on from it. [next] points at the
+ * last entry, so following it reads what comes after this page. [prev] points at the first entry,
+ * so following it reads what comes before. Both are null for an empty page.
+ */
+private data class Page(
+    val entries: List<ResourceEntry>,
+    val hasNext: Boolean,
+) {
+    val next: PageCursor?
+        get() = entries.lastOrNull()?.let { PageCursor(PageDirection.AFTER, it.toAnchor()) }
+
+    val prev: PageCursor?
+        get() = entries.firstOrNull()?.let { PageCursor(PageDirection.BEFORE, it.toAnchor()) }
+}
+
+private fun ResourceEntry.toAnchor() = PageAnchor(createdAt, id)

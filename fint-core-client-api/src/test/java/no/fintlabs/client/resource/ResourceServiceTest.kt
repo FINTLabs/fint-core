@@ -7,24 +7,32 @@ import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidArgumentException
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.paging.PageCursor
+import no.fintlabs.client.resource.paging.PageCursorCodec
+import no.fintlabs.client.resource.paging.PageDirection
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.relationEdgeId
 import no.novari.core.shared.store.IdentifierRef
+import no.novari.core.shared.store.PageAnchor
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
+import no.novari.core.shared.store.SinceFilter
 import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
 import org.bson.Document
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
 import org.junit.jupiter.api.assertThrows
-import org.springframework.data.mongodb.core.query.Criteria
 import java.time.Instant
 
 class ResourceServiceTest {
     private val resourceStore = mockk<ResourceStore>()
+
+    private companion object {
+        const val BASE = "https://api.felleskomponent.no/utdanning/vurdering/elevfravar"
+    }
 
     private val relationEdgeStore =
         mockk<RelationEdgeStore> {
@@ -32,11 +40,14 @@ class ResourceServiceTest {
             every { findAllByTargetType(any(), any()) } returns emptyList()
         }
 
+    private val cursorCodec = PageCursorCodec.withRandomKey()
+
     private val resourceService =
         ResourceService(
             consumerConfiguration = consumerConfiguration(),
             resourceStore = resourceStore,
             relationEdgeStore = relationEdgeStore,
+            cursorCodec = cursorCodec,
         )
 
     val resourceCoordinate =
@@ -70,43 +81,39 @@ class ResourceServiceTest {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries = (1..5).map { resourceEntry("resource-$it") }
 
-        every { resourceStore.findPage(null, 2, 0, collectionName) } returns entries.take(2)
+        every { resourceStore.findPage(null, 3, 0, collectionName) } returns entries.take(2)
         every { resourceStore.count(null, collectionName) } returns 5
 
         val result = resourceService.getResources(resourceCoordinate, 2, 0, null, null)
 
         verify(exactly = 1) {
-            resourceStore.findPage(null, 2, 0, collectionName)
+            resourceStore.findPage(null, 3, 0, collectionName)
         }
         assertEquals(2, result.size)
+        assertEquals(setOf("self"), result.links.keys)
     }
 
     @Test
     fun `sinceTimeStamp 0 reads the page without a lastModified filter`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findPage(null, 2, 0, collectionName) } returns emptyList()
+        every { resourceStore.findPage(null, 3, 0, collectionName) } returns emptyList()
         every { resourceStore.count(null, collectionName) } returns 0
 
         resourceService.getResources(resourceCoordinate, 2, 0, 0L, null)
 
-        verify(exactly = 1) { resourceStore.findPage(null, 2, 0, collectionName) }
+        verify(exactly = 1) { resourceStore.findPage(null, 3, 0, collectionName) }
     }
 
     @Test
-    fun `a positive sinceTimeStamp filters on lastModified`() {
+    fun `a positive sinceTimeStamp reaches the store as an instant with the number of matching entries`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val filters = mutableListOf<Criteria?>()
-        every { resourceStore.findPage(captureNullable(filters), 2, 0, collectionName) } returns emptyList()
-        every { resourceStore.count(any(), collectionName) } returns 0
+        val since = Instant.ofEpochMilli(1723456789L)
+        every { resourceStore.count(since, collectionName) } returns 7
+        every { resourceStore.findPage(SinceFilter(since, 7), 3, 0, collectionName) } returns emptyList()
 
         resourceService.getResources(resourceCoordinate, 2, 0, 1723456789L, null)
 
-        val filter = filters.single()
-        assertNotNull(filter)
-        assertEquals(
-            Document("lastModified", Document("\$gte", Instant.ofEpochMilli(1723456789L))),
-            filter.criteriaObject,
-        )
+        verify(exactly = 1) { resourceStore.findPage(SinceFilter(since, 7), 3, 0, collectionName) }
     }
 
     @Test
@@ -118,7 +125,7 @@ class ResourceServiceTest {
                 resourceEntry("B", data = Document("systemId", Document("identifikatorverdi", "B"))),
                 resourceEntry("C", data = Document("systemId", Document("identifikatorverdi", "C"))),
             )
-        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
         every { resourceStore.count(null, collectionName) } returns 3
 
         val result =
@@ -143,7 +150,7 @@ class ResourceServiceTest {
     @Test
     fun `getResources with a filter that fails to evaluate throws FilterException`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findPage(null, 10, 0, collectionName) } returns
+        every { resourceStore.findPage(null, 11, 0, collectionName) } returns
             listOf(resourceEntry("A", data = Document("systemId", Document("identifikatorverdi", "A"))))
         every { resourceStore.count(null, collectionName) } returns 1
 
@@ -171,7 +178,7 @@ class ResourceServiceTest {
                     identifiers = listOf(IdentifierRef("systemid", "B")),
                 ),
             )
-        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
         every { resourceStore.count(null, collectionName) } returns 2
 
         resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi eq 'B'")
@@ -201,7 +208,7 @@ class ResourceServiceTest {
                     identifiers = listOf(IdentifierRef("systemid", "B")),
                 ),
             )
-        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
         every { resourceStore.count(null, collectionName) } returns 2
         every {
             relationEdgeStore.findByTargets(any(), any(), any())
@@ -245,8 +252,8 @@ class ResourceServiceTest {
     @Test
     fun `a paged read without timestamp reports the collection size as total_items`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findPage(null, 2, 2, collectionName) } returns
-            listOf(resourceEntry("C"), resourceEntry("D"))
+        every { resourceStore.findPage(null, 3, 2, collectionName) } returns
+            listOf(resourceEntry("C"), resourceEntry("D"), resourceEntry("E"))
         every { resourceStore.count(null, collectionName) } returns 5
 
         val result = resourceService.getResources(resourceCoordinate, 2, 2, null, null)
@@ -259,8 +266,8 @@ class ResourceServiceTest {
     @Test
     fun `a paged read with sinceTimeStamp counts every entry from the timestamp onward, not just the page`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val since = Criteria.where("lastModified").gte(Instant.ofEpochMilli(30))
-        every { resourceStore.findPage(since, 2, 2, collectionName) } returns listOf(resourceEntry("E"))
+        val since = Instant.ofEpochMilli(30)
+        every { resourceStore.findPage(SinceFilter(since, 3), 3, 2, collectionName) } returns listOf(resourceEntry("E"))
         every { resourceStore.count(since, collectionName) } returns 3
 
         val result = resourceService.getResources(resourceCoordinate, 2, 2, 30, null)
@@ -277,7 +284,7 @@ class ResourceServiceTest {
     @Test
     fun `nothing changed since the timestamp gives total_items 0`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findPage(any(), 2, 0, collectionName) } returns emptyList()
+        every { resourceStore.findPage(any(), 3, 0, collectionName) } returns emptyList()
         every { resourceStore.count(any(), collectionName) } returns 0
 
         val result = resourceService.getResources(resourceCoordinate, 2, 0, 100, null)
@@ -289,7 +296,7 @@ class ResourceServiceTest {
     @Test
     fun `sinceTimeStamp 0 means no timestamp`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findPage(null, 2, 0, collectionName) } returns listOf(resourceEntry("A"))
+        every { resourceStore.findPage(null, 3, 0, collectionName) } returns listOf(resourceEntry("A"))
         every { resourceStore.count(null, collectionName) } returns 1
 
         val result = resourceService.getResources(resourceCoordinate, 2, 0, 0, null)
@@ -303,8 +310,8 @@ class ResourceServiceTest {
     @Test
     fun `without size, total_items is the number of entries returned and no count query is made`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val since = Criteria.where("lastModified").gte(Instant.ofEpochMilli(30))
-        every { resourceStore.findAll(since, collectionName) } returns listOf("C", "D", "E").map { resourceEntry(it) }
+        every { resourceStore.findAll(Instant.ofEpochMilli(30), collectionName) } returns
+            listOf("C", "D", "E").map { resourceEntry(it) }
 
         val result = resourceService.getResources(resourceCoordinate, 0, 0, 30, null)
 
@@ -417,6 +424,7 @@ class ResourceServiceTest {
                 consumerConfiguration = consumerConfiguration(autorelationEnabled = false),
                 resourceStore = resourceStore,
                 relationEdgeStore = relationEdgeStore,
+                cursorCodec = cursorCodec,
             )
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entry =
@@ -462,13 +470,113 @@ class ResourceServiceTest {
     fun `an explicit page above 1000 still queries edges by identifier`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries = (1..1200).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
-        every { resourceStore.findPage(null, 1200, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 1201, 0, collectionName) } returns entries
         every { resourceStore.count(null, collectionName) } returns 1200
 
         resourceService.getResources(resourceCoordinate, 1200, 0, null, null)
 
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
         verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `a cursor page reads after the bookmark and its links carry offset, size and cursor`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val cursor = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "B"))
+        every { resourceStore.count(null, collectionName) } returns 10
+        every { resourceStore.findPageAfter(cursor.anchor, null, 3, collectionName) } returns
+            listOf("C", "D", "E").map { resourceEntry(it) }
+
+        val result = resourceService.getResources(resourceCoordinate, 2, 2, null, null, cursor)
+
+        assertEquals(2, result.size)
+        assertEquals(setOf("self", "prev", "next"), result.links.keys)
+        assertEquals(cursor, cursorOf(result.links["self"]?.single()?.href))
+        assertEquals(
+            "$BASE?offset=2&size=2",
+            result.links["self"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+        assertEquals(
+            PageCursor(PageDirection.AFTER, PageAnchor(Instant.EPOCH, "D")),
+            cursorOf(result.links["next"]?.single()?.href),
+        )
+        assertEquals(
+            "$BASE?offset=4&size=2",
+            result.links["next"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+        assertEquals(
+            PageCursor(PageDirection.BEFORE, PageAnchor(Instant.EPOCH, "C")),
+            cursorOf(result.links["prev"]?.single()?.href),
+        )
+        assertEquals(
+            "$BASE?offset=0&size=2",
+            result.links["prev"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+    }
+
+    @Test
+    fun `a cursor page without an extra row is the last page`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val cursor = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "Y"))
+        every { resourceStore.count(null, collectionName) } returns 10
+        every { resourceStore.findPageAfter(cursor.anchor, null, 3, collectionName) } returns listOf(resourceEntry("Z"))
+
+        val result = resourceService.getResources(resourceCoordinate, 2, 8, null, null, cursor)
+
+        assertEquals(1, result.size)
+        assertEquals(setOf("self", "prev"), result.links.keys)
+    }
+
+    @Test
+    fun `a cursor page before the bookmark drops the extra leading row and keeps next by position`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val cursor = PageCursor(PageDirection.BEFORE, PageAnchor(Instant.ofEpochMilli(40), "D"))
+        every { resourceStore.count(null, collectionName) } returns 10
+        every { resourceStore.findPageBefore(cursor.anchor, null, 3, collectionName) } returns
+            listOf("A", "B", "C").map { resourceEntry(it) }
+
+        val result = resourceService.getResources(resourceCoordinate, 2, 2, null, null, cursor)
+
+        assertEquals(2, result.size)
+        assertEquals(setOf("self", "prev", "next"), result.links.keys)
+        assertEquals(
+            PageCursor(PageDirection.BEFORE, PageAnchor(Instant.EPOCH, "B")),
+            cursorOf(result.links["prev"]?.single()?.href),
+        )
+        assertEquals(
+            PageCursor(PageDirection.AFTER, PageAnchor(Instant.EPOCH, "C")),
+            cursorOf(result.links["next"]?.single()?.href),
+        )
+    }
+
+    @Test
+    fun `a cursor page with sinceTimeStamp keeps the timestamp in every link`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val since = Instant.ofEpochMilli(30)
+        val cursor = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "B"))
+        every { resourceStore.count(since, collectionName) } returns 4
+        every { resourceStore.findPageAfter(cursor.anchor, SinceFilter(since, 4), 3, collectionName) } returns
+            listOf("C", "D", "E").map { resourceEntry(it) }
+
+        val result = resourceService.getResources(resourceCoordinate, 2, 2, 30, null, cursor)
+
+        assertEquals(4, result.totalItems)
+        assertEquals(
+            "$BASE?sinceTimeStamp=30&offset=4&size=2",
+            result.links["next"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
     }
 
     @Test
@@ -491,6 +599,8 @@ class ResourceServiceTest {
             podUrl = "http://localhost",
             autorelation = AutorelationConfig(enabled = autorelationEnabled),
         )
+
+    private fun cursorOf(href: String?) = cursorCodec.decode(href!!.substringAfter("cursor="))
 
     private fun resourceEntry(id: String) =
         ResourceEntry(
