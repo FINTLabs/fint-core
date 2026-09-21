@@ -1,5 +1,6 @@
 package no.fintlabs.client.resource
 
+import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
@@ -22,6 +23,7 @@ class ResourceService(
     private val relationEdgeStore: RelationEdgeStore,
 ) {
     private val storageMapper = FintJson.storageMapper()
+    private val filterService: FintFilterService = ODataFilterService()
 
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
@@ -30,6 +32,10 @@ class ResourceService(
         sinceTimeStamp: Long?,
         filter: String?,
     ): FintResourcesResponse {
+        if (filter != null && !filterService.validate(filter)) {
+            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
+        }
+
         val since = sinceTimeStamp?.takeIf { it > 0 } ?: 0L
         val sinceCriteria = since.toCriteria()
         val collectionName = resourceCoordinate.toCollectionName()
