@@ -5,6 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.novari.core.shared.json.FintJson
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
@@ -54,6 +55,7 @@ class AdminControllerTest {
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(content().json(jsonMapper.writeValueAsString(response)))
+            .andExpect(content().string(containsString(""""lastUpdated":"2026-02-03T04:05:06Z"""")))
 
         verify(exactly = 1) { statsService.cacheStatus(any(), any()) }
     }
