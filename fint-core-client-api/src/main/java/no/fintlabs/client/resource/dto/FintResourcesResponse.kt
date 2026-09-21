@@ -45,7 +45,9 @@ class FintResourcesResponse(
  *
  * Every link has `offset` and `size`. When the request had a `sinceTimeStamp`, the links keep it,
  * so a client can follow `next` without adding it again. `prev` is only added when `offset > 0`.
- * `next` is only added when `offset + size < totalItems`. When [size] is zero or lower there is no
+ * `next` is only added when [hasNext] says there is a row after the page. `next` and `prev` also
+ * carry a `cursor`, the bookmark the next read starts from, when the caller supplies one, and
+ * `self` repeats the cursor the request came with. When [size] is zero or lower there is no
  * paging, and `self` is the plain resource URL with `sinceTimeStamp` added if the request had one.
  *
  * Example:
@@ -58,12 +60,14 @@ class FintResourcesResponse(
  *     size = 2,
  *     totalItems = 10,
  *     sinceTimeStamp = 1000,
+ *     hasNext = true,
+ *     nextCursor = "YQ...",
  * )
  * ```
  *
  * produces:
  * - self: `https://api.felleskomponent.no/utdanning/elev/elev?sinceTimeStamp=1000&offset=0&size=2`
- * - next: `https://api.felleskomponent.no/utdanning/elev/elev?sinceTimeStamp=1000&offset=2&size=2`
+ * - next: `https://api.felleskomponent.no/utdanning/elev/elev?sinceTimeStamp=1000&offset=2&size=2&cursor=YQ...`
  */
 fun createFintResourcesResponse(
     baseUrl: String,
@@ -73,15 +77,19 @@ fun createFintResourcesResponse(
     size: Int,
     totalItems: Int,
     sinceTimeStamp: Long = 0,
+    hasNext: Boolean = offset + size < totalItems,
+    nextCursor: String? = null,
+    prevCursor: String? = null,
+    selfCursor: String? = null,
 ): FintResourcesResponse {
     val builder = UriComponentsBuilder.fromUriString("$baseUrl/$resourceUri")
     if (sinceTimeStamp > 0) builder.queryParam("sinceTimeStamp", sinceTimeStamp)
 
     return FintResourcesResponse(entries, offset, totalItems).apply {
         if (size > 0) {
-            addLink("self", pageLink(builder, size, offset))
-            if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size)))
-            if (offset + size < this.totalItems) addLink("next", pageLink(builder, size, offset + size))
+            addLink("self", pageLink(builder, size, offset, selfCursor))
+            if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size), prevCursor))
+            if (hasNext) addLink("next", pageLink(builder, size, offset + size, nextCursor))
         } else {
             addLink("self", LinkResponse(builder.toUriString()))
         }
@@ -92,9 +100,11 @@ private fun pageLink(
     builder: UriComponentsBuilder,
     size: Int,
     offset: Long,
+    cursor: String?,
 ) = LinkResponse(
     builder
         .replaceQueryParam("offset", offset)
         .replaceQueryParam("size", size)
+        .replaceQueryParam("cursor", *listOfNotNull(cursor).toTypedArray())
         .toUriString(),
 )
