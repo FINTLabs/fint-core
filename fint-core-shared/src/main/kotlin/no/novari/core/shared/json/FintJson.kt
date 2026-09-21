@@ -1,12 +1,17 @@
 package no.novari.core.shared.json
 
+import com.fasterxml.jackson.annotation.JsonFormat
 import com.fasterxml.jackson.annotation.JsonInclude
 import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.MapperFeature
 import tools.jackson.databind.cfg.DateTimeFeature
 import tools.jackson.databind.json.JsonMapper
-import tools.jackson.databind.util.StdDateFormat
 import tools.jackson.module.kotlin.KotlinModule
+import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.util.TimeZone
+
+const val RESPONSE_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ss'Z'"
 
 /**
  * The two Jackson contracts in fint-core. Every mapper that touches a `FintResource` is built
@@ -37,7 +42,8 @@ object FintJson {
     ): JsonMapper =
         mapperBuilder()
             .addModule(ResponseLinksModule(baseUrl, componentResolver))
-            .defaultDateFormat(StdDateFormat.instance)
+            .withConfigOverride(LocalDateTime::class.java) { it.format = JsonFormat.Value.forPattern(RESPONSE_DATE_TIME_PATTERN) }
+            .defaultDateFormat(SimpleDateFormat(RESPONSE_DATE_TIME_PATTERN).apply { timeZone = TimeZone.getTimeZone("UTC") })
             .build()
 
     private fun mapperBuilder(): JsonMapper.Builder =
