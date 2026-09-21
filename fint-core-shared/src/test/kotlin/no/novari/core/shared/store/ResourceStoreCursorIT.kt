@@ -91,7 +91,12 @@ class ResourceStoreCursorIT {
 
     @Test
     fun `a page after an anchor gives the same rows whichever index serves the filter`() {
-        val storeReadingThroughCreatedAt = ResourceStore(template, FintResourceBsonConverter(), deltaHintThreshold = 0)
+        val storeReadingThroughCreatedAt =
+            ResourceStore(
+                template,
+                FintResourceBsonConverter(),
+                ResourceStoreProperties(deltaHintThreshold = 0),
+            )
 
         val throughLastModified = ids(store.findPageAfter(anchor("B1"), since(30, 3), 3, collection))
         val throughCreatedAt = ids(storeReadingThroughCreatedAt.findPageAfter(anchor("B1"), since(30, 3), 3, collection))
