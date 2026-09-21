@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation(project(":fint-core-shared"))
 
-    implementation("no.fintlabs:fint-antlr:1.1.1")
+    implementation("no.fintlabs:fint-antlr:1.2.0")
     implementation("no.fintlabs:fint-core-status-models:1.0.0")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
