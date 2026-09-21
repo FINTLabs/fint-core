@@ -3,6 +3,8 @@ package no.fintlabs.client.resource
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import no.fint.antlr.exception.FilterException
+import no.fint.antlr.exception.InvalidArgumentException
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
@@ -107,9 +109,137 @@ class ResourceServiceTest {
         )
     }
 
-    // TODO: implement filtering
     @Test
     fun `getResources with filter returns as expected`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf(
+                resourceEntry("A", data = Document("systemId", Document("identifikatorverdi", "A"))),
+                resourceEntry("B", data = Document("systemId", Document("identifikatorverdi", "B"))),
+                resourceEntry("C", data = Document("systemId", Document("identifikatorverdi", "C"))),
+            )
+        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 3
+
+        val result =
+            resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi eq 'B'")
+
+        assertEquals(1, result.size)
+        assertEquals(3, result.totalItems)
+        val survivor = result.embedded.entries.single() as Elevfravar
+        assertEquals("B", survivor.systemId?.identifikatorverdi)
+    }
+
+    @Test
+    fun `getResources with invalid filter syntax fails fast, before touching the store`() {
+        assertThrows<FilterException> {
+            resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi = 'A'")
+        }
+
+        verify(exactly = 0) { resourceStore.findPage(any(), any(), any(), any()) }
+        verify(exactly = 0) { resourceStore.findAll(any(), any()) }
+    }
+
+    @Test
+    fun `getResources with a filter that fails to evaluate throws FilterException`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 10, 0, collectionName) } returns
+            listOf(resourceEntry("A", data = Document("systemId", Document("identifikatorverdi", "A"))))
+        every { resourceStore.count(null, collectionName) } returns 1
+
+        val exception =
+            assertThrows<FilterException> {
+                resourceService.getResources(resourceCoordinate, 10, 0, null, "doesNotExist eq 'A'")
+            }
+
+        assertEquals(InvalidArgumentException::class, exception.cause?.let { it::class })
+    }
+
+    @Test
+    fun `getResources fetches relation edges for the whole page, not just the filtered survivors`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf(
+                resourceEntry(
+                    "A",
+                    data = Document("systemId", Document("identifikatorverdi", "A")),
+                    identifiers = listOf(IdentifierRef("systemid", "A")),
+                ),
+                resourceEntry(
+                    "B",
+                    data = Document("systemId", Document("identifikatorverdi", "B")),
+                    identifiers = listOf(IdentifierRef("systemid", "B")),
+                ),
+            )
+        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 2
+
+        resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi eq 'B'")
+
+        verify(exactly = 1) {
+            relationEdgeStore.findByTargets(
+                any(),
+                any(),
+                listOf(IdentifierRef("systemid", "A"), IdentifierRef("systemid", "B")),
+            )
+        }
+    }
+
+    @Test
+    fun `getResources can filter on an autorelation back-link`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf(
+                resourceEntry(
+                    "A",
+                    data = Document("systemId", Document("identifikatorverdi", "A")),
+                    identifiers = listOf(IdentifierRef("systemid", "A")),
+                ),
+                resourceEntry(
+                    "B",
+                    data = Document("systemId", Document("identifikatorverdi", "B")),
+                    identifiers = listOf(IdentifierRef("systemid", "B")),
+                ),
+            )
+        every { resourceStore.findPage(null, 10, 0, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 2
+        every {
+            relationEdgeStore.findByTargets(any(), any(), any())
+        } returns
+            listOf(
+                RelationEdge(
+                    id =
+                        relationEdgeId(
+                            sourceType = "utdanning/vurdering/fravarsregistrering",
+                            sourceId = "FR-9",
+                            relationName = "elevfravar",
+                            targetType = "utdanning/vurdering/elevfravar",
+                            targetIdField = "systemid",
+                            targetIdValue = "B",
+                        ),
+                    sourceType = "utdanning/vurdering/fravarsregistrering",
+                    sourceId = "FR-9",
+                    sourceIdField = "systemid",
+                    sourceIdValue = "FR-9",
+                    inverseName = "fravarsregistrering",
+                    targetType = "utdanning/vurdering/elevfravar",
+                    targetIdField = "systemid",
+                    targetIdValue = "B",
+                ),
+            )
+
+        val result =
+            resourceService.getResources(
+                resourceCoordinate,
+                10,
+                0,
+                null,
+                "links/fravarsregistrering/any(l:l/idValue eq 'FR-9')",
+            )
+
+        assertEquals(1, result.size)
+        val survivor = result.embedded.entries.single() as Elevfravar
+        assertEquals("B", survivor.systemId?.identifikatorverdi)
     }
 
     @Test

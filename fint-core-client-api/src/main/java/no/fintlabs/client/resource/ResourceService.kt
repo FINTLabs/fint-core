@@ -128,7 +128,7 @@ class ResourceService(
 
     /**
      * Runs an OData `$filter` expression against each resource's own getters. Must run after
-     * [mergeRelationEdges] to include all relatiosn.
+     * [mergeRelationEdges] to include all relations.
      */
     private fun filterResources(
         resources: List<FintResource>,
