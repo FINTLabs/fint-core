@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.MongoTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.mongodb.MongoDBContainer
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -19,7 +20,9 @@ import java.time.Instant
  * matches what the page shows. Pages are ordered by `createdAt`, so an entry that is updated
  * later keeps its place in the order. One test deletes an entry and checks that the count
  * without a filter follows. A page read takes the timestamp together with the number of entries
- * it matches, which is what the service gets back from the count.
+ * it matches, which is what the service gets back from the count. The unfiltered count is cached,
+ * so the tests that check its timing build their own store with a short TTL instead of using the
+ * shared one.
  */
 @Testcontainers
 class ResourceStorePagingIT {
@@ -56,6 +59,27 @@ class ResourceStorePagingIT {
     }
 
     @Test
+    fun `count without criteria is cached for a short time`() {
+        val cached = ResourceStore(template, FintResourceBsonConverter(), ResourceStoreProperties(countCacheTtl = Duration.ofSeconds(30)))
+        assertThat(cached.count(null, collection)).isEqualTo(5)
+
+        cached.applyAll(listOf(Delete("A", collection, Instant.ofEpochMilli(100))))
+
+        assertThat(cached.count(null, collection)).isEqualTo(5)
+    }
+
+    @Test
+    fun `count without criteria refreshes once the cache expires`() {
+        val cached = ResourceStore(template, FintResourceBsonConverter(), ResourceStoreProperties(countCacheTtl = Duration.ofMillis(100)))
+        assertThat(cached.count(null, collection)).isEqualTo(5)
+
+        cached.applyAll(listOf(Delete("A", collection, Instant.ofEpochMilli(100))))
+        Thread.sleep(300)
+
+        assertThat(cached.count(null, collection)).isEqualTo(4)
+    }
+
+    @Test
     fun `count with a timestamp includes entries at the boundary`() {
         assertThat(store.count(since(30), collection)).isEqualTo(3)
     }
@@ -63,6 +87,16 @@ class ResourceStorePagingIT {
     @Test
     fun `count with a timestamp after every entry is 0`() {
         assertThat(store.count(since(100), collection)).isZero()
+    }
+
+    @Test
+    fun `count with a timestamp is never cached`() {
+        val cached = ResourceStore(template, FintResourceBsonConverter(), ResourceStoreProperties(countCacheTtl = Duration.ofSeconds(30)))
+        assertThat(cached.count(since(30), collection)).isEqualTo(3)
+
+        cached.saveAll(listOf(save("F", 35)))
+
+        assertThat(cached.count(since(30), collection)).isEqualTo(4)
     }
 
     @Test
