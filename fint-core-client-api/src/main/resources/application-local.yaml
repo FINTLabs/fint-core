@@ -24,6 +24,9 @@ spring:
     consumer:
       group-id: fint-core-client-api
     bootstrap-servers: localhost:9092
+  mongodb:
+    ssl:
+      enabled: false
 logging:
   level:
     org.apache.kafka: OFF
