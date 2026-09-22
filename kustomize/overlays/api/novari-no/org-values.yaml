@@ -8,6 +8,7 @@ data:
   id-dotted: novari.no
   id-dashed: novari-no
   id-underscore: novari_no
+  org-id-regex: 're:(^|\.)novari\.no$'
   asset-regex: 're:(^|,)novari\.no(,|$)'
   host: api.felleskomponent.no
   base-url: https://api.felleskomponent.no
