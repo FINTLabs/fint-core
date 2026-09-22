@@ -7,6 +7,6 @@ import java.time.Duration
 @ConfigurationProperties("fint.security.opa")
 class OpaProperties {
     var enabled: Boolean = false
-    var url: String = "http://fint-core-opa:8181"
+    var url: String = "http://fint-core-opa.fint-core.svc.cluster.local:8181"
     var timeout: Duration = Duration.ofSeconds(2)
 }
