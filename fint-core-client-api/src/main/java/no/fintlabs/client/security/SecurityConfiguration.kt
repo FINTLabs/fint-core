@@ -100,8 +100,7 @@ class SecurityConfiguration(
                 )
         ) {
             is OpaDecision.Allowed -> {
-                context.request.setAttribute(OPA_FIELDS_ATTRIBUTE, decision.fields)
-                context.request.setAttribute(OPA_RELATIONS_ATTRIBUTE, decision.relations)
+                context.request.setAttribute(OPA_DECISION_ATTRIBUTE, decision)
                 null
             }
 
@@ -116,8 +115,7 @@ class SecurityConfiguration(
     }
 
     companion object {
-        const val OPA_FIELDS_ATTRIBUTE = "x-opa-fields"
-        const val OPA_RELATIONS_ATTRIBUTE = "x-opa-relations"
+        const val OPA_DECISION_ATTRIBUTE = "opa-decision"
         private const val ORG_ID_HEADER = "x-org-id"
         private const val RESOURCE_PATH = "/{domainName}/{packageName}/{resourceName}/**"
         private const val ENDPOINTS_PATH = "/{domainName}/{packageName}"
