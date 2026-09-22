@@ -49,7 +49,7 @@ import org.testcontainers.utility.DockerImageName
  * Runs the real rego policy (copied unchanged from fint-core-access-control) against a real OPA
  * container, not a mock, so a change to the input/output contract fails here instead of in
  * production. `env` is MockMvc's default host ("localhost") unless a test sets the host itself.
- * The test data allows `localhost` and `beta`.
+ * The test client is granted `localhost` and `beta`.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -78,14 +78,14 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `client allowed on the resource the policy data lists`() {
+    fun `a granted resource is allowed`() {
         mockMvc
             .perform(personRequest())
             .andExpect(status().isOk)
     }
 
     @Test
-    fun `client denied on a resource the policy data does not list, and the body names the resource`() {
+    fun `a resource that is not granted is denied, and the 403 says why`() {
         mockMvc
             .perform(
                 get("/administrasjon/personal/personalressurs")
@@ -96,7 +96,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `response keeps only the fields and relations the policy allowed`() {
+    fun `response keeps only the granted fields and relations`() {
         mockMvc
             .perform(personRequest())
             .andExpect(status().isOk)
@@ -133,7 +133,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `self link is dropped when the id field it is built from is not allowed`() {
+    fun `self link is dropped when the id field it is built from is not granted`() {
         mockMvc
             .perform(
                 get("/administrasjon/personal/person")
@@ -146,7 +146,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `self link is kept when the id field it is built from is allowed`() {
+    fun `self link is kept when the id field it is built from is granted`() {
         mockMvc
             .perform(personRequest())
             .andExpect(status().isOk)
@@ -154,7 +154,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `a camelCase field is kept when the policy allows it, even though OPA lowercases field names`() {
+    fun `a granted camelCase field is kept even though OPA lowercases field names`() {
         mockMvc
             .perform(
                 get("/utdanning/vurdering/elevfravar")
@@ -165,7 +165,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `endpoints overview is allowed when the policy data lists the package`() {
+    fun `endpoints overview is allowed for a granted package`() {
         mockMvc
             .perform(
                 get("/utdanning/vurdering")
@@ -175,7 +175,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `endpoints overview is denied when the policy data does not list the package`() {
+    fun `endpoints overview is denied for a package that is not granted`() {
         mockMvc
             .perform(
                 get("/utdanning/kodeverk")
@@ -193,7 +193,7 @@ class OpaAccessIT {
     }
 
     @Test
-    fun `client is denied in an environment the policy data does not allow`() {
+    fun `client is denied in an environment it is not granted`() {
         mockMvc
             .perform(personRequestFrom("api.felleskomponent.no"))
             .andExpect(status().isForbidden)
@@ -319,6 +319,25 @@ class OpaAccessIT {
         ): String = "$domainName/$packageName/$resourceName"
     }
 
+    class ClientGrants(
+        val allowedEnvironments: List<String>,
+        val components: List<Component>,
+    )
+
+    class Component(
+        val domainName: String,
+        val packageName: String,
+        vararg resources: Resource,
+    ) {
+        val resources: List<Resource> = resources.toList()
+    }
+
+    class Resource(
+        val resourceName: String,
+        val fields: List<String> = emptyList(),
+        val relations: List<String> = emptyList(),
+    )
+
     companion object {
         private val opa =
             GenericContainer(DockerImageName.parse("openpolicyagent/opa:1.20.2"))
@@ -342,7 +361,7 @@ class OpaAccessIT {
                 .put()
                 .uri("/v1/data/clients")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(CLIENT_DATA)
+                .body(grants)
                 .retrieve()
                 .toBodilessEntity()
             registry.add("fint.security.opa.enabled") { "true" }
@@ -400,48 +419,35 @@ class OpaAccessIT {
             relations := [ lower(relation) | relation := get_resource(get_component(get_client())).relations[_] ]
             """.trimIndent()
 
-        private const val CLIENT_DATA =
-            """
-            {
-              "test@client.fintlabs.no": {
-                "allowedEnvironments": ["localhost", "beta"],
-                "components": [
-                  {
-                    "domainName": "utdanning",
-                    "packageName": "elev",
-                    "resources": [
-                      {
-                        "resourceName": "person",
-                        "fields": ["fodselsnummer"],
-                        "relations": ["elev"]
-                      }
-                    ]
-                  },
-                  {
-                    "domainName": "utdanning",
-                    "packageName": "vurdering",
-                    "resources": [
-                      {
-                        "resourceName": "elevfravar",
-                        "fields": ["systemId"],
-                        "relations": []
-                      }
-                    ]
-                  },
-                  {
-                    "domainName": "administrasjon",
-                    "packageName": "personal",
-                    "resources": [
-                      {
-                        "resourceName": "person",
-                        "fields": ["navn"],
-                        "relations": []
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-            """
+        /**
+         * What the test client is granted, which the rego reads as `data.clients[username]`. The
+         * elev person has a field and a relation. The personal person is the same resource without
+         * its id field, so its self link must go. The vurdering elevfravar has a camelCase field.
+         */
+        private val grants =
+            mapOf(
+                "test@client.fintlabs.no" to
+                    ClientGrants(
+                        allowedEnvironments = listOf("localhost", "beta"),
+                        components =
+                            listOf(
+                                Component(
+                                    "utdanning",
+                                    "elev",
+                                    Resource("person", fields = listOf("fodselsnummer"), relations = listOf("elev")),
+                                ),
+                                Component(
+                                    "administrasjon",
+                                    "personal",
+                                    Resource("person", fields = listOf("navn")),
+                                ),
+                                Component(
+                                    "utdanning",
+                                    "vurdering",
+                                    Resource("elevfravar", fields = listOf("systemId")),
+                                ),
+                            ),
+                    ),
+            )
     }
 }
