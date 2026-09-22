@@ -40,12 +40,13 @@ class SecurityProblemDetailHandler(
     private fun describeDenial(request: HttpServletRequest): String {
         val auth = SecurityContextHolder.getContext().authentication
         val orgId = request.getHeader(ORG_ID_HEADER)
+        // A missing org-id header never reaches this handler; it's a 400, not a 403.
+        val hasOrgMismatch = orgId != null && auth is CorePrincipal && auth.assets.none { it.isSameOrgAs(orgId) }
         return when {
             auth !is CorePrincipal -> "Principal is not a FINT client"
             auth.type != FintType.CLIENT -> "Principal type must be CLIENT"
             FintScope.FINT_CLIENT !in auth.scopes -> "JWT is missing required 'fint-client' scope"
-            orgId == null -> "Missing $ORG_ID_HEADER header"
-            auth.assets.none { it.isSameOrgAs(orgId) } -> "Client does not have access to organisation '$orgId'"
+            hasOrgMismatch -> "Client does not have access to organisation '$orgId'"
             else -> "Client is missing the required role for the requested component"
         }
     }
