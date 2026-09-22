@@ -5,7 +5,7 @@ kind: Component
 # mongodb uri, 1Password item) and env-specific values (host, base-url). Source is a
 # local-only generated resource, so it exists before these replacements run.
 replacements:
-  # dotted (org.id) -> orgId + org-id label (both) + consumer org-id header
+  # dotted (org.id) -> orgId + org-id label (both)
   - source:
       kind: ConfigMap
       name: fint-org
@@ -17,7 +17,6 @@ replacements:
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
-          - spec.ingress.routes.0.headers.x-org-id
       - select:
           kind: Application
           name: fint-core-adapter-gateway
@@ -36,6 +35,18 @@ replacements:
           name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.headers.x-allowed-asset-ids
+
+  # org-id regex -> consumer ingress header gate, the org itself or any sub-org of it
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.org-id-regex
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-client-api
+        fieldPaths:
+          - spec.ingress.routes.0.headers.x-org-id
 
   # dashed (org-id) -> namespace (both) + consumer/provider per-org kafka acl prefixes
   - source:

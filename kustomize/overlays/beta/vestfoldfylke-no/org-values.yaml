@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fint-org
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  id-dotted: vestfoldfylke.no
+  id-dashed: vestfoldfylke-no
+  id-underscore: vestfoldfylke_no
+  org-id-regex: 're:(^|\.)vestfoldfylke\.no$'
+  asset-regex: 're:(^|,)vestfoldfylke\.no(,|$)'
+  host: beta.felleskomponent.no
+  base-url: https://beta.felleskomponent.no
+  onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-vestfoldfylke-no-cluster-beta"
