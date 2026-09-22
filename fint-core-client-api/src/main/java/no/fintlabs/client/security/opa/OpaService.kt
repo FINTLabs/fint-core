@@ -15,11 +15,10 @@ class OpaService(
         domainName: String,
         packageName: String,
         resourceName: String?,
-    ): OpaResult =
+    ): OpaDecision =
         if (opaProperties.enabled) {
-            val opaRequest = createOpaRequest(principal, request, domainName, packageName, resourceName)
-            opaClient.getDecision(opaRequest).result
+            opaClient.getDecision(createOpaRequest(principal, request, domainName, packageName, resourceName))
         } else {
-            OpaResult(allow = true)
+            OpaDecision.Allowed(emptySet(), emptySet())
         }
 }

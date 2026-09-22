@@ -19,18 +19,24 @@ class OpaClient(
                     .apply { setReadTimeout(opaProperties.timeout) },
             ).build()
 
-    fun getDecision(opaRequest: OpaRequest): OpaResponse =
+    fun getDecision(opaRequest: OpaRequest): OpaDecision =
         try {
-            restClient
-                .post()
-                .uri("/v1/data/core")
-                .body(opaRequest)
-                .retrieve()
-                .body(OpaResponse::class.java)
-                ?: OpaResponse()
+            val result =
+                restClient
+                    .post()
+                    .uri("/v1/data/core")
+                    .body(opaRequest)
+                    .retrieve()
+                    .body(OpaResponse::class.java)
+                    ?.result
+            when {
+                result == null -> OpaDecision.Unavailable.also { logger.error("Empty decision from OPA") }
+                result.allow -> OpaDecision.Allowed(result.fields, result.relations)
+                else -> OpaDecision.Denied
+            }
         } catch (e: Exception) {
             logger.error("Failed to get decision from OPA: {}", e.message)
-            OpaResponse()
+            OpaDecision.Unavailable
         }
 
     companion object {
