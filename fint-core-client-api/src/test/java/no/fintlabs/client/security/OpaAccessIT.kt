@@ -46,10 +46,10 @@ import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
 
 /**
- * Runs the real rego policy (copied verbatim from fint-core-access-control) against a real OPA
+ * Runs the real rego policy (copied unchanged from fint-core-access-control) against a real OPA
  * container, not a mock, so a change to the input/output contract fails here instead of in
- * production. `env` is left at MockMvc's default host ("localhost"), matched by the test data's
- * `allowedEnvironments`.
+ * production. `env` is MockMvc's default host ("localhost") unless a test sets the host itself.
+ * The test data allows `localhost` and `beta`.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -164,10 +164,59 @@ class OpaAccessIT {
             .andExpect(jsonPath("$.systemId").exists())
     }
 
+    @Test
+    fun `endpoints overview is allowed when the policy data lists the package`() {
+        mockMvc
+            .perform(
+                get("/utdanning/vurdering")
+                    .header("x-org-id", "fintlabs.no")
+                    .with(authentication(client(roles = listOf("FINT_Client_utdanning_vurdering")))),
+            ).andExpect(status().isOk)
+    }
+
+    @Test
+    fun `endpoints overview is denied when the policy data does not list the package`() {
+        mockMvc
+            .perform(
+                get("/utdanning/kodeverk")
+                    .header("x-org-id", "fintlabs.no")
+                    .with(authentication(client(roles = listOf("FINT_Client_utdanning_kodeverk")))),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(containsString("requested resource")))
+    }
+
+    @Test
+    fun `env sent to OPA is the first label of the request host`() {
+        mockMvc
+            .perform(personRequestFrom("beta.felleskomponent.no"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `client is denied in an environment the policy data does not allow`() {
+        mockMvc
+            .perform(personRequestFrom("api.felleskomponent.no"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(containsString("requested resource")))
+    }
+
+    @Test
+    fun `a resource served from a path with no saved decision is pruned to nothing`() {
+        mockMvc
+            .perform(get("/other").with(authentication(client())))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.fodselsnummer").doesNotExist())
+            .andExpect(jsonPath("$.navn").doesNotExist())
+            .andExpect(jsonPath("$._links.self").doesNotExist())
+    }
+
     private fun personRequest() =
         get("/utdanning/elev/person")
             .header("x-org-id", "fintlabs.no")
             .with(authentication(client(roles = listOf("FINT_Client_utdanning_elev"))))
+
+    private fun personRequestFrom(host: String) =
+        personRequest().with { request -> request.apply { serverName = host } }
 
     private fun client(
         cn: String = "test@client.fintlabs.no",
@@ -242,6 +291,16 @@ class OpaAccessIT {
             @RequestHeader("x-org-id") orgId: String,
         ): Elevfravar = Elevfravar(systemId = Identifikator(identifikatorverdi = "42"))
 
+        @GetMapping("/{domainName}/{packageName}")
+        fun endpoints(
+            @PathVariable domainName: String,
+            @PathVariable packageName: String,
+            @RequestHeader("x-org-id") orgId: String,
+        ): String = "$domainName/$packageName"
+
+        @GetMapping("/other")
+        fun outsideResourcePaths(): Person = newPerson()
+
         private fun newPerson(): Person =
             Person(
                 fodselsnummer = Identifikator(identifikatorverdi = "01010112345"),
@@ -290,7 +349,7 @@ class OpaAccessIT {
             registry.add("fint.security.opa.url") { opaUrl }
         }
 
-        // Copied verbatim from FINTLabs/fint-core-access-control's
+        // Copied unchanged from FINTLabs/fint-core-access-control's
         // src/main/resources/opa/policy/auth.txt, package `core`.
         private val COMPONENT_ACCESS_POLICY =
             """
@@ -345,7 +404,7 @@ class OpaAccessIT {
             """
             {
               "test@client.fintlabs.no": {
-                "allowedEnvironments": ["localhost"],
+                "allowedEnvironments": ["localhost", "beta"],
                 "components": [
                   {
                     "domainName": "utdanning",

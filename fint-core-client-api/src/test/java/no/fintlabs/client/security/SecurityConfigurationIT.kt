@@ -113,6 +113,15 @@ class SecurityConfigurationIT {
     }
 
     @Test
+    fun `request with a blank org-id header is rejected as a client error, not a server error`() {
+        mockMvc
+            .perform(
+                resourceRequest("")
+                    .with(authentication(client(roles = listOf("FINT_Client_utdanning_vurdering")))),
+            ).andExpect(status().is4xxClientError)
+    }
+
+    @Test
     fun `token without the matching component role is denied`() {
         mockMvc
             .perform(
