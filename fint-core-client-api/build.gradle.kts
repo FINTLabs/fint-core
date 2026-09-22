@@ -11,6 +11,10 @@ dependencies {
 
     implementation("com.google.guava:guava:33.7.1-jre")
 
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("no.novari:fint-core-principal:4.1.0")
+
     testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
+    testImplementation("org.springframework.security:spring-security-test")
 }
