@@ -9,10 +9,6 @@ data class OpaRequest(
     val input: OpaInput,
 )
 
-/**
- * [domainName], [packageName] and [resourceName] are passed in rather than read from [request]
- * here, because the security layer already reads them from the request's path variables.
- */
 fun createOpaRequest(
     principal: CorePrincipal,
     request: HttpServletRequest,
