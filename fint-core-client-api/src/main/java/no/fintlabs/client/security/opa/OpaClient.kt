@@ -31,13 +31,17 @@ class OpaClient(
                     ?.result
             when {
                 result == null -> OpaDecision.Unavailable.also { logger.error("Empty decision from OPA") }
-                result.allow -> OpaDecision.Allowed(result.fields, result.relations)
+                result.allow -> OpaDecision.Allowed(result.fields.lowercased(), result.relations.lowercased())
                 else -> OpaDecision.Denied
             }
         } catch (e: Exception) {
             logger.error("Failed to get decision from OPA: {}", e.message)
             OpaDecision.Unavailable
         }
+
+    // The policy lowercases these already; doing it here too keeps the comparison in OpaFieldAdvice
+    // correct even if the policy changes.
+    private fun Set<String>.lowercased(): Set<String> = map(String::lowercase).toSet()
 
     companion object {
         private val logger = LoggerFactory.getLogger(OpaClient::class.java)
