@@ -41,6 +41,9 @@ class OpaFieldAdvice(
     private val jsonMapper: JsonMapper,
     private val opaProperties: OpaProperties,
 ) : ResponseBodyAdvice<Any> {
+    /**
+     * Spring will only ever call [beforeBodyWrite] if this returns true
+     */
     override fun supports(
         returnType: MethodParameter,
         converterType: Class<out HttpMessageConverter<*>>,
