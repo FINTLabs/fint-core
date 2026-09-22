@@ -14,6 +14,11 @@ import org.mockito.BDDMockito.given
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.web.OAuth2ResourceServerWebSecurityAutoConfiguration
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
@@ -38,7 +43,15 @@ import kotlin.test.assertEquals
 )
 class EncodedSlashIT {
     @SpringBootConfiguration
-    @EnableAutoConfiguration
+    @EnableAutoConfiguration(
+        exclude = [
+            ManagementWebSecurityAutoConfiguration::class,
+            SecurityFilterAutoConfiguration::class,
+            ServletWebSecurityAutoConfiguration::class,
+            OAuth2ResourceServerAutoConfiguration::class,
+            OAuth2ResourceServerWebSecurityAutoConfiguration::class,
+        ],
+    )
     @EnableConfigurationProperties(ConsumerConfiguration::class)
     @Import(ResourceController::class, JacksonConfiguration::class, TomcatConfiguration::class)
     open class SliceApplication
