@@ -68,12 +68,16 @@ class SecurityConfiguration(
         private const val ORG_ID_HEADER = "x-org-id"
         private const val RESOURCE_PATH = "/{domainName}/{packageName}/{resourceName}/**"
         private const val ENDPOINTS_PATH = "/{domainName}/{packageName}"
+
+        /**
+         * The two endpoints the platform calls without a token: the health probe and the Prometheus
+         * scrape. The ingress only routes resource paths, so neither is reachable from outside the
+         * cluster. Anything else under `/actuator` stays behind the client check.
+         */
         private val OPEN_PATHS =
             arrayOf(
-                "/swagger-ui/**",
-                "/swagger-ui.html",
-                "/v3/api-docs/**",
                 "/actuator/health",
+                "/actuator/prometheus",
             )
     }
 }
