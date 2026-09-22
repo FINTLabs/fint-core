@@ -1,9 +1,4 @@
 fint:
-  security:
-    opa:
-      enabled: false
-      url: http://localhost:8181
-      env-header: true
   relation:
     base-url: https://api.felleskomponent.no
   consumer:

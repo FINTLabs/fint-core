@@ -1,10 +1,4 @@
 fint:
-  security:
-    opa:
-      enabled: false
-    exposed-endpoints:
-      - /actuator/prometheus
-      - /actuator/health
   relation:
     base-url: https://api.felleskomponent.no
   consumer:
