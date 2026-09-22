@@ -76,11 +76,15 @@ class SecurityConfiguration(
         }
 
         val requestedOrgId = context.request.getHeader(ORG_ID_HEADER)
-        if (requestedOrgId != null && assets.none { OrgId.from(it) == OrgId.from(requestedOrgId) }) {
+        if (requestedOrgId != null && !ownsOrg(requestedOrgId)) {
             return Denial.OrgNotInAssets(requestedOrgId)
         }
         return opaDenial(context, domainName, packageName)
     }
+
+    /** A blank header never matches, because [OrgId.from] refuses a blank value and this must not throw. */
+    private fun CorePrincipal.ownsOrg(requestedOrgId: String): Boolean =
+        requestedOrgId.isNotBlank() && assets.any { OrgId.from(it) == OrgId.from(requestedOrgId) }
 
     /** Saves what OPA allowed so [OpaFieldAdvice] can prune the response later. */
     private fun CorePrincipal.opaDenial(
