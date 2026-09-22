@@ -7,6 +7,7 @@ import no.fintlabs.client.exception.resource.ResourceNotFoundException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -17,6 +18,11 @@ public class ResourceExceptionHandler {
 
     @ExceptionHandler(FilterException.class)
     public ResponseEntity<?> handleFilterException(FilterException e) {
+        return ResponseEntity.badRequest().body(e.getMessage());
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<?> missingRequestHeader(MissingRequestHeaderException e) {
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 

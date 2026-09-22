@@ -1,14 +1,17 @@
 package no.fintlabs.client.resource
 
+import no.fint.antlr.exception.FilterException
+import no.fint.antlr.exception.InvalidSyntaxException
 import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
-import no.novari.fint.core.model.utdanning.elev.Elev
+import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.boot.SpringBootConfiguration
@@ -32,7 +35,7 @@ import kotlin.test.assertEquals
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [EncodedSlashIT.SliceApplication::class],
+    classes = [ResourceFilterIT.SliceApplication::class],
     properties = [
         "fint.consumer.base-url=https://api.felleskomponent.no",
         "fint.consumer.org-id=fintlabs.no",
@@ -41,7 +44,7 @@ import kotlin.test.assertEquals
         "fint.consumer.pod-url=http://localhost",
     ],
 )
-class EncodedSlashIT {
+class ResourceFilterIT {
     @SpringBootConfiguration
     @EnableAutoConfiguration(
         exclude = [
@@ -53,7 +56,12 @@ class EncodedSlashIT {
         ],
     )
     @EnableConfigurationProperties(ConsumerConfiguration::class)
-    @Import(ResourceController::class, JacksonConfiguration::class, TomcatConfiguration::class)
+    @Import(
+        ResourceController::class,
+        ResourceExceptionHandler::class,
+        JacksonConfiguration::class,
+        TomcatConfiguration::class,
+    )
     open class SliceApplication
 
     @MockitoBean
@@ -73,6 +81,9 @@ class EncodedSlashIT {
 
     private val client = HttpClient.newHttpClient()
     private val mapper = JsonMapper.builder().build()
+    private val baseUrl = "https://api.felleskomponent.no"
+    private val resourceCoordinate = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "elevfravar")
+    private val elevfravarB = Elevfravar(systemId = Identifikator(identifikatorverdi = "B"))
 
     private fun get(path: String): HttpResponse<String> =
         client.send(
@@ -84,36 +95,69 @@ class EncodedSlashIT {
             HttpResponse.BodyHandlers.ofString(),
         )
 
-    @Test
-    fun `an encoded slash in the id value reaches the controller decoded`() {
-        given(
-            resourceService.getResourceById(
-                ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elev"),
-                "systemid",
-                "2023/145",
-            ),
-        ).willReturn(Elev(systemId = Identifikator(identifikatorverdi = "2023/145")))
+    private fun postQuery(
+        path: String,
+        body: String,
+    ): HttpResponse<String> =
+        client.send(
+            HttpRequest
+                .newBuilder(URI.create("http://localhost:$port$path"))
+                .header("x-org-id", "fintlabs.no")
+                .header("Content-Type", "text/plain")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(),
+            HttpResponse.BodyHandlers.ofString(),
+        )
 
-        val response = get("/utdanning/elev/elev/systemId/2023%2F145")
+    @Test
+    fun `GET with dollar-filter forwards the decoded expression to the service`() {
+        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi eq 'B'"))
+            .willReturn(
+                createFintResourcesResponse(baseUrl, "utdanning/vurdering/elevfravar", listOf(elevfravarB), 0, 0, 1),
+            )
+
+        val response = get("/utdanning/vurdering/elevfravar?\$filter=systemId%2Fidentifikatorverdi%20eq%20%27B%27")
 
         assertEquals(200, response.statusCode())
-        val body = mapper.readTree(response.body())
-        assertEquals("2023/145", body.get("systemId").get("identifikatorverdi").asString())
-        assertEquals(
-            "https://api.felleskomponent.no/utdanning/elev/elev/systemid/2023%2F145",
-            body
-                .get("_links")
-                .get("self")
+        val entry =
+            mapper
+                .readTree(response.body())
+                .get("_embedded")
+                .get("_entries")
                 .get(0)
-                .get("href")
-                .asString(),
-        )
+        assertEquals("B", entry.get("systemId").get("identifikatorverdi").asString())
     }
 
     @Test
-    fun `a raw slash is a path separator and does not match the id route`() {
-        val response = get("/utdanning/elev/elev/systemId/2023/145")
+    fun `POST dollar-query forwards the raw body as the filter expression`() {
+        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi eq 'B'"))
+            .willReturn(
+                createFintResourcesResponse(baseUrl, "utdanning/vurdering/elevfravar", listOf(elevfravarB), 0, 0, 1),
+            )
 
-        assertEquals(404, response.statusCode())
+        val response = postQuery("/utdanning/vurdering/elevfravar/\$query", "systemId/identifikatorverdi eq 'B'")
+
+        assertEquals(200, response.statusCode())
+        val entry =
+            mapper
+                .readTree(response.body())
+                .get("_embedded")
+                .get("_entries")
+                .get(0)
+        assertEquals("B", entry.get("systemId").get("identifikatorverdi").asString())
+    }
+
+    @Test
+    fun `invalid dollar-filter surfaces as a 400, via the shared ResourceExceptionHandler`() {
+        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi = 'B'"))
+            .willThrow(FilterException(InvalidSyntaxException("Invalid \$filter: systemId/identifikatorverdi = 'B'")))
+
+        val response = get("/utdanning/vurdering/elevfravar?\$filter=systemId%2Fidentifikatorverdi%20%3D%20%27B%27")
+
+        assertEquals(400, response.statusCode())
+        assertEquals(
+            "no.fint.antlr.exception.InvalidSyntaxException: Invalid \$filter: systemId/identifikatorverdi = 'B'",
+            response.body(),
+        )
     }
 }

@@ -5,12 +5,16 @@ plugins {
 dependencies {
     implementation(project(":fint-core-shared"))
 
-    implementation("no.fintlabs:fint-antlr:1.2.0")
+    implementation("no.fintlabs:fint-antlr:1.2.1")
     implementation("no.fintlabs:fint-core-status-models:1.0.0")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     implementation("com.google.guava:guava:33.7.1-jre")
 
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("no.novari:fint-core-principal:4.1.0")
+
     testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
+    testImplementation("org.springframework.security:spring-security-test")
 }

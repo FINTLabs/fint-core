@@ -1,5 +1,9 @@
 package no.fintlabs.client.resource
 
+import no.fint.antlr.FintFilterService
+import no.fint.antlr.exception.FilterException
+import no.fint.antlr.exception.InvalidSyntaxException
+import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
@@ -27,6 +31,7 @@ class ResourceService(
     private val cursorCodec: PageCursorCodec,
 ) {
     private val storageMapper = FintJson.storageMapper()
+    private val filterService: FintFilterService = ODataFilterService()
 
     /**
      * Serves a list read. A `size` above zero gives one page, otherwise everything. A positive
@@ -41,6 +46,10 @@ class ResourceService(
         filter: String?,
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
+        if (filter != null && !filterService.validate(filter)) {
+            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
+        }
+
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
         val baseUrl = consumerConfiguration.baseUrl
@@ -48,8 +57,9 @@ class ResourceService(
 
         if (size <= 0) {
             val entries = resourceStore.findAll(since, collectionName)
-            val resources = entries.toFintResources(resourceCoordinate)
-            mergeRelationEdges(resourceCoordinate, entries, resources, fullDump = since == null)
+            val allResources = entries.toFintResources(resourceCoordinate)
+            mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = since == null)
+            val resources = filter?.let { filterResources(allResources, it) } ?: allResources
             return createFintResourcesResponse(
                 baseUrl,
                 resourceUri,
@@ -64,8 +74,9 @@ class ResourceService(
         val totalItems = resourceStore.count(since, collectionName)
         val page =
             readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
-        val resources = page.entries.toFintResources(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, page.entries, resources, fullDump = false)
+        val allResources = page.entries.toFintResources(resourceCoordinate)
+        mergeRelationEdges(resourceCoordinate, page.entries, allResources, fullDump = false)
+        val resources = filter?.let { filterResources(allResources, it) } ?: allResources
 
         return createFintResourcesResponse(
             baseUrl = baseUrl,
@@ -165,6 +176,15 @@ class ResourceService(
 
         edges.mergeInto(entries.zip(resources))
     }
+
+    /**
+     * Runs an OData `$filter` expression against each resource's own getters. Must run after
+     * [mergeRelationEdges] to include all relations.
+     */
+    private fun filterResources(
+        resources: List<FintResource>,
+        filter: String,
+    ): List<FintResource> = filterService.from(resources.stream(), filter).toList()
 
     private fun ResourceEntry.toFintResource(resourceCoordinate: ResourceCoordinate): FintResource =
         storageMapper.convertValue(data, resourceCoordinate.toResourceClass())

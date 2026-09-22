@@ -1,8 +1,4 @@
 fint:
-  security:
-    exposed-endpoints:
-      - /bob
-      - /utdanning/vurdering/**
   relation:
     base-url: https://test.felleskomponent.no
   consumer:
