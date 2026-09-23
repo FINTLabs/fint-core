@@ -283,14 +283,23 @@ class ResourceStore(
             ?.lastModified
     }
 
-    fun findIdentitiesOlderThan(
+    /**
+     * Reads up to [limit] ids of entries modified before [threshold], through the `last_modified`
+     * index.
+     */
+    fun findIdsOlderThan(
         threshold: Instant,
+        limit: Int,
         collectionName: String,
-    ): List<ResourceIdentity> {
-        val query = Query.query(Criteria.where("lastModified").lt(Date.from(threshold)))
-        query.fields().include("identifiers")
+    ): List<String> {
+        val query =
+            Query
+                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .limit(limit)
+                .withHint(LAST_MODIFIED_INDEX)
+        query.fields().include("_id")
 
-        return template.find(query, ResourceIdentity::class.java, collectionName)
+        return template.find(query, ResourceId::class.java, collectionName).map { it.id }
     }
 
     fun deleteStaleByIds(
