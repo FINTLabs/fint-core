@@ -8,6 +8,9 @@ fint:
         concurrency: 1
     kafka:
       replicas: 2
+    resource-ttl:
+      max-age: P21D
+      sweep-interval: PT1H
   base-url: https://api.felleskomponent.no
 
 spring:
