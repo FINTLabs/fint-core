@@ -25,6 +25,8 @@ spec:
       value: |
         -XX:MaxRAMPercentage=80
         -XX:+ExitOnOutOfMemoryError
+  ingress:
+    enabled: false
   kafka:
     enabled: true
     acls:

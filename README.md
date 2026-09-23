@@ -155,6 +155,12 @@ changes. The `re:` prefix on `org-id-regex` in `org-values.yaml` is what the ope
 needs for the adapter-gateway route; it is stripped before the value goes into this
 rule. Requests to the excluded paths match no route at all and get Traefik's 404.
 
+The Application keeps an `ingress: {enabled: false}` stub on purpose. With the block
+absent the operator throws a NullPointerException while trying to delete the route it
+used to manage (`IngressDR.desired` dereferences `spec.ingress`), leaves that route in
+place with the old rule, and marks the Application FAILED. The stub keeps the operator's
+route disabled and lets it clean up. Remove it once flaiserator handles a missing block.
+
 ### Adding an org
 
 Copy an existing leaf and edit only `org-values.yaml`:
