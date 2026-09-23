@@ -69,10 +69,8 @@ class SyncCompletionTracker(
     }
 
     /**
-     * Records that the full sync completed, then claims the eviction on the calling thread, so a
-     * redelivery of the same records on another replica finds it taken, and hands the work
-     * itself to the [EvictionRunner]. The record comes first, so it is written even when the
-     * eviction is lost, for example on a restart.
+     * Records that the full sync completed, claims the eviction so a redelivery does not run it
+     * twice, and hands the eviction to the [EvictionRunner].
      */
     private fun complete(progress: SyncProgress) {
         fullSyncStatusStore.recordCompleted(progress.coordinate, progress.updatedAt)
