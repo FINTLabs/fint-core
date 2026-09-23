@@ -118,17 +118,42 @@ at the repo root:
 kustomize/
   base/
     consumer.yaml          # the two Applications, with REPLACE placeholders
+    consumer-ingress.yaml  # the client-api Traefik route, see below
     provider.yaml
     kustomization.yaml
-  components/org/           # one component; fans per-overlay values into both Apps
+  components/org/           # one component; fans per-overlay values into all three
   overlays/
     <env>/<org>/
       kustomization.yaml   # identical for every org leaf
       org-values.yaml      # the only per-org file
 ```
 
-`kustomize build kustomize/overlays/<env>/<org>` renders **both** the consumer and
-provider Application for that org, fully substituted.
+`kustomize build kustomize/overlays/<env>/<org>` renders the consumer and provider
+Application and the consumer's IngressRoute for that org, fully substituted.
+
+### The client-api route is not managed by FLAIS
+
+The adapter-gateway gets its Traefik route from the FLAIS operator, through
+`spec.ingress.routes`. The client-api does not. The operator can only build
+`Host && PathPrefix && Headers` rules, and a `PathPrefix` of `/utdanning` also matches
+the core 1 provider paths, `/utdanning/<package>/provider/...`, that core 1 adapters
+still call. In beta nothing else claims those paths, so the requests would land in the
+client-api and fail with 403. In api the core 1 provider routes still exist but their
+rules are shorter, and Traefik picks the longest matching rule, so the client-api would
+take over live adapter traffic.
+
+`base/consumer-ingress.yaml` therefore holds a plain `IngressRoute` whose rule excludes
+those paths:
+
+```
+Host(`<host>`) && PathPrefix(`/utdanning`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `<org-id-regex>`)
+```
+
+The org component fills in the host and the org regex by splitting that string on
+backticks: the host is piece 1 and the regex is piece 9, so keep that order if the rule
+changes. The `re:` prefix on `org-id-regex` in `org-values.yaml` is what the operator
+needs for the adapter-gateway route; it is stripped before the value goes into this
+rule. Requests to the excluded paths match no route at all and get Traefik's 404.
 
 ### Adding an org
 
