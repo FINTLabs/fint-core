@@ -26,10 +26,23 @@ spring:
       - classpath:shared-mongodb.yaml
   mongodb:
     database: fint
+    ssl:
+      enabled: true
+      bundle: database
+  # MongoDB uses this named bundle to create a TLS 1.3-only SSL context while
+  # retaining the JVM's default trust material. Keep it to prevent TLS fallback.
+  ssl:
+    bundle:
+      jks:
+        database:
+          protocol: TLSv1.3
   threads:
     virtual:
       enabled: true
   kafka:
+    properties:
+      "[ssl.protocol]": TLSv1.3
+      "[ssl.enabled.protocols]": TLSv1.3
     consumer:
       group-id: fint-core-client-api-${fint.org-id}
     producer:

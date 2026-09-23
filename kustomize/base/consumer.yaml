@@ -25,6 +25,7 @@ spec:
       value: |
         -XX:MaxRAMPercentage=80
         -XX:+ExitOnOutOfMemoryError
+        -Djdk.tls.client.protocols=TLSv1.3
   ingress:
     enabled: false
   kafka:
