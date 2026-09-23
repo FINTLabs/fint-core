@@ -68,7 +68,7 @@ class AutoRelationIT {
     private val bufferReader by lazy {
         BufferReader(
             ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
-            SyncCompletionTracker(syncProgressStore, evictionService, InlineEvictionRunner()),
+            SyncCompletionTracker(syncProgressStore, FullSyncStatusStore(mongoTemplate), evictionService, InlineEvictionRunner()),
         )
     }
 

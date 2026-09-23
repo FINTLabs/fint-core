@@ -322,6 +322,18 @@ class ResourceStore(
     }
 
     /**
+     * Drops the whole collection. A write that lands at the same moment creates the collection
+     * again, so the indexes are checked once more afterwards.
+     */
+    fun dropCollection(collectionName: String) {
+        template.dropCollection(collectionName)
+        indexedCollections.remove(collectionName)
+        sizeCache.invalidate(collectionName)
+
+        if (template.collectionExists(collectionName)) ensureIndexes(collectionName)
+    }
+
+    /**
      * The query behind every list read. Results are ordered by `createdAt` and then `_id`, so a
      * resource keeps its place in the list when it is updated, and two resources created in the
      * same millisecond always come back in the same order. The `created_at_id` index has the same

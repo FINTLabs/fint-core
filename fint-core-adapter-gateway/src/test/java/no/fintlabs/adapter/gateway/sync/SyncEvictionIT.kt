@@ -47,6 +47,8 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @Testcontainers
@@ -79,8 +81,13 @@ class SyncEvictionIT {
 
     @BeforeEach
     fun clean() {
-        listOf(edgeCollection, elevforholdCollection, elevCollection, SyncProgressStore.COLLECTION_NAME)
-            .forEach { mongoTemplate.remove(Query(), it) }
+        listOf(
+            edgeCollection,
+            elevforholdCollection,
+            elevCollection,
+            SyncProgressStore.COLLECTION_NAME,
+            FullSyncStatusStore.COLLECTION_NAME,
+        ).forEach { mongoTemplate.remove(Query(), it) }
         nextOffset = 0
     }
 
@@ -190,6 +197,24 @@ class SyncEvictionIT {
         )
 
         assertEquals(listOf("EF-NEW", "EF-OLD"), storedIds(elevforholdCollection).sorted())
+    }
+
+    @Test
+    fun `a completed full sync records when it completed, which is where the resource TTL counts from`() {
+        bufferReader.readMessage(
+            listOf(elevforholdRecord("EF-1", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
+        )
+
+        assertNotNull(fullSyncStatus()?.lastCompletedAt)
+    }
+
+    @Test
+    fun `a full sync that has not delivered everything it announced records no completion`() {
+        bufferReader.readMessage(
+            listOf(elevforholdRecord("EF-1", writtenAt = DURING, sync = fullSync("S-1", totalSize = 2))),
+        )
+
+        assertNull(fullSyncStatus())
     }
 
     @Test
@@ -467,6 +492,7 @@ class SyncEvictionIT {
             ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
             SyncCompletionTracker(
                 SyncProgressStore(mongoTemplate),
+                FullSyncStatusStore(mongoTemplate),
                 EvictionService(
                     evictionResourceStore,
                     evictionEdgeStore,
@@ -503,6 +529,9 @@ class SyncEvictionIT {
             .tag("resource", "utdanning/elev/elevforhold")
             .counter()
             .count()
+
+    private fun fullSyncStatus(): FullSyncStatus? =
+        mongoTemplate.findById(elevforholdCollection, FullSyncStatus::class.java, FullSyncStatusStore.COLLECTION_NAME)
 
     private fun storedIds(collectionName: String): List<String> =
         mongoTemplate

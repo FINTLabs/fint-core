@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service
 @Service
 class SyncCompletionTracker(
     private val progressStore: SyncProgressStore,
+    private val fullSyncStatusStore: FullSyncStatusStore,
     private val evictionService: EvictionService,
     private val evictionRunner: EvictionRunner,
 ) {
@@ -60,7 +61,7 @@ class SyncCompletionTracker(
                     return@repeat
                 }
 
-            if (progress.complete) evict(progress)
+            if (progress.complete) complete(progress)
             return
         }
 
@@ -68,10 +69,12 @@ class SyncCompletionTracker(
     }
 
     /**
-     * Claims the eviction on the calling thread, so a redelivery of the same records on another
-     * replica finds it taken, and hands the work itself to the [EvictionRunner].
+     * Records that the full sync completed, claims the eviction so a redelivery does not run it
+     * twice, and hands the eviction to the [EvictionRunner].
      */
-    private fun evict(progress: SyncProgress) {
+    private fun complete(progress: SyncProgress) {
+        fullSyncStatusStore.recordCompleted(progress.coordinate, progress.updatedAt)
+
         val claimed = progressStore.claimEviction(progress.corrId) ?: return
 
         log.info(
