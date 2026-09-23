@@ -1,0 +1,21 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: fint-core-client-api-ingress
+  namespace: REPLACE-DASHED
+  labels:
+    app.kubernetes.io/name: fint-core-client-api
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: fint-core
+    fintlabs.no/team: core
+    fintlabs.no/org-id: REPLACE
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: 'Host(`REPLACE`) && PathPrefix(`/utdanning`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `REPLACE`)'
+      services:
+        - name: fint-core-client-api
+          namespace: REPLACE-DASHED
+          port: 8080

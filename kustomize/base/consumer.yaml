@@ -25,12 +25,6 @@ spec:
       value: |
         -XX:MaxRAMPercentage=80
         -XX:+ExitOnOutOfMemoryError
-  ingress:
-    routes:
-      - host: REPLACE
-        path: /utdanning
-        headers:
-          x-org-id: REPLACE
   kafka:
     enabled: true
     acls:
