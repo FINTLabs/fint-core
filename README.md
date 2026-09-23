@@ -140,7 +140,7 @@ data:
   id-dashed: agderfk-no          # namespace + kafka acl prefix
   id-underscore: agderfk_no      # instance label
   org-id-regex: 're:(^|\.)agderfk\.no$'      # consumer x-org-id route, the org or any sub-org
-  asset-regex: 're:(^|,)agderfk\.no(,|$)'  # provider x-allowed-asset-ids route
+  asset-regex: 're:(^|[,.])agderfk\.no(,|$)'  # provider x-allowed-asset-ids route, the org or any sub-org
   host: beta.felleskomponent.no  # ingress host (env)
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: vaults/aks-beta-vault/items/<item>

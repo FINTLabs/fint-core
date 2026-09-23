@@ -9,7 +9,7 @@ data:
   id-dashed: novari-no
   id-underscore: novari_no
   org-id-regex: 're:(^|\.)novari\.no$'
-  asset-regex: 're:(^|,)novari\.no(,|$)'
+  asset-regex: 're:(^|[,.])novari\.no(,|$)'
   host: alpha.felleskomponent.no
   base-url: https://alpha.felleskomponent.no
   onepassword-itempath: "vaults/aks-alpha-vault/items/fint-core-client-api-cluster-alpha"

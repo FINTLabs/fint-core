@@ -9,7 +9,7 @@ data:
   id-dashed: vlfk-no
   id-underscore: vlfk_no
   org-id-regex: 're:(^|\.)vlfk\.no$'
-  asset-regex: 're:(^|,)vlfk\.no(,|$)'
+  asset-regex: 're:(^|[,.])vlfk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-vlfk-no-cluster-beta"

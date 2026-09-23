@@ -9,7 +9,7 @@ data:
   id-dashed: rogfk-no
   id-underscore: rogfk_no
   org-id-regex: 're:(^|\.)rogfk\.no$'
-  asset-regex: 're:(^|,)rogfk\.no(,|$)'
+  asset-regex: 're:(^|[,.])rogfk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-rogfk-no-cluster-beta"

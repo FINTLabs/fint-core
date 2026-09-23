@@ -9,7 +9,7 @@ data:
   id-dashed: mrfylke-no
   id-underscore: mrfylke_no
   org-id-regex: 're:(^|\.)mrfylke\.no$'
-  asset-regex: 're:(^|,)mrfylke\.no(,|$)'
+  asset-regex: 're:(^|[,.])mrfylke\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-mrfylke-no-cluster-beta"

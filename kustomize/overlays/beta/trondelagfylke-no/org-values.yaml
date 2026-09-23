@@ -9,7 +9,7 @@ data:
   id-dashed: trondelagfylke-no
   id-underscore: trondelagfylke_no
   org-id-regex: 're:(^|\.)trondelagfylke\.no$'
-  asset-regex: 're:(^|,)trondelagfylke\.no(,|$)'
+  asset-regex: 're:(^|[,.])trondelagfylke\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-trondelagfylke-no-cluster-beta"

@@ -9,7 +9,7 @@ data:
   id-dashed: oslo-kommune-no
   id-underscore: oslo_kommune_no
   org-id-regex: 're:(^|\.)oslo\.kommune\.no$'
-  asset-regex: 're:(^|,)oslo\.kommune\.no(,|$)'
+  asset-regex: 're:(^|[,.])oslo\.kommune\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-oslo-kommune-no-cluster-beta"

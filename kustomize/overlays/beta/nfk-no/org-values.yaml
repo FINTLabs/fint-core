@@ -9,7 +9,7 @@ data:
   id-dashed: nfk-no
   id-underscore: nfk_no
   org-id-regex: 're:(^|\.)nfk\.no$'
-  asset-regex: 're:(^|,)nfk\.no(,|$)'
+  asset-regex: 're:(^|[,.])nfk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-nfk-no-cluster-beta"

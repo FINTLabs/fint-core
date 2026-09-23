@@ -9,7 +9,7 @@ data:
   id-dashed: ofk-no
   id-underscore: ofk_no
   org-id-regex: 're:(^|\.)ofk\.no$'
-  asset-regex: 're:(^|,)ofk\.no(,|$)'
+  asset-regex: 're:(^|[,.])ofk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-ofk-no-cluster-beta"

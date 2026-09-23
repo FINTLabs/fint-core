@@ -9,7 +9,7 @@ data:
   id-dashed: agderfk-no
   id-underscore: agderfk_no
   org-id-regex: 're:(^|\.)agderfk\.no$'
-  asset-regex: 're:(^|,)agderfk\.no(,|$)'
+  asset-regex: 're:(^|[,.])agderfk\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-agderfk-no-cluster-beta"

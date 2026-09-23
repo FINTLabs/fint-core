@@ -24,7 +24,7 @@ replacements:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
 
-  # asset regex -> provider ingress header gate, exact element match in the comma list
+  # asset regex -> provider ingress header gate, any element in the comma list that is the org or a sub-org of it
   - source:
       kind: ConfigMap
       name: fint-org

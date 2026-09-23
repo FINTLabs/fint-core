@@ -9,7 +9,7 @@ data:
   id-dashed: innlandetfylke-no
   id-underscore: innlandetfylke_no
   org-id-regex: 're:(^|\.)innlandetfylke\.no$'
-  asset-regex: 're:(^|,)innlandetfylke\.no(,|$)'
+  asset-regex: 're:(^|[,.])innlandetfylke\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-innlandetfylke-no-cluster-beta"
