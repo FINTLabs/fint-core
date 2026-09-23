@@ -17,21 +17,12 @@ import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Wipes resource types that have had no completed full sync for [ResourceTtlProperties.maxAge].
+ * Removes resource types that have had no completed full sync for [ResourceTtlProperties.maxAge].
  * Without a full sync we cannot tell which resources are gone from the source system, so the
- * whole collection goes, including what deltas and event answers delivered since. The adapter's
- * next full sync fills it again.
+ * whole collection is wiped, and the adapter's next full sync fills it again.
  *
- * Every hour one sweep is handed to the [EvictionRunner]. Fixed-delay tasks all run on one
- * scheduler thread, the event expiry sweep included, so the sweep never runs there. The runner
- * also runs the evictions after full syncs, so a wipe and an eviction never touch the same
- * collection at the same time. A new sweep is not queued while the previous one is still
- * waiting or running.
- *
- * A collection that has no [FullSyncStatus] yet gets one, and its clock starts at that moment.
- * A resource type whose full sync is running right now is left alone until the sync is done.
- * A sync's first page is written before its progress entry exists, so a sweep that hits that
- * gap drops that page. The next full sync brings it back.
+ * The sweep runs every hour on the [EvictionRunner], never on the scheduler thread. A resource
+ * type whose full sync is running right now is left alone.
  */
 @Service
 class ResourceTtlService(
