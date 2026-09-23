@@ -18,13 +18,6 @@ data class EvictionResult(
     operator fun plus(other: EvictionResult) = EvictionResult(resources + other.resources, edges + other.edges)
 }
 
-enum class EvictionReason(
-    val tag: String,
-) {
-    FULL_SYNC("full-sync"),
-    TTL("ttl"),
-}
-
 @Service
 class EvictionService(
     private val resourceStore: ResourceStore,
@@ -36,18 +29,12 @@ class EvictionService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Removes the resources that were last delivered before [threshold], together with the
-     * relation edges those resources own. After a full sync, the threshold is the time the sync
-     * started, so everything the sync did not carry is removed. The TTL sweep uses now minus the
-     * max age instead.
-     *
-     * The resources are removed in batches. Each batch is one transaction, so a resource and its
-     * edges always disappear together.
+     * Removes the resources a completed full sync did not carry, together with the relation
+     * edges those resources own. It happens within a transaction so they disappear together.
      */
     fun evict(
         coordinate: ResourceCoordinate,
         threshold: Instant,
-        reason: EvictionReason,
     ): EvictionResult {
         val collectionName = coordinate.toCollectionName()
         val resourceType = coordinate.toResourceUri()
@@ -61,7 +48,7 @@ class EvictionService(
             val batch = transactions.inTransaction { evictBatch(coordinate, threshold) }
             if (batch.read == 0) break
 
-            record(resourceType, reason, batch.result)
+            record(resourceType, batch.result)
             total += batch.result
             log.debug(
                 "Evicted a batch of {} resources and {} relation edges from {}",
@@ -71,19 +58,14 @@ class EvictionService(
             )
         }
 
-        if (total == EvictionResult(0, 0)) {
-            log.debug("Nothing to evict from {} older than {} ({})", collectionName, threshold, reason.tag)
-        } else {
-            log.info(
-                "Evicted {} resources and {} relation edges from {} older than {} ({}) in {}",
-                total.resources,
-                total.edges,
-                collectionName,
-                threshold,
-                reason.tag,
-                Duration.ofNanos(System.nanoTime() - startedAt),
-            )
-        }
+        log.info(
+            "Evicted {} resources and {} relation edges from {} older than {} in {}",
+            total.resources,
+            total.edges,
+            collectionName,
+            threshold,
+            Duration.ofNanos(System.nanoTime() - startedAt),
+        )
 
         return total
     }
@@ -110,21 +92,18 @@ class EvictionService(
 
     private fun record(
         resourceType: String,
-        reason: EvictionReason,
         result: EvictionResult,
     ) {
-        counter("fint.core.eviction.resources", resourceType, reason).increment(result.resources.toDouble())
-        counter("fint.core.eviction.edges", resourceType, reason).increment(result.edges.toDouble())
+        counter("fint.core.eviction.resources", resourceType).increment(result.resources.toDouble())
+        counter("fint.core.eviction.edges", resourceType).increment(result.edges.toDouble())
     }
 
     private fun counter(
         name: String,
         resourceType: String,
-        reason: EvictionReason,
     ): Counter =
         Counter
             .builder(name)
             .tag("resource", resourceType)
-            .tag("reason", reason.tag)
             .register(meterRegistry)
 }
