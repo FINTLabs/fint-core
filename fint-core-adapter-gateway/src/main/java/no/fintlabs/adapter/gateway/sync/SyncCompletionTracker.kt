@@ -1,6 +1,5 @@
 package no.fintlabs.adapter.gateway.sync
 
-import no.fintlabs.adapter.gateway.storage.EvictionReason
 import no.fintlabs.adapter.gateway.storage.EvictionRunner
 import no.fintlabs.adapter.gateway.storage.EvictionService
 import no.fintlabs.adapter.models.sync.SyncType
@@ -11,6 +10,7 @@ import org.springframework.stereotype.Service
 @Service
 class SyncCompletionTracker(
     private val progressStore: SyncProgressStore,
+    private val fullSyncStatusStore: FullSyncStatusStore,
     private val evictionService: EvictionService,
     private val evictionRunner: EvictionRunner,
 ) {
@@ -61,7 +61,7 @@ class SyncCompletionTracker(
                     return@repeat
                 }
 
-            if (progress.complete) evict(progress)
+            if (progress.complete) complete(progress)
             return
         }
 
@@ -69,10 +69,14 @@ class SyncCompletionTracker(
     }
 
     /**
-     * Claims the eviction on the calling thread, so a redelivery of the same records on another
-     * replica finds it taken, and hands the work itself to the [EvictionRunner].
+     * Records that the full sync completed, then claims the eviction on the calling thread, so a
+     * redelivery of the same records on another replica finds it taken, and hands the work
+     * itself to the [EvictionRunner]. The record comes first, so it is written even when the
+     * eviction is lost, for example on a restart.
      */
-    private fun evict(progress: SyncProgress) {
+    private fun complete(progress: SyncProgress) {
+        fullSyncStatusStore.recordCompleted(progress.coordinate, progress.updatedAt)
+
         val claimed = progressStore.claimEviction(progress.corrId) ?: return
 
         log.info(
@@ -84,7 +88,7 @@ class SyncCompletionTracker(
 
         evictionRunner.submit {
             try {
-                evictionService.evict(claimed.coordinate, claimed.startedAt, EvictionReason.FULL_SYNC)
+                evictionService.evict(claimed.coordinate, claimed.startedAt)
             } catch (failure: RuntimeException) {
                 log.error(
                     "Eviction failed for sync {} of {}, leaving the rest to the next full sync",
