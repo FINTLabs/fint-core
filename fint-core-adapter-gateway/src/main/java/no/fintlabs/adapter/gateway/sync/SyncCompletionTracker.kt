@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.sync
 
+import no.fintlabs.adapter.gateway.storage.EvictionRunner
 import no.fintlabs.adapter.gateway.storage.EvictionService
 import no.fintlabs.adapter.models.sync.SyncType
 import org.slf4j.LoggerFactory
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service
 class SyncCompletionTracker(
     private val progressStore: SyncProgressStore,
     private val evictionService: EvictionService,
+    private val evictionRunner: EvictionRunner,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -65,6 +67,10 @@ class SyncCompletionTracker(
         throw IllegalStateException("Gave up folding sync $corrId partition $partition after $FOLD_ATTEMPTS attempts")
     }
 
+    /**
+     * Claims the eviction on the calling thread, so a redelivery of the same records on another
+     * replica finds it taken, and hands the work itself to the [EvictionRunner].
+     */
     private fun evict(progress: SyncProgress) {
         val claimed = progressStore.claimEviction(progress.corrId) ?: return
 
@@ -75,15 +81,17 @@ class SyncCompletionTracker(
             claimed.startedAt,
         )
 
-        try {
-            evictionService.evict(claimed.coordinate, claimed.startedAt)
-        } catch (failure: RuntimeException) {
-            log.error(
-                "Eviction failed for sync {} of {}, leaving it to the next full sync",
-                claimed.corrId,
-                claimed.coordinate.toResourceUri(),
-                failure,
-            )
+        evictionRunner.submit {
+            try {
+                evictionService.evict(claimed.coordinate, claimed.startedAt)
+            } catch (failure: RuntimeException) {
+                log.error(
+                    "Eviction failed for sync {} of {}, leaving the rest to the next full sync",
+                    claimed.corrId,
+                    claimed.coordinate.toResourceUri(),
+                    failure,
+                )
+            }
         }
     }
 

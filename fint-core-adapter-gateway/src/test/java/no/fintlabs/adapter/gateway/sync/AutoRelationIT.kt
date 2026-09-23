@@ -4,6 +4,7 @@ import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.fintlabs.adapter.gateway.storage.EvictionService
+import no.fintlabs.adapter.gateway.storage.InlineEvictionRunner
 import no.fintlabs.adapter.gateway.storage.MongoTransactions
 import no.fintlabs.adapter.gateway.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
@@ -62,12 +63,12 @@ class AutoRelationIT {
     private val transactions by lazy { MongoTransactions(TransactionTemplate(MongoTransactionManager(factory)), factory) }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()) }
+    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, transactions, SimpleMeterRegistry()) }
     private val syncProgressStore by lazy { SyncProgressStore(mongoTemplate) }
     private val bufferReader by lazy {
         BufferReader(
             ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
-            SyncCompletionTracker(syncProgressStore, evictionService),
+            SyncCompletionTracker(syncProgressStore, evictionService, InlineEvictionRunner()),
         )
     }
 
