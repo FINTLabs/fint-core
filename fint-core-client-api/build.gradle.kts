@@ -15,6 +15,7 @@ dependencies {
     implementation("no.novari:fint-core-principal:4.1.0")
 
     testImplementation("org.testcontainers:testcontainers-kafka")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
     testImplementation("org.springframework.security:spring-security-test")
 }
