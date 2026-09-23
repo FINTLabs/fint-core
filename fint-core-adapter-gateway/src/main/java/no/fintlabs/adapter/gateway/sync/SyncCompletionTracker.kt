@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.sync
 
+import no.fintlabs.adapter.gateway.storage.EvictionReason
 import no.fintlabs.adapter.gateway.storage.EvictionRunner
 import no.fintlabs.adapter.gateway.storage.EvictionService
 import no.fintlabs.adapter.models.sync.SyncType
@@ -83,7 +84,7 @@ class SyncCompletionTracker(
 
         evictionRunner.submit {
             try {
-                evictionService.evict(claimed.coordinate, claimed.startedAt)
+                evictionService.evict(claimed.coordinate, claimed.startedAt, EvictionReason.FULL_SYNC)
             } catch (failure: RuntimeException) {
                 log.error(
                     "Eviction failed for sync {} of {}, leaving the rest to the next full sync",
