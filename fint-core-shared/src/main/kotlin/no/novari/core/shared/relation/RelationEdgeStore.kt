@@ -134,6 +134,21 @@ class RelationEdgeStore(
         return template.remove(query, collectionName).deletedCount
     }
 
+    /**
+     * Removes every edge that resources of one type own, for example every edge the Elevforhold
+     * resources of an org declared.
+     */
+    fun deleteBySourceType(
+        collectionName: String,
+        sourceType: String,
+    ): Long {
+        ensureIndexes(collectionName)
+
+        val query = Query.query(Criteria.where("sourceType").`is`(sourceType))
+
+        return template.remove(query, collectionName).deletedCount
+    }
+
     private fun targetQuery(
         targetType: String,
         identifiers: Collection<IdentifierRef>,
