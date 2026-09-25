@@ -75,14 +75,6 @@ replacements:
           - spec.routes.0.services.0.namespace
       - select:
           kind: Application
-          name: fint-core-client-api
-        fieldPaths:
-          - spec.kafka.acls.0.topic
-        options:
-          delimiter: "."
-          index: 0
-      - select:
-          kind: Application
           name: fint-core-adapter-gateway
         fieldPaths:
           - spec.kafka.acls.6.topic
