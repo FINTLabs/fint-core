@@ -26,6 +26,12 @@ class SecurityConfiguration(
             .csrf { it.disable() }
             .authorizeHttpRequests { requests ->
                 requests
+                    .requestMatchers(HttpMethod.POST, RELATION_EDGE_REBUILD_PATH)
+                    .access(requireFintClientOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .requestMatchers(HttpMethod.GET, RELATION_EDGE_DRIFT_PATH)
+                    .access(requireFintClientOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .requestMatchers(ADMIN_PATHS)
+                    .denyAll()
                     .requestMatchers(*OPEN_PATHS)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, SYNC_PATH)
@@ -57,6 +63,14 @@ class SecurityConfiguration(
             AuthorizationDecision(authentication.get().canAccessComponent(context))
         }
 
+    private fun requireFintClientOf(orgId: String): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManager { authentication, _ ->
+            AuthorizationDecision(authentication.get().isFintClientOf(orgId))
+        }
+
+    private fun Authentication.isFintClientOf(orgId: String): Boolean =
+        this is CorePrincipal && type == FintType.CLIENT && FintScope.FINT_CLIENT in scopes && this.orgId == orgId
+
     private fun Authentication.isFintAdapter(): Boolean =
         this is CorePrincipal && type == FintType.ADAPTER && FintScope.FINT_ADAPTER in scopes
 
@@ -69,6 +83,10 @@ class SecurityConfiguration(
 
     companion object {
         private const val SYNC_PATH = "/{domainName}/{packageName}/{entity}"
+        private const val RELATION_EDGE_REBUILD_PATH = "/admin/relation-edges/rebuild"
+        private const val RELATION_EDGE_DRIFT_PATH = "/admin/relation-edges/drift"
+        private const val RELATION_EDGE_ADMIN_ORG_ID = "novari.no"
+        private const val ADMIN_PATHS = "/admin/**"
         private val OPEN_PATHS =
             arrayOf(
                 "/swagger-ui/**",
