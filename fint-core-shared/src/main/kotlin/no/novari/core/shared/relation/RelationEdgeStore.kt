@@ -51,6 +51,18 @@ sealed interface RelationEdgeWrite {
     ) : RelationEdgeWrite
 }
 
+data class RelationEdgeWriteResult(
+    val written: Long,
+    val removed: Long,
+) {
+    operator fun plus(other: RelationEdgeWriteResult): RelationEdgeWriteResult =
+        RelationEdgeWriteResult(written + other.written, removed + other.removed)
+
+    companion object {
+        val NONE = RelationEdgeWriteResult(0, 0)
+    }
+}
+
 @Service
 class RelationEdgeStore(
     private val template: MongoTemplate,
@@ -66,20 +78,24 @@ class RelationEdgeStore(
      * for example after a re-sync, changes nothing: `createdAt` is only set on the first insert,
      * which is why edges are updated field by field instead of replaced as whole documents.
      */
-    fun applyAll(writes: List<RelationEdgeWrite>) {
-        if (writes.isEmpty()) return
+    fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult {
+        if (writes.isEmpty()) return RelationEdgeWriteResult.NONE
 
         val timestamp = Instant.now()
 
-        writes
+        return writes
             .groupBy { it.collectionName }
-            .forEach { (collectionName, collectionWrites) ->
+            .map { (collectionName, collectionWrites) ->
                 ensureIndexes(collectionName)
 
                 val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
                 collectionWrites.forEach { bulkOps.add(it, timestamp) }
-                bulkOps.execute()
-            }
+                val result = bulkOps.execute()
+                RelationEdgeWriteResult(
+                    written = (result.upserts.size + result.modifiedCount).toLong(),
+                    removed = result.deletedCount.toLong(),
+                )
+            }.fold(RelationEdgeWriteResult.NONE, RelationEdgeWriteResult::plus)
     }
 
     private fun BulkOperations.add(
@@ -134,6 +150,38 @@ class RelationEdgeStore(
             Query.query(Criteria.where("targetType").`is`(targetType)),
             RelationEdge::class.java,
             collectionName,
+        )
+
+    /** The edges of [sourceType] owned by any of [sourceIds]. */
+    fun findBySources(
+        collectionName: String,
+        sourceType: String,
+        sourceIds: Collection<String>,
+    ): List<RelationEdge> {
+        if (sourceIds.isEmpty()) return emptyList()
+
+        val query =
+            Query.query(
+                Criteria
+                    .where("sourceType")
+                    .`is`(sourceType)
+                    .and("sourceId")
+                    .`in`(sourceIds.distinct()),
+            )
+
+        return template.find(query, RelationEdge::class.java, collectionName)
+    }
+
+    /** The ids of every source of [sourceType] that owns at least one edge in [collectionName]. */
+    fun findSourceIds(
+        collectionName: String,
+        sourceType: String,
+    ): List<String> =
+        template.findDistinct(
+            Query.query(Criteria.where("sourceType").`is`(sourceType)),
+            "sourceId",
+            collectionName,
+            String::class.java,
         )
 
     fun deleteBySources(
