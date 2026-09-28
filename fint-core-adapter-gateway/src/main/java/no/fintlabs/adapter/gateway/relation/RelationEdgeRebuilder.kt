@@ -94,16 +94,14 @@ class RelationEdgeRebuilder(
 
     private fun removeEdgesOfSourcesGone(coordinate: ResourceCoordinate): RelationEdgeRebuild {
         val removed =
-            sourceIdsWithEdges(coordinate)
-                .chunked(batchSize)
-                .sumOf { sourceIds ->
-                    transactions.inTransaction {
-                        deleteEdgesOwnedBy(
-                            sourcesNoLongerStored(sourceIds, coordinate),
-                            coordinate,
-                        )
-                    }
+            sourceIdsWithEdges(coordinate).chunked(batchSize).sumOf { sourceIds ->
+                transactions.inTransaction {
+                    deleteEdgesOwnedBy(
+                        sourcesNoLongerStored(sourceIds, coordinate),
+                        coordinate,
+                    )
                 }
+            }
         return RelationEdgeRebuild(resourcesRead = 0, edgesWritten = 0, edgesRemoved = removed)
     }
 
@@ -276,8 +274,9 @@ data class RelationEdgeDrift(
                         .take(EXAMPLES_PER_KIND)
                         .map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.MISSING, it) } +
                         stale
-                            .take(EXAMPLES_PER_KIND)
-                            .map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.STALE, it) },
+                            .take(
+                                EXAMPLES_PER_KIND,
+                            ).map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.STALE, it) },
             )
 
         fun ofSourcesGone(edges: List<RelationEdge>): RelationEdgeDrift =

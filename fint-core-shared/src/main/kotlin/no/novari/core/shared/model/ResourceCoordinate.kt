@@ -45,8 +45,7 @@ data class ResourceCoordinate(
         fun of(
             orgId: OrgId,
             resource: FintResourceRef,
-        ): ResourceCoordinate =
-            ResourceCoordinate(orgId.value, resource.domainName, resource.packageName, resource.resourceName)
+        ): ResourceCoordinate = ResourceCoordinate(orgId.value, resource.domainName, resource.packageName, resource.resourceName)
     }
 }
 
