@@ -6,18 +6,19 @@ import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuildRunningException
 import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuilder
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.fint.core.model.FintModel
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
+import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 /**
  * Operator actions on this adapter gateway. Every endpoint here has its own access rule in
@@ -32,19 +33,19 @@ class AdminController(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Rebuilds the relation edges of [resource] for [orgId], for example `orgId=ude.oslo.kommune.no`
-     * and `resource=utdanning/elev/person`, and answers with what it did once it is done. Use it
-     * after a fix to how edges are written, or to clear back-links that stale edges still give.
-     * The org id may be written with dots, dashes or underscores. The resource is a path the model
-     * serves. Only a FINT client from novari.no may call it.
+     * Rebuilds the relation edges of one resource for one org, for example
+     * `?orgId=ude.oslo.kommune.no&resource=utdanning/elev/person`, and answers with what it did once
+     * it is done. Use it after a fix to how edges are written, or to clear back-links that stale edges
+     * still give. The org id may be written with dots, dashes or underscores, and the resource must
+     * be a path the model serves. Only a FINT client from novari.no may call it.
      */
     @PostMapping("/relation-edges/rebuild")
     fun rebuild(
-        @RequestParam orgId: String,
-        @RequestParam resource: String,
+        @RequestParam orgId: OrgId,
+        @RequestParam resource: FintResourceRef,
         principal: CorePrincipal,
     ): RelationEdgeRebuild {
-        val coordinate = coordinateOf(orgId, resource)
+        val coordinate = ResourceCoordinate.of(orgId, resource)
         log.info(
             "Relation edge rebuild of {} for {} started by {} ({})",
             coordinate.toResourceUri(),
@@ -58,17 +59,17 @@ class AdminController(
     }
 
     /**
-     * Reports what [rebuild] would change for [resource] and [orgId], without writing anything:
-     * edges missing, edges stale, and edges whose source is gone, with a few examples of each.
-     * Takes the same parameters as [rebuild], and only a FINT client from novari.no may call it.
+     * Reports what [rebuild] would change for one resource and org, without writing anything: edges
+     * missing, edges stale, and edges whose source is gone, with a few examples of each. Takes the
+     * same query parameters as [rebuild], and only a FINT client from novari.no may call it.
      */
     @GetMapping("/relation-edges/drift")
     fun drift(
-        @RequestParam orgId: String,
-        @RequestParam resource: String,
+        @RequestParam orgId: OrgId,
+        @RequestParam resource: FintResourceRef,
         principal: CorePrincipal,
     ): RelationEdgeDrift {
-        val coordinate = coordinateOf(orgId, resource)
+        val coordinate = ResourceCoordinate.of(orgId, resource)
         log.info(
             "Relation edge drift check of {} for {} started by {} ({})",
             coordinate.toResourceUri(),
@@ -93,16 +94,19 @@ class AdminController(
     fun alreadyRunning(exception: RelationEdgeRebuildRunningException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.message)
 
-    private fun coordinateOf(
-        orgId: String,
-        resource: String,
-    ): ResourceCoordinate {
-        val org =
-            runCatching { OrgId.from(orgId) }
-                .getOrElse { throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Not an org id: $orgId") }
-        val ref =
-            FintModel.refOf(resource)
-                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Not a resource the model serves: $resource")
-        return ResourceCoordinate(org.value, ref.domainName, ref.packageName, ref.resourceName)
-    }
+    /**
+     * Answers a query parameter that cannot be read with what was wrong with it. Spring's own answer
+     * is a 400 without the reason.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun unreadableParameter(exception: MethodArgumentTypeMismatchException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Bad ${exception.name}: ${exception.rootCause?.message ?: exception.value}",
+        )
+
+    /** Answers a missing query parameter with its name, for the same reason as [unreadableParameter]. */
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    fun missingParameter(exception: MissingServletRequestParameterException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Missing ${exception.parameterName}")
 }
