@@ -63,7 +63,7 @@ class AdminControllerIT {
 
     @Test
     fun `a rebuild names the org and resource it was asked for`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=ude-oslo-kommune-no&resource=utdanning/elev/person", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=ude-oslo-kommune-no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
         assertEquals(200, response.statusCode())
         verify { rebuilder.rebuild(ResourceCoordinate("ude.oslo.kommune.no", "utdanning", "elev", "person")) }
@@ -71,7 +71,7 @@ class AdminControllerIT {
 
     @Test
     fun `an iso resource is rebuilt under the identity the model gives it`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=felles/kodeverk/iso/landkode", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=felles/kodeverk/iso/landkode", NOVARI_ADAPTER)
 
         assertEquals(200, response.statusCode())
         verify { rebuilder.rebuild(ResourceCoordinate("fintlabs.no", "felles", "kodeverk", "landkode")) }
@@ -79,7 +79,7 @@ class AdminControllerIT {
 
     @Test
     fun `a rebuild for a resource the model does not serve is a bad request`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
         assertTrue("utdanning/elev/nothing" in response.body(), response.body())
@@ -87,21 +87,21 @@ class AdminControllerIT {
 
     @Test
     fun `a rebuild with a blank org id is a bad request`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=%20&resource=utdanning/elev/person", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=%20&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
     }
 
     @Test
     fun `a rebuild without an org id is a bad request`() {
-        val response = post("/admin/relation-edges/rebuild?resource=utdanning/elev/person", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?resource=utdanning/elev/person", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
     }
 
     @Test
     fun `a rebuild without a resource is a bad request`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
         assertTrue("resource" in response.body(), response.body())
@@ -109,7 +109,7 @@ class AdminControllerIT {
 
     @Test
     fun `a drift check for a resource the model does not serve is a bad request`() {
-        val response = get("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_CLIENT)
+        val response = get("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
     }
@@ -119,7 +119,7 @@ class AdminControllerIT {
         every { rebuilder.rebuild(any()) } throws
             RelationEdgeRebuildRunningException(ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person"))
 
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
         assertEquals(409, response.statusCode(), response.body())
     }
@@ -128,14 +128,14 @@ class AdminControllerIT {
     fun `a rebuild that fails answers server error`() {
         every { rebuilder.rebuild(any()) } throws IllegalStateException("the store is down")
 
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_CLIENT)
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
         assertEquals(500, response.statusCode(), response.body())
     }
 
     @Test
-    fun `an adapter is refused the rebuild`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
+    fun `a FINT client is refused the rebuild`() {
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_CLIENT)
 
         assertEquals(403, response.statusCode(), response.body())
         verify(exactly = 0) { rebuilder.rebuild(any()) }

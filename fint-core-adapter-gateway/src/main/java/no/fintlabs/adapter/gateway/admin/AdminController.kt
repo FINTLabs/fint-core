@@ -35,9 +35,7 @@ class AdminController(
     /**
      * Rebuilds the relation edges of one resource for one org, for example
      * `?orgId=ude.oslo.kommune.no&resource=utdanning/elev/person`, and answers with what it did once
-     * it is done. Use it after a fix to how edges are written, or to clear back-links that stale edges
-     * still give. The org id may be written with dots, dashes or underscores, and the resource must
-     * be a path the model serves. Only a FINT client from novari.no may call it.
+     * it is done.
      */
     @PostMapping("/relation-edges/rebuild")
     fun rebuild(
@@ -61,7 +59,7 @@ class AdminController(
     /**
      * Reports what [rebuild] would change for one resource and org, without writing anything: edges
      * missing, edges stale, and edges whose source is gone, with a few examples of each. Takes the
-     * same query parameters as [rebuild], and only a FINT client from novari.no may call it.
+     * same query parameters as [rebuild], and only a FINT adapter from novari.no may call it.
      */
     @GetMapping("/relation-edges/drift")
     fun drift(

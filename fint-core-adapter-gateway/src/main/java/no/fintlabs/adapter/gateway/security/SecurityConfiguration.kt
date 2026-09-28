@@ -30,9 +30,9 @@ class SecurityConfiguration(
                     .dispatcherTypeMatchers(DispatcherType.ERROR)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, RELATION_EDGE_REBUILD_PATH)
-                    .access(requireFintClientOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .access(requireFintAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
                     .requestMatchers(HttpMethod.GET, RELATION_EDGE_DRIFT_PATH)
-                    .access(requireFintClientOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .access(requireFintAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
                     .requestMatchers(ADMIN_PATHS)
                     .denyAll()
                     .requestMatchers(*OPEN_PATHS)
@@ -66,16 +66,15 @@ class SecurityConfiguration(
             AuthorizationDecision(authentication.get().canAccessComponent(context))
         }
 
-    private fun requireFintClientOf(orgId: String): AuthorizationManager<RequestAuthorizationContext> =
+    private fun requireFintAdapterOf(orgId: String): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManager { authentication, _ ->
-            AuthorizationDecision(authentication.get().isFintClientOf(orgId))
+            AuthorizationDecision(authentication.get().isFintAdapterOf(orgId))
         }
-
-    private fun Authentication.isFintClientOf(orgId: String): Boolean =
-        this is CorePrincipal && type == FintType.CLIENT && FintScope.FINT_CLIENT in scopes && this.orgId == orgId
 
     private fun Authentication.isFintAdapter(): Boolean =
         this is CorePrincipal && type == FintType.ADAPTER && FintScope.FINT_ADAPTER in scopes
+
+    private fun Authentication.isFintAdapterOf(orgId: String): Boolean = this is CorePrincipal && isFintAdapter() && this.orgId == orgId
 
     private fun Authentication.canAccessComponent(context: RequestAuthorizationContext): Boolean {
         if (this !is CorePrincipal || !isFintAdapter()) return false

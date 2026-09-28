@@ -193,23 +193,23 @@ class SecurityConfigurationIT {
     }
 
     @Test
-    fun `the relation edge rebuild answers a FINT client from novari`() {
+    fun `the relation edge rebuild answers a FINT adapter from novari`() {
         mockMvc
-            .perform(post(REBUILD).with(authentication(novariClient())))
+            .perform(post(REBUILD).with(authentication(novariAdapter())))
             .andExpect(status().isOk)
     }
 
     @Test
-    fun `the relation edge rebuild denies a FINT client from another org`() {
+    fun `the relation edge rebuild denies a FINT adapter from another org`() {
         mockMvc
-            .perform(post(REBUILD).with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))))
+            .perform(post(REBUILD).with(authentication(adapter())))
             .andExpect(status().isForbidden)
     }
 
     @Test
-    fun `the relation edge rebuild denies an adapter from novari`() {
+    fun `the relation edge rebuild denies a FINT client from novari`() {
         mockMvc
-            .perform(post(REBUILD).with(authentication(novariAdapter())))
+            .perform(post(REBUILD).with(authentication(novariClient())))
             .andExpect(status().isForbidden)
     }
 
@@ -221,23 +221,23 @@ class SecurityConfigurationIT {
     }
 
     @Test
-    fun `the relation edge drift check answers a FINT client from novari`() {
+    fun `the relation edge drift check answers a FINT adapter from novari`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(novariClient())))
+            .perform(get(DRIFT).with(authentication(novariAdapter())))
             .andExpect(status().isOk)
     }
 
     @Test
-    fun `the relation edge drift check denies a FINT client from another org`() {
+    fun `the relation edge drift check denies a FINT adapter from another org`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))))
+            .perform(get(DRIFT).with(authentication(adapter())))
             .andExpect(status().isForbidden)
     }
 
     @Test
-    fun `the relation edge drift check denies an adapter from novari`() {
+    fun `the relation edge drift check denies a FINT client from novari`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(novariAdapter())))
+            .perform(get(DRIFT).with(authentication(novariClient())))
             .andExpect(status().isForbidden)
     }
 
@@ -256,9 +256,9 @@ class SecurityConfigurationIT {
     }
 
     @Test
-    fun `another admin path is refused to a FINT client from novari`() {
+    fun `another admin path is refused to a FINT adapter from novari`() {
         mockMvc
-            .perform(get(OTHER_ADMIN).with(authentication(novariClient())))
+            .perform(get(OTHER_ADMIN).with(authentication(novariAdapter())))
             .andExpect(status().isForbidden)
     }
 
