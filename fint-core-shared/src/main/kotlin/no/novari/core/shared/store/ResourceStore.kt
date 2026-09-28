@@ -27,7 +27,8 @@ class ResourceStore(
     private val properties: ResourceStoreProperties = ResourceStoreProperties(),
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
-    private val sizeCache: Cache<String, Long> = Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
+    private val sizeCache: Cache<String, Long> =
+        Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
 
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
@@ -169,7 +170,8 @@ class ResourceStore(
         size: Int,
         offset: Long,
         collectionName: String,
-    ): List<ResourceEntry> = find(orderedQuery(filter?.since, Sort.Direction.ASC).skip(offset), size, collectionName, hintFor(filter))
+    ): List<ResourceEntry> =
+        find(orderedQuery(filter?.since, Sort.Direction.ASC).skip(offset), size, collectionName, hintFor(filter))
 
     /**
      * Reads the [size] entries that follow [anchor], the last entry of the page the caller already
@@ -182,7 +184,12 @@ class ResourceStore(
         size: Int,
         collectionName: String,
     ): List<ResourceEntry> {
-        if (anchor == null) return find(orderedQuery(filter?.since, Sort.Direction.ASC), size, collectionName, hintFor(filter))
+        if (anchor == null) return find(
+            orderedQuery(filter?.since, Sort.Direction.ASC),
+            size,
+            collectionName,
+            hintFor(filter)
+        )
 
         val createdAt = Date.from(anchor.createdAt)
         val sameTimestamp =
@@ -281,6 +288,19 @@ class ResourceStore(
         return template
             .findOne<ResourceEntry>(query, collectionName)
             ?.lastModified
+    }
+
+    /** The ids among [ids] that are stored in [collectionName]. */
+    fun findStoredIds(
+        ids: Collection<String>,
+        collectionName: String,
+    ): Set<String> {
+        if (ids.isEmpty()) return emptySet()
+
+        val query = Query.query(Criteria.where("_id").`in`(ids))
+        query.fields().include("_id")
+
+        return template.find(query, Document::class.java, collectionName).mapTo(mutableSetOf()) { it.getString("_id") }
     }
 
     fun findIdentitiesOlderThan(
