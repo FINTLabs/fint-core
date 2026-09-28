@@ -1,14 +1,16 @@
 package no.novari.core.shared.model
 
-@JvmInline
-value class OrgId(
+/**
+ * An org id in its dotted lowercase form, such as `ude.oslo.kommune.no`. [from] is the only way to
+ * make one, and it accepts dots, dashes or underscores in any case, so every OrgId in the code is
+ * already in that form. It is a normal class and not a value class, because Spring builds a value
+ * class from request input by calling its constructor, which would skip [from].
+ */
+class OrgId private constructor(
     val value: String,
 ) {
     init {
         require(value.isNotBlank()) { "OrgId must not be blank" }
-        require(value == value.lowercase()) { "OrgId must be lowercase: $value" }
-        require(!value.contains('-')) { "OrgId must use dot instead of dash: $value" }
-        require(!value.contains('_')) { "OrgId must use dot instead of underscore: $value" }
     }
 
     val asTopicSegment: String
@@ -22,6 +24,10 @@ value class OrgId(
      * `labs.no`.
      */
     fun belongsTo(organization: OrgId): Boolean = this == organization || value.endsWith(".${organization.value}")
+
+    override fun equals(other: Any?): Boolean = other is OrgId && other.value == value
+
+    override fun hashCode(): Int = value.hashCode()
 
     override fun toString(): String = value
 
