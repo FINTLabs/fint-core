@@ -50,7 +50,7 @@ replacements:
           - spec.routes.0.match
         options:
           delimiter: "`"
-          index: 9
+          index: 11
 
   - source:
       kind: ConfigMap
