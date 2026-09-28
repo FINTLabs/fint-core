@@ -63,8 +63,7 @@ class RelationEdgeRebuilder(
      * changed a field. The second report then finds nothing. Syncs that write in between can make
      * the numbers differ by the edges they touched.
      */
-    fun drift(coordinate: ResourceCoordinate): RelationEdgeDrift =
-        driftOfStoredSources(coordinate) + driftOfSourcesGone(coordinate)
+    fun drift(coordinate: ResourceCoordinate): RelationEdgeDrift = driftOfStoredSources(coordinate) + driftOfSourcesGone(coordinate)
 
     private fun replaceEdgesOfStoredSources(coordinate: ResourceCoordinate): RelationEdgeRebuild {
         resourceWritePipeline.prepare(coordinate)
@@ -101,7 +100,7 @@ class RelationEdgeRebuilder(
                     transactions.inTransaction {
                         deleteEdgesOwnedBy(
                             sourcesNoLongerStored(sourceIds, coordinate),
-                            coordinate
+                            coordinate,
                         )
                     }
                 }
@@ -141,12 +140,12 @@ class RelationEdgeRebuilder(
                     edgesOwnedBy(
                         sourcesNoLongerStored(
                             sourceIds,
-                            coordinate
-                        ), coordinate
-                    )
+                            coordinate,
+                        ),
+                        coordinate,
+                    ),
                 )
-            }
-            .fold(RelationEdgeDrift.NONE, RelationEdgeDrift::plus)
+            }.fold(RelationEdgeDrift.NONE, RelationEdgeDrift::plus)
 
     private fun storedResourcesAfter(
         anchor: PageAnchor?,
@@ -156,7 +155,7 @@ class RelationEdgeRebuilder(
             anchor,
             filter = null,
             size = batchSize,
-            collectionName = coordinate.toCollectionName()
+            collectionName = coordinate.toCollectionName(),
         )
 
     private fun sourcesNoLongerStored(
@@ -176,7 +175,7 @@ class RelationEdgeRebuilder(
             RelationEdgeWrite.Replace.of(
                 coordinate,
                 it.id,
-                storageMapper.convertValue(it.data, resourceClass)
+                storageMapper.convertValue(it.data, resourceClass),
             )
         }
     }
@@ -189,8 +188,7 @@ class RelationEdgeRebuilder(
     private fun edgesOwnedBy(
         sourceIds: List<String>,
         coordinate: ResourceCoordinate,
-    ): List<RelationEdge> =
-        relationEdgeStore.findBySources(coordinate.toEdgeCollectionName(), coordinate.toResourceUri(), sourceIds)
+    ): List<RelationEdge> = relationEdgeStore.findBySources(coordinate.toEdgeCollectionName(), coordinate.toResourceUri(), sourceIds)
 
     private fun sourceIdsWithEdges(coordinate: ResourceCoordinate): List<String> =
         relationEdgeStore.findSourceIds(coordinate.toEdgeCollectionName(), coordinate.toResourceUri())
@@ -198,8 +196,7 @@ class RelationEdgeRebuilder(
     private fun deleteEdgesOwnedBy(
         sourceIds: List<String>,
         coordinate: ResourceCoordinate,
-    ): Long =
-        relationEdgeStore.deleteBySources(coordinate.toEdgeCollectionName(), coordinate.toResourceUri(), sourceIds)
+    ): Long = relationEdgeStore.deleteBySources(coordinate.toEdgeCollectionName(), coordinate.toResourceUri(), sourceIds)
 
     private fun List<RelationEdge>.notIn(others: List<RelationEdge>): List<RelationEdge> {
         val otherIds = others.mapTo(HashSet()) { it.id }
@@ -278,9 +275,9 @@ data class RelationEdgeDrift(
                     missing
                         .take(EXAMPLES_PER_KIND)
                         .map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.MISSING, it) } +
-                            stale
-                                .take(EXAMPLES_PER_KIND)
-                                .map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.STALE, it) },
+                        stale
+                            .take(EXAMPLES_PER_KIND)
+                            .map { RelationEdgeDriftExample.of(RelationEdgeDriftExample.Kind.STALE, it) },
             )
 
         fun ofSourcesGone(edges: List<RelationEdge>): RelationEdgeDrift =
