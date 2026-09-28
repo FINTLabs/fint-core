@@ -170,8 +170,7 @@ class ResourceStore(
         size: Int,
         offset: Long,
         collectionName: String,
-    ): List<ResourceEntry> =
-        find(orderedQuery(filter?.since, Sort.Direction.ASC).skip(offset), size, collectionName, hintFor(filter))
+    ): List<ResourceEntry> = find(orderedQuery(filter?.since, Sort.Direction.ASC).skip(offset), size, collectionName, hintFor(filter))
 
     /**
      * Reads the [size] entries that follow [anchor], the last entry of the page the caller already
@@ -184,12 +183,14 @@ class ResourceStore(
         size: Int,
         collectionName: String,
     ): List<ResourceEntry> {
-        if (anchor == null) return find(
-            orderedQuery(filter?.since, Sort.Direction.ASC),
-            size,
-            collectionName,
-            hintFor(filter)
-        )
+        if (anchor == null) {
+            return find(
+                orderedQuery(filter?.since, Sort.Direction.ASC),
+                size,
+                collectionName,
+                hintFor(filter),
+            )
+        }
 
         val createdAt = Date.from(anchor.createdAt)
         val sameTimestamp =
