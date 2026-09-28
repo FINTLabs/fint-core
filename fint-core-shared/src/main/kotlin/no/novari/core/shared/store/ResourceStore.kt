@@ -291,7 +291,6 @@ class ResourceStore(
             ?.lastModified
     }
 
-    /** The ids among [ids] that are stored in [collectionName]. */
     fun findStoredIds(
         ids: Collection<String>,
         collectionName: String,
