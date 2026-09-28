@@ -1,11 +1,5 @@
 package no.novari.core.shared.model
 
-/**
- * An org id in its dotted lowercase form, such as `ude.oslo.kommune.no`. [from] is the only way to
- * make one, and it accepts dots, dashes or underscores in any case, so every OrgId in the code is
- * already in that form. It is a normal class and not a value class, because Spring builds a value
- * class from request input by calling its constructor, which would skip [from].
- */
 class OrgId private constructor(
     val value: String,
 ) {
