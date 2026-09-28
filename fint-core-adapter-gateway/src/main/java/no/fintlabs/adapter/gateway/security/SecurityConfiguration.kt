@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.security
 
+import jakarta.servlet.DispatcherType
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.converter.CorePrincipalConverter
 import no.novari.resource.server.enums.FintScope
@@ -26,6 +27,8 @@ class SecurityConfiguration(
             .csrf { it.disable() }
             .authorizeHttpRequests { requests ->
                 requests
+                    .dispatcherTypeMatchers(DispatcherType.ERROR)
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, RELATION_EDGE_REBUILD_PATH)
                     .access(requireFintClientOf(RELATION_EDGE_ADMIN_ORG_ID))
                     .requestMatchers(HttpMethod.GET, RELATION_EDGE_DRIFT_PATH)
