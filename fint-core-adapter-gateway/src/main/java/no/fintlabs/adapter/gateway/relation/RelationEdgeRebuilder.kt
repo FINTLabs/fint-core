@@ -13,7 +13,6 @@ import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Rebuilds the relation edges of one resource type for one organization from the resources stored
@@ -26,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap
  * batch, the edges of sources that are no longer stored are removed too. A sync write that lands
  * on the same source at the same time writes the same edges in its own transaction, so Mongo
  * reports a conflict and one of the two runs again.
+ *
+ * Both can take minutes for a large type, so callers run them through [RelationEdgeJobs], which
+ * also makes sure only one runs at a time.
  */
 @Service
 class RelationEdgeRebuilder(
@@ -35,23 +37,11 @@ class RelationEdgeRebuilder(
     private val transactions: MongoTransactions,
     @param:Value("\${fint.relation-edges.rebuild-batch-size:500}") private val batchSize: Int,
 ) {
-    private val running: MutableSet<ResourceCoordinate> = ConcurrentHashMap.newKeySet()
     private val storageMapper = FintJson.storageMapper()
 
-    /**
-     * Rebuilds the edges owned by the resources at [coordinate] and says what it did. Only one
-     * rebuild of the same organization and resource type runs at a time.
-     *
-     * @throws RelationEdgeRebuildRunningException when a rebuild of [coordinate] is already running
-     */
-    fun rebuild(coordinate: ResourceCoordinate): RelationEdgeRebuild {
-        if (!running.add(coordinate)) throw RelationEdgeRebuildRunningException(coordinate)
-        try {
-            return replaceEdgesOfStoredSources(coordinate) + removeEdgesOfSourcesGone(coordinate)
-        } finally {
-            running.remove(coordinate)
-        }
-    }
+    /** Rebuilds the edges owned by the resources at [coordinate] and says what it did. */
+    fun rebuild(coordinate: ResourceCoordinate): RelationEdgeRebuild =
+        replaceEdgesOfStoredSources(coordinate) + removeEdgesOfSourcesGone(coordinate)
 
     /**
      * Reports what [rebuild] would change for [coordinate], without writing anything. The edges
@@ -218,7 +208,7 @@ data class RelationEdgeRebuild(
     val resourcesRead: Long,
     val edgesWritten: Long,
     val edgesRemoved: Long,
-) {
+) : RelationEdgeJobResult {
     operator fun plus(other: RelationEdgeRebuild): RelationEdgeRebuild =
         RelationEdgeRebuild(
             resourcesRead = resourcesRead + other.resourcesRead,
@@ -242,7 +232,7 @@ data class RelationEdgeDrift(
     val edgesStale: Long,
     val edgesOfSourcesGone: Long,
     val examples: List<RelationEdgeDriftExample>,
-) {
+) : RelationEdgeJobResult {
     operator fun plus(other: RelationEdgeDrift): RelationEdgeDrift =
         RelationEdgeDrift(
             resourcesRead = resourcesRead + other.resourcesRead,
@@ -319,7 +309,3 @@ data class RelationEdgeDriftExample(
             )
     }
 }
-
-class RelationEdgeRebuildRunningException(
-    coordinate: ResourceCoordinate,
-) : RuntimeException("A relation edge rebuild of ${coordinate.toResourceUri()} for ${coordinate.orgId} is already running")
