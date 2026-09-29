@@ -31,7 +31,9 @@ class SecurityConfiguration(
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, RELATION_EDGE_REBUILD_PATH)
                     .access(requireFintAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
-                    .requestMatchers(HttpMethod.GET, RELATION_EDGE_DRIFT_PATH)
+                    .requestMatchers(HttpMethod.POST, RELATION_EDGE_DRIFT_PATH)
+                    .access(requireFintAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .requestMatchers(HttpMethod.GET, RELATION_EDGE_JOB_PATH)
                     .access(requireFintAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
                     .requestMatchers(ADMIN_PATHS)
                     .denyAll()
@@ -87,6 +89,7 @@ class SecurityConfiguration(
         private const val SYNC_PATH = "/{domainName}/{packageName}/{entity}"
         private const val RELATION_EDGE_REBUILD_PATH = "/admin/relation-edges/rebuild"
         private const val RELATION_EDGE_DRIFT_PATH = "/admin/relation-edges/drift"
+        private const val RELATION_EDGE_JOB_PATH = "/admin/relation-edges/jobs/{id}"
         private const val RELATION_EDGE_ADMIN_ORG_ID = "novari.no"
         private const val ADMIN_PATHS = "/admin/**"
         private val OPEN_PATHS =
