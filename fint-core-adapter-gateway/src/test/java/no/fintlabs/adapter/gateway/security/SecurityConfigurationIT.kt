@@ -223,28 +223,56 @@ class SecurityConfigurationIT {
     @Test
     fun `the relation edge drift check answers a FINT adapter from novari`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(novariAdapter())))
+            .perform(post(DRIFT).with(authentication(novariAdapter())))
             .andExpect(status().isOk)
     }
 
     @Test
     fun `the relation edge drift check denies a FINT adapter from another org`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(adapter())))
+            .perform(post(DRIFT).with(authentication(adapter())))
             .andExpect(status().isForbidden)
     }
 
     @Test
     fun `the relation edge drift check denies a FINT client from novari`() {
         mockMvc
-            .perform(get(DRIFT).with(authentication(novariClient())))
+            .perform(post(DRIFT).with(authentication(novariClient())))
             .andExpect(status().isForbidden)
     }
 
     @Test
     fun `the relation edge drift check asks for a token`() {
         mockMvc
-            .perform(get(DRIFT))
+            .perform(post(DRIFT))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `a relation edge job answers a FINT adapter from novari`() {
+        mockMvc
+            .perform(get(JOB).with(authentication(novariAdapter())))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `a relation edge job denies a FINT adapter from another org`() {
+        mockMvc
+            .perform(get(JOB).with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `a relation edge job denies a FINT client from novari`() {
+        mockMvc
+            .perform(get(JOB).with(authentication(novariClient())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `a relation edge job asks for a token`() {
+        mockMvc
+            .perform(get(JOB))
             .andExpect(status().isUnauthorized)
     }
 
@@ -316,8 +344,13 @@ class SecurityConfigurationIT {
         @PostMapping("/admin/relation-edges/rebuild")
         fun rebuild(): String = "ok"
 
-        @GetMapping("/admin/relation-edges/drift")
+        @PostMapping("/admin/relation-edges/drift")
         fun drift(): String = "ok"
+
+        @GetMapping("/admin/relation-edges/jobs/{id}")
+        fun job(
+            @PathVariable id: String,
+        ): String = id
 
         @GetMapping("/admin/something-else")
         fun otherAdmin(): String = "ok"
@@ -355,6 +388,7 @@ class SecurityConfigurationIT {
         const val PROFILE = "security-config-test"
         private const val REBUILD = "/admin/relation-edges/rebuild"
         private const val DRIFT = "/admin/relation-edges/drift"
+        private const val JOB = "/admin/relation-edges/jobs/5d0c7a3e-8f41-4c55-9a55-2f6b1f0e6c11"
         private const val OTHER_ADMIN = "/admin/something-else"
     }
 }

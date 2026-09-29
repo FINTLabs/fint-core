@@ -5,15 +5,21 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.ClockConfig
+import no.fintlabs.adapter.gateway.config.FintComponentConverter
 import no.fintlabs.adapter.gateway.config.FintResourceRefConverter
 import no.fintlabs.adapter.gateway.config.OrgIdConverter
 import no.fintlabs.adapter.gateway.relation.RelationEdgeDrift
+import no.fintlabs.adapter.gateway.relation.RelationEdgeJobRunner
+import no.fintlabs.adapter.gateway.relation.RelationEdgeJobs
 import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuild
-import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuildRunningException
 import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuilder
 import no.fintlabs.adapter.gateway.security.SecurityConfiguration
 import no.fintlabs.adapter.gateway.security.SecurityProblemDetailHandler
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.FintModel
+import org.awaitility.kotlin.await
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -28,18 +34,25 @@ import org.springframework.context.annotation.Profile
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.test.context.ActiveProfiles
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Duration
 import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * The admin endpoints on a real server, so a request goes through the whole filter chain and any
- * forward to the error page, the way it does in the cluster. Two fixed tokens stand for a FINT
- * client and a FINT adapter from novari.no.
+ * forward to the error page, the way it does in the cluster. Jobs run on the real background
+ * thread; only the rebuilder is a stand-in. Two fixed tokens stand for a FINT client and a FINT
+ * adapter from novari.no.
  */
 @SpringBootTest(
     classes = [AdminControllerIT.TestApp::class],
@@ -54,27 +67,60 @@ class AdminControllerIT {
     @Value("\${local.server.port}")
     private var port: Int = 0
 
+    private val json = JsonMapper.builder().build()
+
     @BeforeEach
     fun resetRebuilder() {
         clearMocks(rebuilder)
-        every { rebuilder.rebuild(any()) } returns RelationEdgeRebuild(resourcesRead = 1, edgesWritten = 1, edgesRemoved = 0)
+        every { rebuilder.rebuild(any()) } returns REBUILT
         every { rebuilder.drift(any()) } returns RelationEdgeDrift.NONE
     }
 
     @Test
-    fun `a rebuild names the org and resource it was asked for`() {
+    fun `a rebuild answers accepted with where to follow the job`() {
         val response = post("/admin/relation-edges/rebuild?orgId=ude-oslo-kommune-no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
-        assertEquals(200, response.statusCode())
+        assertEquals(202, response.statusCode(), response.body())
+        val id = json.readTree(response.body())["id"].asString()
+        assertEquals("/provider/admin/relation-edges/jobs/$id", response.headers().firstValue("Location").orElse(null))
+    }
+
+    @Test
+    fun `a rebuild job names the org and resource it was asked for and holds what the rebuild did`() {
+        val job =
+            finishedJob(post("/admin/relation-edges/rebuild?orgId=ude-oslo-kommune-no&resource=utdanning/elev/person", NOVARI_ADAPTER))
+
+        assertEquals("DONE", job["state"].asString())
+        assertEquals("ude.oslo.kommune.no", job["orgId"].asString())
+        assertEquals("utdanning/elev/person", job["resources"][0]["resource"].asString())
+        assertEquals(REBUILT.edgesWritten, job["resources"][0]["result"]["edgesWritten"].asLong())
         verify { rebuilder.rebuild(ResourceCoordinate("ude.oslo.kommune.no", "utdanning", "elev", "person")) }
     }
 
     @Test
     fun `an iso resource is rebuilt under the identity the model gives it`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=felles/kodeverk/iso/landkode", NOVARI_ADAPTER)
+        finishedJob(post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=felles/kodeverk/iso/landkode", NOVARI_ADAPTER))
 
-        assertEquals(200, response.statusCode())
         verify { rebuilder.rebuild(ResourceCoordinate("fintlabs.no", "felles", "kodeverk", "landkode")) }
+    }
+
+    @Test
+    fun `a rebuild of a component rebuilds every resource type in it`() {
+        val inComponent = FintModel.refsIn("utdanning", "elev")
+
+        val job = finishedJob(post("/admin/relation-edges/rebuild?orgId=fintlabs.no&component=utdanning/elev", NOVARI_ADAPTER))
+
+        val jobResources: Set<String> = job["resources"].values().map { it["resource"].asString() }.toSet()
+        assertEquals(inComponent.map { "${it.domainName}/${it.packageName}/${it.resourceName}" }.toSet(), jobResources)
+        inComponent.forEach { verify { rebuilder.rebuild(ResourceCoordinate.of(OrgId.from("fintlabs.no"), it)) } }
+    }
+
+    @Test
+    fun `a rebuild for a component the model does not serve is a bad request`() {
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&component=utdanning/nothing", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
+        assertEquals("Bad component: Not a component the model serves: utdanning/nothing", detailOf(response))
     }
 
     @Test
@@ -82,7 +128,25 @@ class AdminControllerIT {
         val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
-        assertTrue("utdanning/elev/nothing" in response.body(), response.body())
+        assertEquals("Bad resource: Not a resource the model serves: utdanning/elev/nothing", detailOf(response))
+    }
+
+    @Test
+    fun `a rebuild with both a resource and a component is a bad request`() {
+        val response =
+            post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person&component=utdanning/elev", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
+        assertEquals("Give resource or component, but not both", detailOf(response))
+        verify(exactly = 0) { rebuilder.rebuild(any()) }
+    }
+
+    @Test
+    fun `a rebuild with neither a resource nor a component is a bad request`() {
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
+        assertEquals("Give resource or component, but not both", detailOf(response))
     }
 
     @Test
@@ -100,37 +164,62 @@ class AdminControllerIT {
     }
 
     @Test
-    fun `a rebuild without a resource is a bad request`() {
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no", NOVARI_ADAPTER)
+    fun `a drift check job holds the drift of the resource`() {
+        every { rebuilder.drift(any()) } returns
+            RelationEdgeDrift(resourcesRead = 4, edgesMissing = 1, edgesStale = 2, edgesOfSourcesGone = 3, examples = emptyList())
 
-        assertEquals(400, response.statusCode(), response.body())
-        assertTrue("resource" in response.body(), response.body())
+        val job = finishedJob(post("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER))
+
+        assertEquals("DRIFT", job["kind"].asString())
+        assertEquals(2, job["resources"][0]["result"]["edgesStale"].asLong())
     }
 
     @Test
     fun `a drift check for a resource the model does not serve is a bad request`() {
-        val response = get("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_ADAPTER)
+        val response = post("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/nothing", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
     }
 
     @Test
-    fun `a rebuild that is already running answers conflict`() {
-        every { rebuilder.rebuild(any()) } throws
-            RelationEdgeRebuildRunningException(ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person"))
+    fun `a job started while another is running answers conflict and names the running job`() {
+        val release = CountDownLatch(1)
+        every { rebuilder.rebuild(any()) } answers {
+            release.await(10, TimeUnit.SECONDS)
+            REBUILT
+        }
+        val first = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
+        val second = post("/admin/relation-edges/drift?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
 
-        assertEquals(409, response.statusCode(), response.body())
+        assertEquals(409, second.statusCode(), second.body())
+        assertEquals(json.readTree(first.body())["id"].asString(), json.readTree(second.body())["runningJob"].asString())
+        release.countDown()
+        finishedJob(first)
     }
 
     @Test
-    fun `a rebuild that fails answers server error`() {
+    fun `a rebuild that fails shows as failed on the job`() {
         every { rebuilder.rebuild(any()) } throws IllegalStateException("the store is down")
 
-        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER)
+        val job = finishedJob(post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person", NOVARI_ADAPTER))
 
-        assertEquals(500, response.statusCode(), response.body())
+        assertEquals("FAILED", job["state"].asString())
+        assertEquals("the store is down", job["resources"][0]["error"].asString())
+    }
+
+    @Test
+    fun `a job that does not exist is not found`() {
+        val response = get("/admin/relation-edges/jobs/${UUID.randomUUID()}", NOVARI_ADAPTER)
+
+        assertEquals(404, response.statusCode(), response.body())
+    }
+
+    @Test
+    fun `a job id that is not an id is a bad request`() {
+        val response = get("/admin/relation-edges/jobs/not-an-id", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
     }
 
     @Test
@@ -139,6 +228,24 @@ class AdminControllerIT {
 
         assertEquals(403, response.statusCode(), response.body())
         verify(exactly = 0) { rebuilder.rebuild(any()) }
+    }
+
+    private fun detailOf(response: HttpResponse<String>): String? = json.readTree(response.body())["detail"]?.asString()
+
+    private fun finishedJob(started: HttpResponse<String>): JsonNode {
+        assertEquals(202, started.statusCode(), started.body())
+        val location =
+            started
+                .headers()
+                .firstValue("Location")
+                .orElseThrow()
+                .removePrefix("/provider")
+        var job: JsonNode? = null
+        await.atMost(Duration.ofSeconds(5)).until {
+            job = json.readTree(get(location, NOVARI_ADAPTER).body())
+            job!!["state"].asString() != "RUNNING"
+        }
+        return job!!
     }
 
     private fun post(
@@ -172,8 +279,12 @@ class AdminControllerIT {
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
         AdminController::class,
+        RelationEdgeJobs::class,
+        RelationEdgeJobRunner::class,
+        ClockConfig::class,
         OrgIdConverter::class,
         FintResourceRefConverter::class,
+        FintComponentConverter::class,
     )
     class TestApp {
         @Bean
@@ -208,6 +319,7 @@ class AdminControllerIT {
 
     companion object {
         const val PROFILE = "admin-controller-it"
+        private val REBUILT = RelationEdgeRebuild(resourcesRead = 1, edgesWritten = 1, edgesRemoved = 0)
         private const val NOVARI_CLIENT = "novari-client"
         private const val NOVARI_ADAPTER = "novari-adapter"
     }

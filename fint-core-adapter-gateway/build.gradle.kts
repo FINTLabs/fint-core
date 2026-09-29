@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":fint-core-shared"))
 
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
 
     implementation("jakarta.annotation:jakarta.annotation-api:3.0.0")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
