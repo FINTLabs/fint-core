@@ -33,10 +33,11 @@ class RelationEdgeStoreIT {
         store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B")))
         val createdAt = edges().first { it.targetIdValue == "PARENT-A" }.createdAt
 
-        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+        val result = store.applyAll(listOf(replace("CHILD", "PARENT-A")))
 
         assertThat(edges().map { it.targetIdValue }).containsExactly("PARENT-A")
         assertThat(edges().single().createdAt).isEqualTo(createdAt)
+        assertThat(result).isEqualTo(RelationEdgeWriteResult(written = 0, removed = 1))
     }
 
     @Test
@@ -55,6 +56,23 @@ class RelationEdgeStoreIT {
         store.applyAll(listOf(replace("CHILD")))
 
         assertThat(edges().map { it.sourceId }).containsExactly("SIBLING")
+    }
+
+    @Test
+    fun `the sources that own edges of a type are listed once each`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B"), replace("SIBLING", "PARENT-A")))
+
+        assertThat(store.findSourceIds(COLLECTION, PERSON)).containsExactlyInAnyOrder("CHILD", "SIBLING")
+    }
+
+    @Test
+    fun `edges are found by the sources that own them`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B"), replace("SIBLING", "PARENT-A"), replace("OTHER", "PARENT-C")))
+
+        val found = store.findBySources(COLLECTION, PERSON, listOf("CHILD", "SIBLING"))
+
+        assertThat(found.map { it.sourceId to it.targetIdValue })
+            .containsExactlyInAnyOrder("CHILD" to "PARENT-A", "CHILD" to "PARENT-B", "SIBLING" to "PARENT-A")
     }
 
     private fun replace(

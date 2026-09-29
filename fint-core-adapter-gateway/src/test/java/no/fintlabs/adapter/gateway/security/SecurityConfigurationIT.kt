@@ -192,6 +192,87 @@ class SecurityConfigurationIT {
             ).andExpect(status().isForbidden)
     }
 
+    @Test
+    fun `the relation edge rebuild answers a FINT adapter from novari`() {
+        mockMvc
+            .perform(post(REBUILD).with(authentication(novariAdapter())))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `the relation edge rebuild denies a FINT adapter from another org`() {
+        mockMvc
+            .perform(post(REBUILD).with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the relation edge rebuild denies a FINT client from novari`() {
+        mockMvc
+            .perform(post(REBUILD).with(authentication(novariClient())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the relation edge rebuild asks for a token`() {
+        mockMvc
+            .perform(post(REBUILD))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `the relation edge drift check answers a FINT adapter from novari`() {
+        mockMvc
+            .perform(get(DRIFT).with(authentication(novariAdapter())))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `the relation edge drift check denies a FINT adapter from another org`() {
+        mockMvc
+            .perform(get(DRIFT).with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the relation edge drift check denies a FINT client from novari`() {
+        mockMvc
+            .perform(get(DRIFT).with(authentication(novariClient())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the relation edge drift check asks for a token`() {
+        mockMvc
+            .perform(get(DRIFT))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `another admin path is refused to a FINT adapter`() {
+        mockMvc
+            .perform(get(OTHER_ADMIN).with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `another admin path is refused to a FINT adapter from novari`() {
+        mockMvc
+            .perform(get(OTHER_ADMIN).with(authentication(novariAdapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `a FINT client from novari is denied everywhere else`() {
+        mockMvc
+            .perform(get("/status").with(authentication(novariClient())))
+            .andExpect(status().isForbidden)
+    }
+
+    private fun novariClient(): CorePrincipal = principal(cn = "admin@client.novari.no", scope = "fint-client", assets = "novari.no")
+
+    private fun novariAdapter(): CorePrincipal = principal(cn = "test@adapter.novari.no", scope = "fint-adapter", assets = "novari.no")
+
     private fun adapter(
         scope: String = "fint-adapter",
         roles: List<String> = emptyList(),
@@ -206,13 +287,14 @@ class SecurityConfigurationIT {
         cn: String,
         scope: String,
         roles: List<String> = emptyList(),
+        assets: String = "fintlabs.no",
     ): CorePrincipal {
         val jwt =
             Jwt
                 .withTokenValue("token")
                 .header("alg", "none")
                 .claim("cn", cn)
-                .claim("fintAssetIDs", "fintlabs.no")
+                .claim("fintAssetIDs", assets)
                 .claim("scope", listOf(scope))
                 .claim("Roles", roles)
                 .build()
@@ -230,6 +312,15 @@ class SecurityConfigurationIT {
     class Endpoints {
         @GetMapping("/status")
         fun status(): String = "ok"
+
+        @PostMapping("/admin/relation-edges/rebuild")
+        fun rebuild(): String = "ok"
+
+        @GetMapping("/admin/relation-edges/drift")
+        fun drift(): String = "ok"
+
+        @GetMapping("/admin/something-else")
+        fun otherAdmin(): String = "ok"
 
         @PostMapping("/{domainName}/{packageName}/{entity}")
         fun sync(
@@ -262,5 +353,8 @@ class SecurityConfigurationIT {
 
     companion object {
         const val PROFILE = "security-config-test"
+        private const val REBUILD = "/admin/relation-edges/rebuild"
+        private const val DRIFT = "/admin/relation-edges/drift"
+        private const val OTHER_ADMIN = "/admin/something-else"
     }
 }

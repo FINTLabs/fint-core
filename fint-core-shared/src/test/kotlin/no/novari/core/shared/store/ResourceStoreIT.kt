@@ -181,6 +181,13 @@ class ResourceStoreIT {
         assertThat(store.findByResourceId("1", collection)!!.identifiers).hasSize(1)
     }
 
+    @Test
+    fun `only the ids that are stored come back as stored`() {
+        store.saveAll(listOf(save("1", base), save("2", base)))
+
+        assertThat(store.findStoredIds(listOf("1", "2", "9"), collection)).containsExactlyInAnyOrder("1", "2")
+    }
+
     private fun save(
         id: String,
         timestamp: Instant,

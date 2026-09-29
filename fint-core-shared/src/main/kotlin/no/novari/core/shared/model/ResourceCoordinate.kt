@@ -29,7 +29,7 @@ data class ResourceCoordinate(
      * `<assetId>_<domainName>_<packageName>_<resourceName>`.
      * `fintlabs.no_utdanning_vurdering_elevfravar`
      */
-    fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
+    fun toCollectionName(): String = "${orgId.replace(".", "_")}_${domainName}_${packageName}_$resourceName"
 
     fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
 
@@ -40,6 +40,13 @@ data class ResourceCoordinate(
     fun toEdgeCollectionName(): String = "${orgId.replace(".", "_")}_relation_edges"
 
     fun toResourceRef(): FintResourceRef = FintResourceRef(domainName, packageName, resourceName)
+
+    companion object {
+        fun of(
+            orgId: OrgId,
+            resource: FintResourceRef,
+        ): ResourceCoordinate = ResourceCoordinate(orgId.value, resource.domainName, resource.packageName, resource.resourceName)
+    }
 }
 
 fun FintResourceRef.toResourceUri(): String = "$domainName/$packageName/$resourceName"
