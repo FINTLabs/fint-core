@@ -2,7 +2,9 @@ package no.novari.core.shared.store
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.FintModel
 import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
@@ -27,7 +29,8 @@ class ResourceStore(
     private val properties: ResourceStoreProperties = ResourceStoreProperties(),
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
-    private val sizeCache: Cache<String, Long> = Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
+    private val sizeCache: Cache<String, Long> =
+        Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
 
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
@@ -182,7 +185,14 @@ class ResourceStore(
         size: Int,
         collectionName: String,
     ): List<ResourceEntry> {
-        if (anchor == null) return find(orderedQuery(filter?.since, Sort.Direction.ASC), size, collectionName, hintFor(filter))
+        if (anchor == null) {
+            return find(
+                orderedQuery(filter?.since, Sort.Direction.ASC),
+                size,
+                collectionName,
+                hintFor(filter),
+            )
+        }
 
         val createdAt = Date.from(anchor.createdAt)
         val sameTimestamp =
@@ -270,6 +280,18 @@ class ResourceStore(
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
 
+    /**
+     * The resource types [orgId] has a collection for, sorted by type. A collection stays after an
+     * eviction empties it, so a type that was synced once is still listed.
+     */
+    fun storedCoordinates(orgId: OrgId): List<ResourceCoordinate> {
+        val existing = template.collectionNames
+        return FintModel.refs
+            .map { ResourceCoordinate.of(orgId, it) }
+            .filter { it.toCollectionName() in existing }
+            .sortedBy { it.toResourceUri() }
+    }
+
     fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
         val collectionName = coordinate.toCollectionName()
 
@@ -283,14 +305,35 @@ class ResourceStore(
             ?.lastModified
     }
 
-    fun findIdentitiesOlderThan(
-        threshold: Instant,
+    fun findStoredIds(
+        ids: Collection<String>,
         collectionName: String,
-    ): List<ResourceIdentity> {
-        val query = Query.query(Criteria.where("lastModified").lt(Date.from(threshold)))
-        query.fields().include("identifiers")
+    ): Set<String> {
+        if (ids.isEmpty()) return emptySet()
 
-        return template.find(query, ResourceIdentity::class.java, collectionName)
+        val query = Query.query(Criteria.where("_id").`in`(ids))
+        query.fields().include("_id")
+
+        return template.find(query, Document::class.java, collectionName).mapTo(mutableSetOf()) { it.getString("_id") }
+    }
+
+    /**
+     * Reads up to [limit] ids of entries modified before [threshold], through the `last_modified`
+     * index.
+     */
+    fun findIdsOlderThan(
+        threshold: Instant,
+        limit: Int,
+        collectionName: String,
+    ): List<String> {
+        val query =
+            Query
+                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .limit(limit)
+                .withHint(LAST_MODIFIED_INDEX)
+        query.fields().include("_id")
+
+        return template.find(query, ResourceId::class.java, collectionName).map { it.id }
     }
 
     fun deleteStaleByIds(
@@ -310,6 +353,18 @@ class ResourceStore(
             )
 
         return template.remove(query, collectionName).deletedCount
+    }
+
+    /**
+     * Drops the whole collection. A write that lands at the same moment creates the collection
+     * again, so the indexes are checked once more afterwards.
+     */
+    fun dropCollection(collectionName: String) {
+        template.dropCollection(collectionName)
+        indexedCollections.remove(collectionName)
+        sizeCache.invalidate(collectionName)
+
+        if (template.collectionExists(collectionName)) ensureIndexes(collectionName)
     }
 
     /**

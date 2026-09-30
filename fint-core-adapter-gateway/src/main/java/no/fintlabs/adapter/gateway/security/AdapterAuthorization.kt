@@ -23,6 +23,15 @@ class AdapterAuthorization(
         request: HttpServletRequest,
     ): Boolean = adapterOrNull(authentication, request) != null
 
+    fun isAdapterOf(
+        authentication: Authentication,
+        request: HttpServletRequest,
+        orgId: String,
+    ): Boolean {
+        val principal = adapterOrNull(authentication, request) ?: return false
+        return principal.orgId == orgId
+    }
+
     fun canAccessComponent(
         authentication: Authentication,
         context: RequestAuthorizationContext,

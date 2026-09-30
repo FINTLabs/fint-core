@@ -92,6 +92,27 @@ class SyncProgressStore(
             COLLECTION_NAME,
         )
 
+    /**
+     * Whether a full sync of the resource type is running, or was still receiving pages within
+     * the last 24 hours. Progress entries expire 24 hours after their last update, so a sync
+     * that stalled counts as running until then.
+     */
+    fun hasRecentSync(coordinate: ResourceCoordinate): Boolean =
+        template.exists(
+            Query.query(
+                Criteria
+                    .where("coordinate.orgId")
+                    .`is`(coordinate.orgId)
+                    .and("coordinate.domainName")
+                    .`is`(coordinate.domainName)
+                    .and("coordinate.packageName")
+                    .`is`(coordinate.packageName)
+                    .and("coordinate.resourceName")
+                    .`is`(coordinate.resourceName),
+            ),
+            COLLECTION_NAME,
+        )
+
     companion object {
         const val COLLECTION_NAME = "sync_progress"
         private val TTL: Duration = Duration.ofHours(24)

@@ -1,10 +1,10 @@
 package no.fintlabs.adapter.gateway.storage
 
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.store.ResourceStore
-import no.novari.fint.core.model.FintModel
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -31,10 +31,9 @@ class ResourceIndexEnsurer(
         val existing = template.collectionNames
 
         orgStore.findAll().forEach { org ->
-            val coordinates =
-                FintModel.refs.map { ResourceCoordinate(org.id, it.domainName, it.packageName, it.resourceName) }
-            val resourceCollections = coordinates.map { it.toCollectionName() }.filter { it in existing }
-            val edgeCollections = coordinates.map { it.toEdgeCollectionName() }.distinct().filter { it in existing }
+            val orgId = OrgId.from(org.id)
+            val resourceCollections = resourceStore.storedCoordinates(orgId).map { it.toCollectionName() }
+            val edgeCollections = listOf(ResourceCoordinate.edgeCollectionNameOf(orgId)).filter { it in existing }
 
             resourceCollections.forEach { prepare(it, resourceStore::prepareCollection) }
             edgeCollections.forEach { prepare(it, relationEdgeStore::prepareCollection) }
