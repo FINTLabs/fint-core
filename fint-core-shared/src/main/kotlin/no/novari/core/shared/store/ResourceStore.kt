@@ -317,14 +317,23 @@ class ResourceStore(
         return template.find(query, Document::class.java, collectionName).mapTo(mutableSetOf()) { it.getString("_id") }
     }
 
-    fun findIdentitiesOlderThan(
+    /**
+     * Reads up to [limit] ids of entries modified before [threshold], through the `last_modified`
+     * index.
+     */
+    fun findIdsOlderThan(
         threshold: Instant,
+        limit: Int,
         collectionName: String,
-    ): List<ResourceIdentity> {
-        val query = Query.query(Criteria.where("lastModified").lt(Date.from(threshold)))
-        query.fields().include("identifiers")
+    ): List<String> {
+        val query =
+            Query
+                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .limit(limit)
+                .withHint(LAST_MODIFIED_INDEX)
+        query.fields().include("_id")
 
-        return template.find(query, ResourceIdentity::class.java, collectionName)
+        return template.find(query, ResourceId::class.java, collectionName).map { it.id }
     }
 
     fun deleteStaleByIds(
@@ -344,6 +353,18 @@ class ResourceStore(
             )
 
         return template.remove(query, collectionName).deletedCount
+    }
+
+    /**
+     * Drops the whole collection. A write that lands at the same moment creates the collection
+     * again, so the indexes are checked once more afterwards.
+     */
+    fun dropCollection(collectionName: String) {
+        template.dropCollection(collectionName)
+        indexedCollections.remove(collectionName)
+        sizeCache.invalidate(collectionName)
+
+        if (template.collectionExists(collectionName)) ensureIndexes(collectionName)
     }
 
     /**

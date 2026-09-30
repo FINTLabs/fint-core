@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.sync
 
+import no.fintlabs.adapter.gateway.storage.EvictionRunner
 import no.fintlabs.adapter.gateway.storage.EvictionService
 import no.fintlabs.adapter.models.sync.SyncType
 import org.slf4j.LoggerFactory
@@ -9,7 +10,9 @@ import org.springframework.stereotype.Service
 @Service
 class SyncCompletionTracker(
     private val progressStore: SyncProgressStore,
+    private val fullSyncStatusStore: FullSyncStatusStore,
     private val evictionService: EvictionService,
+    private val evictionRunner: EvictionRunner,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -58,14 +61,20 @@ class SyncCompletionTracker(
                     return@repeat
                 }
 
-            if (progress.complete) evict(progress)
+            if (progress.complete) complete(progress)
             return
         }
 
         throw IllegalStateException("Gave up folding sync $corrId partition $partition after $FOLD_ATTEMPTS attempts")
     }
 
-    private fun evict(progress: SyncProgress) {
+    /**
+     * Records that the full sync completed, claims the eviction so a redelivery does not run it
+     * twice, and hands the eviction to the [EvictionRunner].
+     */
+    private fun complete(progress: SyncProgress) {
+        fullSyncStatusStore.recordCompleted(progress.coordinate, progress.updatedAt)
+
         val claimed = progressStore.claimEviction(progress.corrId) ?: return
 
         log.info(
@@ -75,15 +84,17 @@ class SyncCompletionTracker(
             claimed.startedAt,
         )
 
-        try {
-            evictionService.evict(claimed.coordinate, claimed.startedAt)
-        } catch (failure: RuntimeException) {
-            log.error(
-                "Eviction failed for sync {} of {}, leaving it to the next full sync",
-                claimed.corrId,
-                claimed.coordinate.toResourceUri(),
-                failure,
-            )
+        evictionRunner.submit {
+            try {
+                evictionService.evict(claimed.coordinate, claimed.startedAt)
+            } catch (failure: RuntimeException) {
+                log.error(
+                    "Eviction failed for sync {} of {}, leaving the rest to the next full sync",
+                    claimed.corrId,
+                    claimed.coordinate.toResourceUri(),
+                    failure,
+                )
+            }
         }
     }
 

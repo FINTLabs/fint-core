@@ -27,9 +27,8 @@ data class ResourceEntry(
     val lastModified: Instant,
 )
 
-data class ResourceIdentity(
+data class ResourceId(
     @Id val id: String,
-    val identifiers: List<IdentifierRef>,
 )
 
 data class ResourceTimestamp(
