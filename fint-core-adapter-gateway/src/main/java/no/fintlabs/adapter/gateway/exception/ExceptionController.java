@@ -8,11 +8,7 @@ import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException;
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException;
 import no.fintlabs.adapter.gateway.register.AdapterNotRegisteredException;
 import no.fintlabs.adapter.gateway.register.InvalidAdapterCapabilityException;
-import no.fintlabs.adapter.gateway.security.CapabilityNotSupportedException;
 import no.fintlabs.adapter.gateway.security.InvalidJwtException;
-import no.fintlabs.adapter.gateway.security.InvalidOrgId;
-import no.fintlabs.adapter.gateway.security.InvalidUsername;
-import no.fintlabs.adapter.gateway.security.UnauthorizedAdapterAccessException;
 import no.fintlabs.adapter.gateway.sync.InvalidSyncPageEntryException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.springframework.http.HttpStatus;
@@ -52,29 +48,9 @@ public class ExceptionController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
 
-    @ExceptionHandler(CapabilityNotSupportedException.class)
-    public ResponseEntity<String> handleCapabilityNotSupportedException(Throwable e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
-
     @ExceptionHandler(JacksonException.class)
     public ResponseEntity<Void> handleJacksonException(Throwable e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-    }
-
-    @ExceptionHandler(InvalidOrgId.class)
-    public ResponseEntity<String> handleInvalidOrgId(InvalidOrgId e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidUsername.class)
-    public ResponseEntity<String> handleInvalidUsername(InvalidUsername e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
-
-    @ExceptionHandler(UnauthorizedAdapterAccessException.class)
-    public ResponseEntity<String> handleInvalidUsername(UnauthorizedAdapterAccessException e) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
     }
 
     @ExceptionHandler({NoRequestFoundException.class})

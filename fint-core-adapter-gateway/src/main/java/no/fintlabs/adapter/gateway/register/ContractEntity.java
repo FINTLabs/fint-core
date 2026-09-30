@@ -5,37 +5,61 @@ import lombok.Getter;
 import lombok.Setter;
 import no.fintlabs.adapter.models.AdapterContract;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Getter
 @Setter
 @Entity
-@Table(name = "contract")
+@Table(
+        name = "contract",
+        uniqueConstraints = @UniqueConstraint(name = "uk_contract_user_name_org_id", columnNames = {"user_name", "org_id"})
+)
 public class ContractEntity {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "user_name", nullable = false)
     private String userName;
-    private String adapterId;
+
+    @Column(name = "org_id", nullable = false)
     private String orgId;
+
+    private String adapterId;
     private int heartbeatIntervalInMinutes;
 
     @OneToMany(mappedBy = "contractEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private Set<CapabilityEntity> capabilityEntityset;
+    private Set<CapabilityEntity> capabilityEntityset = new HashSet<>();
 
     public ContractEntity(AdapterContract adapterContract) {
-        this.orgId = adapterContract.getOrgId();
-        this.adapterId = adapterContract.getAdapterId();
         this.userName = adapterContract.getUsername();
-        this.heartbeatIntervalInMinutes = adapterContract.getHeartbeatIntervalInMinutes();
-        this.capabilityEntityset = adapterContract.getCapabilities().stream().map(capability -> {
-            CapabilityEntity entity = new CapabilityEntity(capability);
-            entity.setContractEntity(this);
-            return entity;
-        }).collect(Collectors.toSet());
+        this.orgId = adapterContract.getOrgId();
+        applyContract(adapterContract);
     }
 
     public ContractEntity() {
 
+    }
+
+    /**
+     * Copies everything except the identity of the contract, which is the username and orgId
+     * pair. Re-registering the same pair replaces the capability list rather than adding to
+     * it, so a capability the adapter dropped disappears from the contract.
+     */
+    public void applyContract(AdapterContract adapterContract) {
+        this.adapterId = adapterContract.getAdapterId();
+        this.heartbeatIntervalInMinutes = adapterContract.getHeartbeatIntervalInMinutes();
+
+        Set<CapabilityEntity> replacements = adapterContract.getCapabilities().stream().map(capability -> {
+            CapabilityEntity entity = new CapabilityEntity(capability);
+            entity.setContractEntity(this);
+            return entity;
+        }).collect(Collectors.toSet());
+
+        this.capabilityEntityset.clear();
+        this.capabilityEntityset.addAll(replacements);
     }
 }
