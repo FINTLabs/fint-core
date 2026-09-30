@@ -1,0 +1,34 @@
+package no.fintlabs.adapter.gateway.kafka.topic
+
+import no.fintlabs.adapter.gateway.config.AdapterKafkaProperties
+import no.fintlabs.adapter.gateway.config.ProviderProperties
+import no.novari.core.shared.kafka.KafkaTopicNames
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.event.ApplicationReadyEvent
+import org.springframework.context.event.EventListener
+import org.springframework.stereotype.Component
+
+@Component
+@ConditionalOnProperty(prefix = "fint.provider", name = ["ensure-topics"], havingValue = "true", matchIfMissing = true)
+class EventTopicEnsurer(
+    private val adapterKafkaProperties: AdapterKafkaProperties,
+    private val kafkaTopicService: KafkaTopicService,
+) {
+    @EventListener(ApplicationReadyEvent::class)
+    fun ensureEventTopics() =
+        with(adapterKafkaProperties) {
+            listOf(
+                TopicNamesConstants.ADAPTER_HEARTBEAT to heartbeatRetentionTime,
+                TopicNamesConstants.ADAPTER_CONTRACT to registerRetentionTime,
+                TopicNamesConstants.ADAPTER_FULL_SYNC to fullSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELTA_SYNC to deltaSyncRetentionTime,
+                TopicNamesConstants.ADAPTER_DELETE_SYNC to deleteSyncRetentionTime,
+            ).forEach { (eventName, retentionTime) ->
+                kafkaTopicService.createOrModifyEventTopic(
+                    KafkaTopicNames.eventTopic(eventName),
+                    partitions,
+                    retentionTime,
+                )
+            }
+        }
+}

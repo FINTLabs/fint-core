@@ -1,0 +1,70 @@
+fint:
+  provider:
+    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
+    buffer:
+      topic: ${fint.provider.org-id}
+      consumer:
+        batch-size: 100
+        concurrency: 1
+    kafka:
+      replicas: 2
+  base-url: https://api.felleskomponent.no
+
+spring:
+  application:
+    name: provider
+  jpa:
+    properties:
+      jdbc:
+        time_zone: UTC
+        lob:
+          non_contextual_creation: true
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      enable_lazy_load_no_trans: true
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: ${fint.database.url}
+    username: ${fint.database.username}
+    password: ${fint.database.password}
+    driver-class-name: org.postgresql.Driver
+  config:
+    import:
+      - classpath:cleanup-topics.yaml
+      - classpath:shared-mongodb.yaml
+  mongodb:
+    database: fint
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    security:
+      protocol: SSL
+    admin:
+      modify-topic-configs: true
+    consumer:
+      group-id: provider
+    producer:
+      batch-size: 64KB
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        linger.ms: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+logging:
+  level:
+    root: INFO
+    org.apache.kafka: WARN
+server:
+  servlet:
+    context-path: /provider
+  tomcat:
+    threads:
+      max: 400
+    max-connections: 30000

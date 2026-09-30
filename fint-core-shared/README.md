@@ -56,7 +56,7 @@ from the id fields:
 flowchart LR
     A[Adapter] -- "hrefs in _links" --> P[provider-gateway]
     P -- "FintLinksDeserializer<br/>href to idField + idValue" --> M[("MongoDB<br/>(storage form)")]
-    M -- "storageMapper" --> C[fint-core-consumer]
+    M -- "storageMapper" --> C[fint-core-client-api]
     C -- "responseMapper<br/>idField + idValue to href, self regenerated" --> K[County client]
 ```
 

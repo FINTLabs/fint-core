@@ -3,84 +3,74 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      consumer: ${{ steps.filter.outputs.consumer }}
-      provider: ${{ steps.filter.outputs.provider }}
+      client: ${{ steps.filter.outputs.client }}
+      adapter-gateway: ${{ steps.filter.outputs['adapter-gateway'] }}
       shared: ${{ steps.filter.outputs.shared }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
-        id: filter
+      - uses: actions/checkout@v7
         with:
-          filters: |
-            shared: &shared
-              - 'fint-core-shared/**'
-              - 'buildSrc/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-              - 'gradle.properties'
-              - 'gradle/**'
-              - 'gradlew'
-              - 'gradlew.bat'
-            consumer:
-              - *shared
-              - 'fint-core-consumer/**'
-            provider:
-              - *shared
-              - 'fint-core-provider-gateway/**'
+          fetch-depth: 0
+      - id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          else
+            base="${{ github.event.before }}"
+          fi
+          .github/scripts/changed-services.sh "$base" HEAD | tee -a "$GITHUB_OUTPUT"
 
-  consumer:
+  client:
     needs: changes
-    if: ${{ needs.changes.outputs.consumer == 'true' }}
+    if: ${{ needs.changes.outputs.client == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :fint-core-consumer:check
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew :fint-core-client-api:check
 
-  provider:
+  adapter-gateway:
     needs: changes
-    if: ${{ needs.changes.outputs.provider == 'true' }}
+    if: ${{ needs.changes.outputs['adapter-gateway'] == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :fint-core-provider-gateway:check
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew :fint-core-adapter-gateway:check
 
   shared:
     needs: changes
     if: ${{ needs.changes.outputs.shared == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew :fint-core-shared:check
 
-  # Single gate for branch protection: green when nothing failed (skipped == ok).
   ci-ok:
-    needs: [consumer, provider, shared]
+    needs: [client, adapter-gateway, shared]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
-          if [ "${{ needs.consumer.result }}" = "failure" ] || [ "${{ needs.provider.result }}" = "failure" ] || [ "${{ needs.shared.result }}" = "failure" ]; then
+          if [ "${{ needs.client.result }}" = "failure" ] || [ "${{ needs['adapter-gateway'].result }}" = "failure" ] || [ "${{ needs.shared.result }}" = "failure" ]; then
             echo "a module check failed"
             exit 1
           fi

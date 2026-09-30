@@ -5,11 +5,12 @@
 version: 2
 updates:
   - package-ecosystem: "gradle"
+    target-branch: "develop"
     directories:
       - "/"
       - "/buildSrc"
-      - "/fint-core-consumer"
-      - "/fint-core-provider-gateway"
+      - "/fint-core-client-api"
+      - "/fint-core-adapter-gateway"
       - "/fint-core-shared"
     schedule:
       interval: "weekly"
@@ -54,9 +55,10 @@ updates:
           - "patch"
 
   - package-ecosystem: "docker"
+    target-branch: "develop"
     directories:
-      - "/fint-core-consumer"
-      - "/fint-core-provider-gateway"
+      - "/fint-core-client-api"
+      - "/fint-core-adapter-gateway"
     schedule:
       interval: "weekly"
       day: "tuesday"
@@ -75,6 +77,7 @@ updates:
           - "*"
 
   - package-ecosystem: "docker-compose"
+    target-branch: "develop"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -94,6 +97,7 @@ updates:
           - "*"
 
   - package-ecosystem: "github-actions"
+    target-branch: "develop"
     directory: "/"
     schedule:
       interval: "weekly"

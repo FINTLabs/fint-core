@@ -1,11 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
-# Fans the per-overlay values (ConfigMap "fint-org" from each leaf) out to both the
-# consumer and provider Application. Holds org-specific values (org-id in 3 forms,
-# mongodb uri, 1Password item) and env-specific values (host, base-url). Source is a
-# local-only generated resource, so it exists before these replacements run.
 replacements:
-  # dotted (org.id) -> orgId + org-id label (both) + consumer org-id env
   - source:
       kind: ConfigMap
       name: fint-org
@@ -13,21 +8,50 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
-          - spec.env.[name=fint.consumer.org-id].value
-          - spec.ingress.routes.0.headers.x-org-id
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.orgId
           - metadata.labels.[fintlabs.no/org-id]
-          - spec.ingress.routes.0.headers.x-org-id
+      - select:
+          kind: IngressRoute
+          name: fint-core-client-api-ingress
+        fieldPaths:
+          - metadata.labels.[fintlabs.no/org-id]
 
-  # dashed (org-id) -> namespace (both) + consumer kafka acl prefixes
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.asset-regex
+    targets:
+      - select:
+          kind: Application
+          name: fint-core-adapter-gateway
+        fieldPaths:
+          - spec.ingress.routes.0.headers.x-allowed-asset-ids
+
+  - source:
+      kind: ConfigMap
+      name: fint-org
+      fieldPath: data.org-id-regex
+      options:
+        delimiter: ":"
+        index: 1
+    targets:
+      - select:
+          kind: IngressRoute
+          name: fint-core-client-api-ingress
+        fieldPaths:
+          - spec.routes.0.match
+        options:
+          delimiter: "`"
+          index: 11
+
   - source:
       kind: ConfigMap
       name: fint-org
@@ -35,26 +59,29 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - metadata.namespace
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - metadata.namespace
       - select:
-          kind: Application
-          name: fint-core-consumer
+          kind: IngressRoute
+          name: fint-core-client-api-ingress
         fieldPaths:
-          - spec.kafka.acls.0.topic
-          - spec.kafka.acls.1.topic
-          - spec.kafka.acls.2.topic
+          - metadata.namespace
+          - spec.routes.0.services.0.namespace
+      - select:
+          kind: Application
+          name: fint-core-adapter-gateway
+        fieldPaths:
+          - spec.kafka.acls.6.topic
         options:
           delimiter: "."
           index: 0
 
-  # underscore (org_id) -> instance label (both)
   - source:
       kind: ConfigMap
       name: fint-org
@@ -62,7 +89,7 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - metadata.labels.[app.kubernetes.io/instance]
         options:
@@ -70,14 +97,13 @@ replacements:
           index: 1
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - metadata.labels.[app.kubernetes.io/instance]
         options:
           delimiter: "_"
           index: 1
 
-  # per-org 1Password item path -> both
   - source:
       kind: ConfigMap
       name: fint-org
@@ -85,16 +111,15 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.onePassword.itemPath
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.onePassword.itemPath
 
-  # env base-url -> consumer relation base-url
   - source:
       kind: ConfigMap
       name: fint-org
@@ -102,23 +127,25 @@ replacements:
     targets:
       - select:
           kind: Application
-          name: fint-core-consumer
+          name: fint-core-client-api
         fieldPaths:
           - spec.env.[name=fint.relation.base-url].value
 
-  # env host -> consumer + provider ingress host
   - source:
       kind: ConfigMap
       name: fint-org
       fieldPath: data.host
     targets:
       - select:
-          kind: Application
-          name: fint-core-consumer
+          kind: IngressRoute
+          name: fint-core-client-api-ingress
         fieldPaths:
-          - spec.ingress.routes.0.host
+          - spec.routes.0.match
+        options:
+          delimiter: "`"
+          index: 1
       - select:
           kind: Application
-          name: fint-core-provider-gateway
+          name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.host
