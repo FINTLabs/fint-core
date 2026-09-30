@@ -18,6 +18,7 @@ import no.fintlabs.adapter.gateway.security.SecurityConfiguration
 import no.fintlabs.adapter.gateway.security.SecurityProblemDetailHandler
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintModel
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.BeforeEach
@@ -69,9 +70,12 @@ class AdminControllerIT {
 
     private val json = JsonMapper.builder().build()
 
+    @Autowired
+    private lateinit var resourceStore: ResourceStore
+
     @BeforeEach
     fun resetRebuilder() {
-        clearMocks(rebuilder)
+        clearMocks(rebuilder, resourceStore)
         every { rebuilder.rebuild(any()) } returns REBUILT
         every { rebuilder.drift(any()) } returns RelationEdgeDrift.NONE
     }
@@ -116,6 +120,49 @@ class AdminControllerIT {
     }
 
     @Test
+    fun `a rebuild of everything runs every resource type the org has stored`() {
+        every { resourceStore.storedCoordinates(OrgId.from("fintlabs.no")) } returns
+            listOf(
+                ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elev"),
+                ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person"),
+            )
+
+        val job = finishedJob(post("/admin/relation-edges/rebuild?orgId=fintlabs.no&all=true", NOVARI_ADAPTER))
+
+        val jobResources: List<String> = job["resources"].values().map { it["resource"].asString() }
+        assertEquals(listOf("utdanning/elev/elev", "utdanning/elev/person"), jobResources)
+        verify { rebuilder.rebuild(ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elev")) }
+        verify { rebuilder.rebuild(ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person")) }
+    }
+
+    @Test
+    fun `a rebuild of everything for an org with nothing stored finishes with no resources`() {
+        every { resourceStore.storedCoordinates(any()) } returns emptyList()
+
+        val job = finishedJob(post("/admin/relation-edges/rebuild?orgId=fintlabs.no&all=true", NOVARI_ADAPTER))
+
+        assertEquals("DONE", job["state"].asString())
+        assertEquals(0, job["resources"].size())
+    }
+
+    @Test
+    fun `a rebuild of everything together with a resource is a bad request`() {
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&all=true&resource=utdanning/elev/person", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
+        assertEquals("Give resource, component or all, but only one of them", detailOf(response))
+        verify(exactly = 0) { rebuilder.rebuild(any()) }
+    }
+
+    @Test
+    fun `a component given as the resource points to the component parameter`() {
+        val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev", NOVARI_ADAPTER)
+
+        assertEquals(400, response.statusCode(), response.body())
+        assertEquals("Bad resource: utdanning/elev is a component, send it as component=utdanning/elev", detailOf(response))
+    }
+
+    @Test
     fun `a rebuild for a component the model does not serve is a bad request`() {
         val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&component=utdanning/nothing", NOVARI_ADAPTER)
 
@@ -137,7 +184,7 @@ class AdminControllerIT {
             post("/admin/relation-edges/rebuild?orgId=fintlabs.no&resource=utdanning/elev/person&component=utdanning/elev", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
-        assertEquals("Give resource or component, but not both", detailOf(response))
+        assertEquals("Give resource, component or all, but only one of them", detailOf(response))
         verify(exactly = 0) { rebuilder.rebuild(any()) }
     }
 
@@ -146,7 +193,7 @@ class AdminControllerIT {
         val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no", NOVARI_ADAPTER)
 
         assertEquals(400, response.statusCode(), response.body())
-        assertEquals("Give resource or component, but not both", detailOf(response))
+        assertEquals("Give resource, component or all, but only one of them", detailOf(response))
     }
 
     @Test
@@ -289,6 +336,9 @@ class AdminControllerIT {
     class TestApp {
         @Bean
         fun relationEdgeRebuilder(): RelationEdgeRebuilder = mockk()
+
+        @Bean
+        fun resourceStore(): ResourceStore = mockk()
 
         @Bean
         fun jwtDecoder(): JwtDecoder =
