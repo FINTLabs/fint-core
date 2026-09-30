@@ -1,16 +1,14 @@
 package no.fintlabs.client.admin
 
-import no.fintlabs.client.config.ConsumerConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintModel
 import org.springframework.stereotype.Service
-import java.util.Date
+import java.util.*
 
 @Service
 class StatsService(
-    private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
     private val orgStore: OrgStore,
 ) {
