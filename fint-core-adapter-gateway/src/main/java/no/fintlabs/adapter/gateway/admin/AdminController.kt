@@ -1,20 +1,16 @@
 package no.fintlabs.adapter.gateway.admin
 
+import io.swagger.v3.oas.annotations.Parameter
 import jakarta.servlet.http.HttpServletRequest
-import jakarta.validation.Valid
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJob
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobRunningException
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobs
+import no.fintlabs.adapter.gateway.relation.ResourceSelection
 import no.novari.core.shared.model.OrgId
 import no.novari.resource.server.authentication.CorePrincipal
-import org.springdoc.core.annotations.ParameterObject
-import org.springframework.beans.TypeMismatchException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
-import org.springframework.validation.FieldError
-import org.springframework.validation.ObjectError
-import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
@@ -42,17 +38,18 @@ class AdminController(
     private val jobs: RelationEdgeJobs,
 ) {
     /**
-     * Starts a rebuild of the relation edges of one resource, for example
-     * `?orgId=ude.oslo.kommune.no&resource=utdanning/elev/person`, or of every resource in one
-     * component, for example `?orgId=ude.oslo.kommune.no&component=utdanning/elev`.
+     * Starts a rebuild of the relation edges of one org. The scope is one resource, for example
+     * `?orgId=ude.oslo.kommune.no&scope=utdanning/elev/person`, every resource in one component,
+     * `scope=utdanning/elev`, or every resource the org has stored, `scope=all`.
      */
     @PostMapping("/relation-edges/rebuild")
     fun rebuild(
         @RequestParam orgId: OrgId,
-        @Valid @ParameterObject choice: ResourceChoice,
+        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
+        @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
         request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, choice.resources(), principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, scope, principal.username), request)
 
     /**
      * Starts a check of what [rebuild] would change, without writing anything: edges missing,
@@ -62,10 +59,11 @@ class AdminController(
     @PostMapping("/relation-edges/drift")
     fun drift(
         @RequestParam orgId: OrgId,
-        @Valid @ParameterObject choice: ResourceChoice,
+        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
+        @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
         request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, choice.resources(), principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, scope, principal.username), request)
 
     /** A rebuild or drift check started earlier, with the result of each resource that is done. */
     @GetMapping("/relation-edges/jobs/{id}")
@@ -84,17 +82,6 @@ class AdminController(
         ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.message)
 
     /**
-     * Answers a [ResourceChoice] that cannot be read or breaks its rule, with every reason. A
-     * value the converter turned down is answered the same way as in [unreadableParameter].
-     */
-    @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun invalidChoice(exception: MethodArgumentNotValidException): ProblemDetail =
-        ProblemDetail.forStatusAndDetail(
-            HttpStatus.BAD_REQUEST,
-            exception.bindingResult.allErrors.joinToString("; ") { it.reason() },
-        )
-
-    /**
      * Answers a query parameter that cannot be read with what was wrong with it. Spring's own answer
      * is a 400 without the reason.
      */
@@ -110,13 +97,6 @@ class AdminController(
     fun missingParameter(exception: MissingServletRequestParameterException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Missing ${exception.parameterName}")
 
-    private fun ObjectError.reason(): String =
-        if (this is FieldError && contains(TypeMismatchException::class.java)) {
-            "Bad $field: ${unwrap(TypeMismatchException::class.java).mostSpecificCause.message}"
-        } else {
-            defaultMessage ?: code ?: "Invalid request"
-        }
-
     private fun accepted(
         job: RelationEdgeJob,
         request: HttpServletRequest,
@@ -125,6 +105,11 @@ class AdminController(
             .accepted()
             .location(URI.create("${request.contextPath}/admin/relation-edges/jobs/${job.id}"))
             .body(job)
+
+    companion object {
+        private const val SCOPE_DESCRIPTION =
+            "all for every resource the org has stored, a component such as utdanning/elev, or one resource such as utdanning/elev/person"
+    }
 }
 
 class RelationEdgeJobNotFoundException(
