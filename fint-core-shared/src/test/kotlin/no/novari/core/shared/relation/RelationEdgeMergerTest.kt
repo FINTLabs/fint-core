@@ -48,6 +48,48 @@ class RelationEdgeMergerTest {
     }
 
     @Test
+    fun `a stored link with the same id is not duplicated when it also keeps the original href`() {
+        val elev =
+            elev("E-1").apply {
+                addLink(
+                    "elevforhold",
+                    Link("systemid", "EF-1", "https://api.felleskomponent.no/utdanning/elev/elevforhold/systemid/EF-1"),
+                )
+            }
+        val page = listOf(entry("E-1", "elevnummer" to "E-1") to (elev as FintResource))
+
+        listOf(edge("EF-1", "elevnummer", "E-1")).mergeInto(page)
+
+        assertEquals(1, elev.links["elevforhold"]!!.size)
+    }
+
+    @Test
+    fun `an unresolved link does not stop an edge with the same value`() {
+        val elev =
+            elev("E-1").apply {
+                addLink("elevforhold", Link(unresolved = "EF-1"))
+            }
+        val page = listOf(entry("E-1", "elevnummer" to "E-1") to (elev as FintResource))
+
+        listOf(edge("EF-1", "elevnummer", "E-1")).mergeInto(page)
+
+        assertEquals(listOf(null to null, "systemid" to "EF-1"), elev.linkPairs("elevforhold"))
+    }
+
+    @Test
+    fun `edges from one source reaching a resource through two identifiers give one link`() {
+        val elev = elev("E-1")
+        val page = listOf(entry("E-1", "elevnummer" to "E-1", "systemid" to "S-1") to (elev as FintResource))
+
+        listOf(
+            edge("EF-1", "elevnummer", "E-1"),
+            edge("EF-1", "systemid", "S-1"),
+        ).mergeInto(page)
+
+        assertEquals(listOf("systemid" to "EF-1"), elev.linkPairs("elevforhold"))
+    }
+
+    @Test
     fun `an edge pointing at a resource outside the page is ignored`() {
         val elev = elev("E-1")
         val page = listOf(entry("E-1", "elevnummer" to "E-1") to (elev as FintResource))

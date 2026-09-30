@@ -16,9 +16,11 @@ spring:
     virtual:
       enabled: true
   kafka:
+    bootstrap-servers: localhost:9092
+    security:
+      protocol: PLAINTEXT
     consumer:
       group-id: fint-core-client-api
-    bootstrap-servers: localhost:9092
 logging:
   level:
     org.apache.kafka: OFF

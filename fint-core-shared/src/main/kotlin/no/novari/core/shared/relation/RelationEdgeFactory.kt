@@ -2,10 +2,7 @@ package no.novari.core.shared.relation
 
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceUri
-import no.novari.fint.core.model.FintRelation
 import no.novari.fint.core.model.FintResource
-import no.novari.fint.core.model.FintResourceRef
-import no.novari.fint.core.model.targetIn
 import org.slf4j.LoggerFactory
 
 /**
@@ -17,7 +14,7 @@ object RelationEdgeFactory {
     /**
      * Derives the relation edges a source resource owns, from its stored `_links`.
      *
-     * Every declared link on a relation that [qualifiedInverseName] accepts becomes one edge. A
+     * Every declared link on a relation that [RelationRules.of] accepts becomes one edge. A
      * single-valued relation carrying more than one link is adapter noise, so only its first
      * link counts. A link without a resolved idField/idValue pair cannot be rendered on the
      * target and produces no edge. The rendered back-link is the source identifier pair carrying
@@ -44,10 +41,9 @@ object RelationEdgeFactory {
 
         return resource.links.entries.flatMap { (relationName, links) ->
             val relation = resource.metadata.relation(relationName) ?: return@flatMap emptyList()
-            val targetRef = relation.targetIn(sourceRef) ?: return@flatMap emptyList()
-            val inverseName = relation.qualifiedInverseName(sourceRef, targetRef) ?: return@flatMap emptyList()
+            val rule = RelationRules.of(sourceRef, relation) ?: return@flatMap emptyList()
 
-            val targetType = targetRef.toResourceUri()
+            val targetType = rule.targetRef.toResourceUri()
             val declaredLinks = if (relation.multiplicity.many) links else links.take(1)
 
             declaredLinks.mapNotNull { link ->
@@ -68,44 +64,12 @@ object RelationEdgeFactory {
                     sourceId = resourceId,
                     sourceIdField = sourceIdField.lowercase(),
                     sourceIdValue = sourceIdValue,
-                    inverseName = inverseName,
+                    inverseName = rule.inverseName,
                     targetType = targetType,
                     targetIdField = targetIdField,
                     targetIdValue = targetIdValue,
                 )
             }
         }
-    }
-
-    /**
-     * Decides whether this relation is one we supply back-links for, and under which relation
-     * name they land on the target: the inverse name to attach under, or null when the relation
-     * produces no edges.
-     *
-     * A relation qualifies when all of these hold:
-     *
-     * - The model declares an inverse. Without one there is no relation name on the target to
-     *   attach anything under, so an edge could never be rendered.
-     *
-     * - The inverse side is list-valued. A single-valued slot on the target belongs to the
-     *   target's own adapter data; synthesizing into it would let two sources race for one slot.
-     *   This is why one-to-one and many-to-one relations never produce edges.
-     *
-     * - A list-valued source relation must be the owning side (`isSource`). In a many-to-many
-     *   both sides declare each other, and exactly one side is authoritative so the target's
-     *   list is never fed from two disagreeing sources.
-     *
-     * - The target resolves into the source's own domain. Common resources resolve into the
-     *   source's component via [targetIn] and pass naturally; cross-domain targets do not.
-     */
-    private fun FintRelation.qualifiedInverseName(
-        sourceRef: FintResourceRef,
-        targetRef: FintResourceRef,
-    ): String? {
-        val bidirectional = bidirectional ?: return null
-        if (!bidirectional.inverseMultiplicity.many) return null
-        if (multiplicity.many && !bidirectional.isSource) return null
-        if (targetRef.domainName != sourceRef.domainName) return null
-        return bidirectional.inverseName
     }
 }
