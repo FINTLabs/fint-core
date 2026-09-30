@@ -5,7 +5,7 @@ import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintModel
 import org.springframework.stereotype.Service
-import java.util.*
+import java.util.Date
 
 @Service
 class StatsService(
