@@ -4,6 +4,7 @@ import io.mockk.every
 import io.mockk.mockk
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintResourceRef
 import org.awaitility.kotlin.await
 import org.junit.jupiter.api.AfterEach
@@ -24,8 +25,9 @@ import kotlin.test.assertNull
 
 class RelationEdgeJobsTest {
     private val rebuilder = mockk<RelationEdgeRebuilder>()
+    private val resourceStore = mockk<ResourceStore>()
     private val runner = RelationEdgeJobRunner()
-    private val jobs = RelationEdgeJobs(rebuilder, runner, TickingClock())
+    private val jobs = RelationEdgeJobs(rebuilder, resourceStore, runner, TickingClock())
 
     private val orgId = OrgId.from("fintlabs.no")
     private val elev = FintResourceRef("utdanning", "elev", "elev")
@@ -43,7 +45,7 @@ class RelationEdgeJobsTest {
         every { rebuilder.rebuild(coordinateOf(elev)) } returns elevRebuild
         every { rebuilder.rebuild(coordinateOf(person)) } returns personRebuild
 
-        val job = finished(jobs.startRebuild(orgId, listOf(elev, person), STARTED_BY))
+        val job = finished(jobs.startRebuild(orgId, types(listOf(elev, person)), STARTED_BY))
 
         assertEquals(RelationEdgeJob.State.DONE, job.state)
         assertEquals(
@@ -57,11 +59,33 @@ class RelationEdgeJobsTest {
     }
 
     @Test
+    fun `a job for everything stored runs every resource type the org has stored`() {
+        every { resourceStore.storedCoordinates(orgId) } returns listOf(coordinateOf(elev), coordinateOf(person))
+        every { rebuilder.rebuild(coordinateOf(elev)) } returns elevRebuild
+        every { rebuilder.rebuild(coordinateOf(person)) } returns personRebuild
+
+        val job = finished(jobs.startRebuild(orgId, ResourceSelection.AllStored, STARTED_BY))
+
+        assertEquals(listOf("utdanning/elev/elev", "utdanning/elev/person"), job.resources.map { it.resource })
+        assertEquals(RelationEdgeJob.State.DONE, job.state)
+    }
+
+    @Test
+    fun `a job for everything stored of an org with nothing stored finishes with no resources`() {
+        every { resourceStore.storedCoordinates(orgId) } returns emptyList()
+
+        val job = finished(jobs.startRebuild(orgId, ResourceSelection.AllStored, STARTED_BY))
+
+        assertEquals(RelationEdgeJob.State.DONE, job.state)
+        assertEquals(emptyList(), job.resources)
+    }
+
+    @Test
     fun `a drift check job keeps the drift of each resource type`() {
         val drift = RelationEdgeDrift(resourcesRead = 5, edgesMissing = 1, edgesStale = 2, edgesOfSourcesGone = 0, examples = emptyList())
         every { rebuilder.drift(coordinateOf(person)) } returns drift
 
-        val job = finished(jobs.startDrift(orgId, listOf(person), STARTED_BY))
+        val job = finished(jobs.startDrift(orgId, types(listOf(person)), STARTED_BY))
 
         assertEquals(RelationEdgeJob.Kind.DRIFT, job.kind)
         assertEquals(drift, job.resources.single().result)
@@ -72,7 +96,7 @@ class RelationEdgeJobsTest {
         every { rebuilder.rebuild(coordinateOf(elev)) } throws IllegalStateException("the store is down")
         every { rebuilder.rebuild(coordinateOf(person)) } returns personRebuild
 
-        val job = finished(jobs.startRebuild(orgId, listOf(elev, person), STARTED_BY))
+        val job = finished(jobs.startRebuild(orgId, types(listOf(elev, person)), STARTED_BY))
 
         assertEquals(RelationEdgeJob.State.FAILED, job.state)
         assertEquals(
@@ -89,7 +113,7 @@ class RelationEdgeJobsTest {
         val release = blockRebuildOf(elev)
         every { rebuilder.rebuild(coordinateOf(person)) } returns personRebuild
 
-        val started = jobs.startRebuild(orgId, listOf(elev, person), STARTED_BY)
+        val started = jobs.startRebuild(orgId, types(listOf(elev, person)), STARTED_BY)
         await.atMost(Duration.ofSeconds(5)).untilAsserted {
             assertEquals(
                 listOf(RelationEdgeJobResource.State.RUNNING, RelationEdgeJobResource.State.WAITING),
@@ -106,8 +130,8 @@ class RelationEdgeJobsTest {
     fun `a second job is refused while the first is running and is told which job that is`() {
         val release = blockRebuildOf(elev)
 
-        val first = jobs.startRebuild(orgId, listOf(elev), STARTED_BY)
-        val refused = assertThrows<RelationEdgeJobRunningException> { jobs.startDrift(orgId, listOf(person), STARTED_BY) }
+        val first = jobs.startRebuild(orgId, types(listOf(elev)), STARTED_BY)
+        val refused = assertThrows<RelationEdgeJobRunningException> { jobs.startDrift(orgId, types(listOf(person)), STARTED_BY) }
 
         assertEquals(first.id, refused.runningJobId)
         release.countDown()
@@ -117,9 +141,9 @@ class RelationEdgeJobsTest {
     @Test
     fun `a new job can start once the last one is done`() {
         every { rebuilder.rebuild(any()) } returns personRebuild
-        finished(jobs.startRebuild(orgId, listOf(person), STARTED_BY))
+        finished(jobs.startRebuild(orgId, types(listOf(person)), STARTED_BY))
 
-        val second = finished(jobs.startRebuild(orgId, listOf(person), STARTED_BY))
+        val second = finished(jobs.startRebuild(orgId, types(listOf(person)), STARTED_BY))
 
         assertEquals(RelationEdgeJob.State.DONE, second.state)
     }
@@ -127,7 +151,7 @@ class RelationEdgeJobsTest {
     @Test
     fun `only the last jobs are kept`() {
         every { rebuilder.rebuild(any()) } returns personRebuild
-        val started = (0..RelationEdgeJobs.KEPT_JOBS).map { finished(jobs.startRebuild(orgId, listOf(person), STARTED_BY)) }
+        val started = (0..RelationEdgeJobs.KEPT_JOBS).map { finished(jobs.startRebuild(orgId, types(listOf(person)), STARTED_BY)) }
 
         assertNull(jobs.find(started.first().id))
         started.drop(1).forEach { assertNotNull(jobs.find(it.id)) }
@@ -153,6 +177,8 @@ class RelationEdgeJobsTest {
     }
 
     private fun coordinateOf(resource: FintResourceRef): ResourceCoordinate = ResourceCoordinate.of(orgId, resource)
+
+    private fun types(resources: List<FintResourceRef>): ResourceSelection = ResourceSelection.Types(resources)
 
     private class TickingClock : Clock() {
         private val ticks = AtomicLong()
