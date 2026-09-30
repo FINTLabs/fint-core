@@ -6,6 +6,8 @@ import no.fintlabs.adapter.gateway.relation.RelationEdgeJob
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobRunningException
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobs
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.store.ResourceStore
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import org.springdoc.core.annotations.ParameterObject
 import org.springframework.beans.TypeMismatchException
@@ -40,11 +42,13 @@ import java.util.UUID
 @RequestMapping("/admin")
 class AdminController(
     private val jobs: RelationEdgeJobs,
+    private val resourceStore: ResourceStore,
 ) {
     /**
      * Starts a rebuild of the relation edges of one resource, for example
-     * `?orgId=ude.oslo.kommune.no&resource=utdanning/elev/person`, or of every resource in one
-     * component, for example `?orgId=ude.oslo.kommune.no&component=utdanning/elev`.
+     * `?orgId=ude.oslo.kommune.no&resource=utdanning/elev/person`, of every resource in one
+     * component, for example `?orgId=ude.oslo.kommune.no&component=utdanning/elev`, or of every
+     * resource the org has stored, `?orgId=ude.oslo.kommune.no&all=true`.
      */
     @PostMapping("/relation-edges/rebuild")
     fun rebuild(
@@ -52,7 +56,7 @@ class AdminController(
         @Valid @ParameterObject choice: ResourceChoice,
         principal: CorePrincipal,
         request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, choice.resources(), principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, resourcesOf(orgId, choice), principal.username), request)
 
     /**
      * Starts a check of what [rebuild] would change, without writing anything: edges missing,
@@ -65,7 +69,7 @@ class AdminController(
         @Valid @ParameterObject choice: ResourceChoice,
         principal: CorePrincipal,
         request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, choice.resources(), principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, resourcesOf(orgId, choice), principal.username), request)
 
     /** A rebuild or drift check started earlier, with the result of each resource that is done. */
     @GetMapping("/relation-edges/jobs/{id}")
@@ -109,6 +113,11 @@ class AdminController(
     @ExceptionHandler(MissingServletRequestParameterException::class)
     fun missingParameter(exception: MissingServletRequestParameterException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Missing ${exception.parameterName}")
+
+    private fun resourcesOf(
+        orgId: OrgId,
+        choice: ResourceChoice,
+    ): List<FintResourceRef> = choice.resources { resourceStore.storedCoordinates(orgId).map { it.toResourceRef() } }
 
     private fun ObjectError.reason(): String =
         if (this is FieldError && contains(TypeMismatchException::class.java)) {
