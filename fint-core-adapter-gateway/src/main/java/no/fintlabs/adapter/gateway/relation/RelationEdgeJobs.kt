@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.relation
 
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -24,6 +25,7 @@ import kotlin.concurrent.withLock
 @Service
 class RelationEdgeJobs(
     private val rebuilder: RelationEdgeRebuilder,
+    private val resourceStore: ResourceStore,
     private val runner: RelationEdgeJobRunner,
     private val clock: Clock,
 ) {
@@ -35,16 +37,16 @@ class RelationEdgeJobs(
     /** @throws RelationEdgeJobRunningException when another job is running */
     fun startRebuild(
         orgId: OrgId,
-        resources: List<FintResourceRef>,
+        selection: ResourceSelection,
         startedBy: String,
-    ): RelationEdgeJob = start(RelationEdgeJob.Kind.REBUILD, orgId, resources, startedBy, rebuilder::rebuild)
+    ): RelationEdgeJob = start(RelationEdgeJob.Kind.REBUILD, orgId, resourcesOf(orgId, selection), startedBy, rebuilder::rebuild)
 
     /** @throws RelationEdgeJobRunningException when another job is running */
     fun startDrift(
         orgId: OrgId,
-        resources: List<FintResourceRef>,
+        selection: ResourceSelection,
         startedBy: String,
-    ): RelationEdgeJob = start(RelationEdgeJob.Kind.DRIFT, orgId, resources, startedBy, rebuilder::drift)
+    ): RelationEdgeJob = start(RelationEdgeJob.Kind.DRIFT, orgId, resourcesOf(orgId, selection), startedBy, rebuilder::drift)
 
     fun find(id: UUID): RelationEdgeJob? = jobs[id]
 
@@ -73,6 +75,15 @@ class RelationEdgeJobs(
         runner.submit { run(job.id, resources.map { ResourceCoordinate.of(orgId, it) }, work) }
         return jobs.getValue(job.id)
     }
+
+    private fun resourcesOf(
+        orgId: OrgId,
+        selection: ResourceSelection,
+    ): List<FintResourceRef> =
+        when (selection) {
+            is ResourceSelection.Types -> selection.resources
+            ResourceSelection.AllStored -> resourceStore.storedCoordinates(orgId).map { it.toResourceRef() }
+        }
 
     private fun run(
         jobId: UUID,
