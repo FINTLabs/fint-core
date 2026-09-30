@@ -1,7 +1,6 @@
 package no.fintlabs.adapter.gateway.storage
 
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
 import no.novari.core.shared.store.Delete
@@ -34,7 +33,9 @@ sealed interface ResourceIngest {
 /**
  * Writes resources and the relation edges they own. Events and buffered sync records share
  * this path. One batch is one Mongo transaction. The resources are applied first, and edges
- * are derived only from the writes the store reports as taken effect.
+ * are derived only from the writes the store reports as taken effect. A saved resource's edges
+ * are replaced as a whole, so when a link is gone from the new version, the back-link it gave
+ * its target is gone too.
  */
 @Service
 class ResourceWritePipeline(
@@ -64,7 +65,7 @@ class ResourceWritePipeline(
 
         transactions.inTransaction {
             val effective = resourceStore.applyAll(ingests.map { it.toResourceWrite() })
-            val edgeWrites = effective.flatMap { it.toRelationEdgeWrites(coordinates.getValue(it.collectionName)) }
+            val edgeWrites = effective.map { it.toRelationEdgeWrite(coordinates.getValue(it.collectionName)) }
             relationEdgeStore.applyAll(edgeWrites)
         }
     }
@@ -75,19 +76,9 @@ class ResourceWritePipeline(
             is ResourceIngest.Delete -> Delete(resourceId, coordinate.toCollectionName(), timestamp)
         }
 
-    private fun ResourceWrite.toRelationEdgeWrites(coordinate: ResourceCoordinate): List<RelationEdgeWrite> {
-        val collectionName = coordinate.toEdgeCollectionName()
-
-        return when (this) {
-            is Save -> {
-                RelationEdgeFactory
-                    .createRelationEdges(coordinate, resourceId, resource)
-                    .map { RelationEdgeWrite.Save(collectionName, it) }
-            }
-
-            is Delete -> {
-                listOf(RelationEdgeWrite.Delete(collectionName, coordinate.toResourceUri(), resourceId))
-            }
+    private fun ResourceWrite.toRelationEdgeWrite(coordinate: ResourceCoordinate): RelationEdgeWrite =
+        when (this) {
+            is Save -> RelationEdgeWrite.Replace.of(coordinate, resourceId, resource)
+            is Delete -> RelationEdgeWrite.Delete(coordinate.toEdgeCollectionName(), coordinate.toResourceUri(), resourceId)
         }
-    }
 }

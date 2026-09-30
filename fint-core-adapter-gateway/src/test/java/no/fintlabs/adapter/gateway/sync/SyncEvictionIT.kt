@@ -22,7 +22,6 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
-import no.novari.core.shared.relation.RelationEdgeFactory
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
 import no.novari.core.shared.relation.mergeInto
@@ -516,11 +515,7 @@ class SyncEvictionIT {
     ) {
         val resource = elevforhold(resourceId, "E-1")
         outsideResourceStore.saveAll(listOf(Save(resourceId, elevforholdCollection, resource, Instant.ofEpochMilli(writtenAt))))
-        outsideEdgeStore.applyAll(
-            RelationEdgeFactory
-                .createRelationEdges(coordinate, resourceId, resource)
-                .map { RelationEdgeWrite.Save(edgeCollection, it) },
-        )
+        outsideEdgeStore.applyAll(listOf(RelationEdgeWrite.Replace.of(coordinate, resourceId, resource)))
     }
 
     private fun evictedCount(counter: String): Double =

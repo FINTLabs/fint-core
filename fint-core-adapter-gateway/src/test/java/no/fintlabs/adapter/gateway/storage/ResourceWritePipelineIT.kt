@@ -6,6 +6,7 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
+import no.novari.core.shared.relation.RelationEdgeWriteResult
 import no.novari.core.shared.store.FintResourceBsonConverter
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
@@ -80,7 +81,8 @@ class ResourceWritePipelineIT {
     fun `when the edge write fails the resource write is rolled back with it`() {
         val failingEdgeStore =
             object : RelationEdgeStore(mongoTemplate) {
-                override fun applyAll(writes: List<RelationEdgeWrite>): Unit = throw IllegalStateException("edge write failed")
+                override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult =
+                    throw IllegalStateException("edge write failed")
             }
         val failingPipeline = ResourceWritePipeline(resourceStore, failingEdgeStore, transactions)
 

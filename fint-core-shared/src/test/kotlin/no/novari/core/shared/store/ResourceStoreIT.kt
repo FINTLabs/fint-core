@@ -1,9 +1,13 @@
 package no.novari.core.shared.store
 
 import com.mongodb.client.MongoClients
+import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.felles.Person
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import org.assertj.core.api.Assertions.assertThat
+import org.bson.Document
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -22,6 +26,7 @@ class ResourceStoreIT {
 
         private val collection = "test_org_no_utdanning_elev_elev"
         private val otherCollection = "other_org_no_utdanning_elev_elev"
+        private val personCollection = "test_org_no_utdanning_elev_person"
         private val base = Instant.parse("2026-09-11T10:00:00Z")
         private val template by lazy { MongoTemplate(MongoClients.create(mongo.connectionString), "test") }
     }
@@ -30,6 +35,8 @@ class ResourceStoreIT {
     fun dropCollections() {
         template.dropCollection(collection)
         template.dropCollection(otherCollection)
+        template.dropCollection(personCollection)
+        template.dropCollection("test_org_no_relation_edges")
     }
 
     @Test
@@ -179,6 +186,42 @@ class ResourceStoreIT {
 
         assertThat(effective).isEmpty()
         assertThat(store.findByResourceId("1", collection)!!.identifiers).hasSize(1)
+    }
+
+    @Test
+    fun `only the ids that are stored come back as stored`() {
+        store.saveAll(listOf(save("1", base), save("2", base)))
+
+        assertThat(store.findStoredIds(listOf("1", "2", "9"), collection)).containsExactlyInAnyOrder("1", "2")
+    }
+
+    @Test
+    fun `the stored coordinates of an org are the model types it has a collection for`() {
+        store.saveAll(listOf(save("1", base)))
+        store.saveAll(listOf(Save("1", personCollection, Person(), base)))
+        store.saveAll(listOf(Save("1", otherCollection, elev("1"), base)))
+        template.insert(Document("_id", "edge-1"), "test_org_no_relation_edges")
+
+        val stored = store.storedCoordinates(OrgId.from("test.org.no"))
+
+        assertThat(stored).containsExactly(
+            ResourceCoordinate("test.org.no", "utdanning", "elev", "elev"),
+            ResourceCoordinate("test.org.no", "utdanning", "elev", "person"),
+        )
+    }
+
+    @Test
+    fun `an emptied collection still counts as a stored coordinate`() {
+        store.saveAll(listOf(save("1", base)))
+        store.applyAll(listOf(Delete("1", collection, base.plusSeconds(60))))
+
+        assertThat(store.storedCoordinates(OrgId.from("test.org.no")))
+            .containsExactly(ResourceCoordinate("test.org.no", "utdanning", "elev", "elev"))
+    }
+
+    @Test
+    fun `an org with no collections has no stored coordinates`() {
+        assertThat(store.storedCoordinates(OrgId.from("test.org.no"))).isEmpty()
     }
 
     private fun save(

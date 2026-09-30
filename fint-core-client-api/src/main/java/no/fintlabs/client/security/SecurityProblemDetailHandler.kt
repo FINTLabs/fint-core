@@ -2,17 +2,13 @@ package no.fintlabs.client.security
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import no.novari.core.shared.model.OrgId
-import no.novari.resource.server.authentication.CorePrincipal
-import no.novari.resource.server.enums.FintScope
-import no.novari.resource.server.enums.FintType
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.authorization.AuthorizationDeniedException
 import org.springframework.security.core.AuthenticationException
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.stereotype.Component
@@ -32,27 +28,19 @@ class SecurityProblemDetailHandler(
         response: HttpServletResponse,
         accessDeniedException: AccessDeniedException,
     ) {
-        val detail = describeDenial(request)
+        val detail = accessDeniedException.denial?.detail ?: "Access denied"
         logger.warn("Access denied on {} {}: {}", request.method, request.requestURI, detail)
         writeProblemDetail(request, response, HttpStatus.FORBIDDEN, "Forbidden", detail)
     }
 
-    private fun describeDenial(request: HttpServletRequest): String {
-        val auth = SecurityContextHolder.getContext().authentication
-        val orgId = request.getHeader(ORG_ID_HEADER)
-        // A missing org-id header never reaches this handler; it's a 400, not a 403.
-        val hasOrgMismatch = orgId != null && auth is CorePrincipal && auth.assets.none { it.isSameOrgAs(orgId) }
-        return when {
-            auth !is CorePrincipal -> "Principal is not a FINT client"
-            auth.type != FintType.CLIENT -> "Principal type must be CLIENT"
-            FintScope.FINT_CLIENT !in auth.scopes -> "JWT is missing required 'fint-client' scope"
-            hasOrgMismatch -> "Client does not have access to organisation '$orgId'"
-            else -> "Client is missing the required role for the requested component"
-        }
-    }
-
-    // Transforms org-id string into OrgId type to normalize and validate the org-id
-    private fun String.isSameOrgAs(orgId: String): Boolean = OrgId.from(this) == OrgId.from(orgId)
+    /**
+     * The reason travels on the decision our `AuthorizationManager` returned: Spring wraps that
+     * decision in an [AuthorizationDeniedException]. This handler only receives the base
+     * [AccessDeniedException] type, so the decision has to be cast back before the [Denial] can
+     * be read. Anything else that denies, without one of our decisions attached, gets no reason.
+     */
+    private val AccessDeniedException.denial: Denial?
+        get() = ((this as? AuthorizationDeniedException)?.authorizationResult as? Denied)?.denial
 
     // Fired off when authentication fails
     override fun commence(
@@ -86,9 +74,5 @@ class SecurityProblemDetailHandler(
         response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()
         jsonMapper.writeValue(response.outputStream, problem)
-    }
-
-    companion object {
-        private const val ORG_ID_HEADER = "x-org-id"
     }
 }

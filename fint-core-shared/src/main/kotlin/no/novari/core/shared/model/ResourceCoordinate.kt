@@ -29,7 +29,7 @@ data class ResourceCoordinate(
      * `<assetId>_<domainName>_<packageName>_<resourceName>`.
      * `fintlabs.no_utdanning_vurdering_elevfravar`
      */
-    fun toCollectionName(): String = "${orgId.replace(".","_")}_${domainName}_${packageName}_$resourceName"
+    fun toCollectionName(): String = "${orgId.replace(".", "_")}_${domainName}_${packageName}_$resourceName"
 
     fun toResourceUri(): String = "$domainName/$packageName/$resourceName"
 
@@ -37,9 +37,18 @@ data class ResourceCoordinate(
      * The org's relation-edge collection, `<orgId>_relation_edges`. One collection per org, so
      * the org lives in the collection name and never on the edge documents themselves.
      */
-    fun toEdgeCollectionName(): String = "${orgId.replace(".", "_")}_relation_edges"
+    fun toEdgeCollectionName(): String = edgeCollectionNameOf(OrgId.from(orgId))
 
     fun toResourceRef(): FintResourceRef = FintResourceRef(domainName, packageName, resourceName)
+
+    companion object {
+        fun of(
+            orgId: OrgId,
+            resource: FintResourceRef,
+        ): ResourceCoordinate = ResourceCoordinate(orgId.value, resource.domainName, resource.packageName, resource.resourceName)
+
+        fun edgeCollectionNameOf(orgId: OrgId): String = "${orgId.value.replace(".", "_")}_relation_edges"
+    }
 }
 
 fun FintResourceRef.toResourceUri(): String = "$domainName/$packageName/$resourceName"

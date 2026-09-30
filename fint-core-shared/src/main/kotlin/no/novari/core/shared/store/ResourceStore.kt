@@ -2,7 +2,9 @@ package no.novari.core.shared.store
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.FintModel
 import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
@@ -27,7 +29,8 @@ class ResourceStore(
     private val properties: ResourceStoreProperties = ResourceStoreProperties(),
 ) {
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
-    private val sizeCache: Cache<String, Long> = Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
+    private val sizeCache: Cache<String, Long> =
+        Caffeine.newBuilder().expireAfterWrite(properties.countCacheTtl).build()
 
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
@@ -182,7 +185,14 @@ class ResourceStore(
         size: Int,
         collectionName: String,
     ): List<ResourceEntry> {
-        if (anchor == null) return find(orderedQuery(filter?.since, Sort.Direction.ASC), size, collectionName, hintFor(filter))
+        if (anchor == null) {
+            return find(
+                orderedQuery(filter?.since, Sort.Direction.ASC),
+                size,
+                collectionName,
+                hintFor(filter),
+            )
+        }
 
         val createdAt = Date.from(anchor.createdAt)
         val sameTimestamp =
@@ -270,6 +280,18 @@ class ResourceStore(
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
 
+    /**
+     * The resource types [orgId] has a collection for, sorted by type. A collection stays after an
+     * eviction empties it, so a type that was synced once is still listed.
+     */
+    fun storedCoordinates(orgId: OrgId): List<ResourceCoordinate> {
+        val existing = template.collectionNames
+        return FintModel.refs
+            .map { ResourceCoordinate.of(orgId, it) }
+            .filter { it.toCollectionName() in existing }
+            .sortedBy { it.toResourceUri() }
+    }
+
     fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
         val collectionName = coordinate.toCollectionName()
 
@@ -281,6 +303,18 @@ class ResourceStore(
         return template
             .findOne<ResourceEntry>(query, collectionName)
             ?.lastModified
+    }
+
+    fun findStoredIds(
+        ids: Collection<String>,
+        collectionName: String,
+    ): Set<String> {
+        if (ids.isEmpty()) return emptySet()
+
+        val query = Query.query(Criteria.where("_id").`in`(ids))
+        query.fields().include("_id")
+
+        return template.find(query, Document::class.java, collectionName).mapTo(mutableSetOf()) { it.getString("_id") }
     }
 
     /**

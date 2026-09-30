@@ -50,7 +50,7 @@ replacements:
           - spec.routes.0.match
         options:
           delimiter: "`"
-          index: 9
+          index: 11
 
   - source:
       kind: ConfigMap
@@ -73,14 +73,6 @@ replacements:
         fieldPaths:
           - metadata.namespace
           - spec.routes.0.services.0.namespace
-      - select:
-          kind: Application
-          name: fint-core-client-api
-        fieldPaths:
-          - spec.kafka.acls.0.topic
-        options:
-          delimiter: "."
-          index: 0
       - select:
           kind: Application
           name: fint-core-adapter-gateway

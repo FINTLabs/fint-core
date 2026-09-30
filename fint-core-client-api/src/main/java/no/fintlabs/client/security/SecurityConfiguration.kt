@@ -1,5 +1,7 @@
 package no.fintlabs.client.security
 
+import no.fintlabs.client.security.opa.OpaDecision
+import no.fintlabs.client.security.opa.OpaService
 import no.novari.core.shared.model.OrgId
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.converter.CorePrincipalConverter
@@ -19,6 +21,7 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 @EnableWebSecurity
 class SecurityConfiguration(
     private val securityProblemDetailHandler: SecurityProblemDetailHandler,
+    private val opaService: OpaService,
 ) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain =
@@ -42,29 +45,81 @@ class SecurityConfiguration(
             }.build()
 
     private fun requireClient(): AuthorizationManager<RequestAuthorizationContext> =
-        AuthorizationManager { authentication, _ ->
-            AuthorizationDecision(authentication.get().isFintClient())
-        }
+        AuthorizationManager { authentication, _ -> decide(authentication.get().clientDenial()) }
 
     private fun requireClientWithAccess(): AuthorizationManager<RequestAuthorizationContext> =
-        AuthorizationManager { authentication, context ->
-            AuthorizationDecision(authentication.get().canAccess(context))
+        AuthorizationManager { authentication, context -> decide(authentication.get().accessDenial(context)) }
+
+    private fun decide(denial: Denial?): AuthorizationDecision = denial?.let(::Denied) ?: AuthorizationDecision(true)
+
+    private fun Authentication.clientDenial(): Denial? =
+        when {
+            this !is CorePrincipal -> Denial.NotAClient
+            type != FintType.CLIENT -> Denial.WrongType
+            FintScope.FINT_CLIENT !in scopes -> Denial.MissingScope
+            else -> null
         }
 
-    private fun Authentication.isFintClient(): Boolean =
-        this is CorePrincipal && type == FintType.CLIENT && FintScope.FINT_CLIENT in scopes
+    /**
+     * Every way a resource request can be denied, in the order it is checked. Returns null when
+     * the request is allowed. A missing org-id header is not a denial, it is a malformed request,
+     * and `@RequestHeader` rejects it with 400 further down the chain.
+     */
+    private fun Authentication.accessDenial(context: RequestAuthorizationContext): Denial? {
+        if (this !is CorePrincipal) return Denial.NotAClient
+        clientDenial()?.let { return it }
 
-    /** A missing org header isn't denied here; `@RequestHeader` rejects it with 400 downstream. */
-    private fun Authentication.canAccess(context: RequestAuthorizationContext): Boolean {
-        if (this !is CorePrincipal || !isFintClient()) return false
-        val domainName = context.variables["domainName"] ?: return false
-        val packageName = context.variables["packageName"] ?: return false
-        if (!hasComponent(domainName, packageName)) return false
-        val requestedOrgId = context.request.getHeader(ORG_ID_HEADER) ?: return true
-        return assets.any { OrgId.from(it) == OrgId.from(requestedOrgId) }
+        val domainName = context.variables["domainName"]
+        val packageName = context.variables["packageName"]
+        if (domainName == null || packageName == null || !hasComponent(domainName, packageName)) {
+            return Denial.MissingComponentRole
+        }
+
+        val requestedOrgId = context.request.getHeader(ORG_ID_HEADER)
+        if (requestedOrgId != null && !ownsOrg(requestedOrgId)) {
+            return Denial.OrgNotInAssets(requestedOrgId)
+        }
+        return opaDenial(context, domainName, packageName)
+    }
+
+    /** A blank header never matches, because [OrgId.from] refuses a blank value and this must not throw. */
+    private fun CorePrincipal.ownsOrg(requestedOrgId: String): Boolean =
+        requestedOrgId.isNotBlank() && assets.any { OrgId.from(it) == OrgId.from(requestedOrgId) }
+
+    /** Saves what OPA allowed so [OpaFieldAdvice] can prune the response later. */
+    private fun CorePrincipal.opaDenial(
+        context: RequestAuthorizationContext,
+        domainName: String,
+        packageName: String,
+    ): Denial? {
+        val resourceName = context.variables["resourceName"]
+        return when (
+            val decision =
+                opaService.requestDecision(
+                    this,
+                    context.request,
+                    domainName,
+                    packageName,
+                    resourceName,
+                )
+        ) {
+            is OpaDecision.Allowed -> {
+                context.request.setAttribute(OPA_DECISION_ATTRIBUTE, decision)
+                null
+            }
+
+            OpaDecision.Denied -> {
+                Denial.ResourceNotGranted
+            }
+
+            OpaDecision.Unavailable -> {
+                Denial.AccessControlUnavailable
+            }
+        }
     }
 
     companion object {
+        const val OPA_DECISION_ATTRIBUTE = "opa-decision"
         private const val ORG_ID_HEADER = "x-org-id"
         private const val RESOURCE_PATH = "/{domainName}/{packageName}/{resourceName}/**"
         private const val ENDPOINTS_PATH = "/{domainName}/{packageName}"
