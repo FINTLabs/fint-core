@@ -45,7 +45,8 @@ class AdminController(
     @PostMapping("/relation-edges/rebuild")
     fun rebuild(
         @RequestParam orgId: OrgId,
-        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person") @RequestParam scope: ResourceSelection,
+        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
+        @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
         request: HttpServletRequest,
     ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, scope, principal.username), request)
@@ -58,7 +59,8 @@ class AdminController(
     @PostMapping("/relation-edges/drift")
     fun drift(
         @RequestParam orgId: OrgId,
-        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person") @RequestParam scope: ResourceSelection,
+        @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
+        @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
         request: HttpServletRequest,
     ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, scope, principal.username), request)

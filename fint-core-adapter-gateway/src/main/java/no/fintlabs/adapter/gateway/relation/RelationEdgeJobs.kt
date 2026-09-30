@@ -3,6 +3,7 @@ package no.fintlabs.adapter.gateway.relation
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.ResourceStore
+import no.novari.fint.core.model.FintModel
 import no.novari.fint.core.model.FintResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -81,8 +82,9 @@ class RelationEdgeJobs(
         selection: ResourceSelection,
     ): List<FintResourceRef> =
         when (selection) {
-            is ResourceSelection.Types -> selection.resources
-            ResourceSelection.AllStored -> resourceStore.storedCoordinates(orgId).map { it.toResourceRef() }
+            is ResourceSelection.Resource -> listOf(selection.ref)
+            is ResourceSelection.Component -> FintModel.refsIn(selection.domainName, selection.packageName).sortedBy { it.resourceName }
+            ResourceSelection.All -> resourceStore.storedCoordinates(orgId).map { it.toResourceRef() }
         }
 
     private fun run(
