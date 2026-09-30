@@ -95,7 +95,7 @@ class SecurityErrorBodyIT {
             .andExpect(header().string("Content-Type", containsString(MediaType.APPLICATION_PROBLEM_JSON_VALUE)))
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.title").value("Forbidden"))
-            .andExpect(jsonPath("$.detail").value(containsString("fint-adapter")))
+            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_SCOPE.detail))
             .andExpect(jsonPath("$.instance").value("/register"))
     }
 

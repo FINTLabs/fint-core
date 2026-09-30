@@ -6,21 +6,26 @@ import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
-import org.junit.jupiter.api.Disabled
+import no.novari.resource.server.authentication.CorePrincipal
 import org.junit.jupiter.api.Test
 import org.springframework.http.MediaType
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Instant
 import java.util.UUID
 
 class SyncControllerIT : GatewayIntegrationTestBase() {
-    // TODO: This test should happen in the security layer of spring, not the controller
     @Test
-    @Disabled("Enable in next iteration - where we enable contract validation")
     fun `Should reject sync request if adapter is not registered`() {
+        // A dedicated, never-registered username: registerAdapter() in the other tests of this
+        // class shares mockPrincipal's username, so reusing it here would pass or fail purely
+        // by test execution order once some sibling test has registered it.
+        val unregisteredUsername = "never-registered@adapter.$orgId"
+        val unregisteredPrincipal = principalFor(unregisteredUsername)
         val syncPage =
             FullSyncPage().apply {
                 this.metadata = syncPageMetadata(totalSize = 0, pageSize = 0)
@@ -32,7 +37,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
                 post("/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
-                    .with(authentication(mockPrincipal)),
+                    .with(authentication(unregisteredPrincipal)),
             ).andExpect(status().isForbidden)
     }
 
@@ -120,6 +125,21 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(mockPrincipal)),
             ).andExpect(status().isForbidden)
+    }
+
+    private fun principalFor(username: String): CorePrincipal {
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token-value")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", orgId)
+                .claim("scope", listOf("fint-adapter"))
+                .claim("Roles", listOf("FINT_Adapter_${domainName}_$packageName"))
+                .build()
+        return CorePrincipal(jwt, emptyList())
     }
 
     private fun syncPageMetadata(

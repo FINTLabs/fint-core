@@ -42,7 +42,7 @@ abstract class GatewayIntegrationTestBase {
     protected val domainName = "utdanning"
     protected val packageName = "elev"
     protected val resourceName = "elev"
-    protected val orgId = "test.org.no"
+    protected val orgId = "test.fintlabs.no"
     protected val username = "test@adapter.$orgId"
     protected val adapterId = "https://test.com/$orgId/$domainName/$packageName"
 

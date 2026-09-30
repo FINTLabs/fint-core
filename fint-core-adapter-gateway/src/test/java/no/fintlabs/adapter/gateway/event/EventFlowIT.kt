@@ -52,7 +52,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     private val adapterCollection get() = OrgId.from(orgId).toEventCollectionName()
     private val sweeperCollection get() = providerProperties.orgId.toEventCollectionName()
-    private val resourceCollection get() = "test_org_no_${domainName}_${packageName}_$resourceName"
+    private val resourceCollection get() = "test_fintlabs_no_${domainName}_${packageName}_$resourceName"
 
     @BeforeEach
     fun cleanCollections() {
@@ -60,6 +60,11 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         mongoTemplate.dropCollection(sweeperCollection)
         mongoTemplate.dropCollection(resourceCollection)
         mongoTemplate.dropCollection(OrgStore.COLLECTION_NAME)
+    }
+
+    @BeforeEach
+    fun registerContract() {
+        registerAdapter()
     }
 
     @Test
@@ -248,20 +253,23 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     @Test
     fun `the sweeper covers sub-org collections but never foreign orgs`() {
         val primary = providerProperties.orgId.value
+        val foreignOrgId = "vtfk.no"
+        val foreignCollection = OrgId.from(foreignOrgId).toEventCollectionName()
         orgStore.upsert("test.$primary")
-        orgStore.upsert(orgId)
+        orgStore.upsert(foreignOrgId)
         val subOrgCollection = OrgId.from("test.$primary").toEventCollectionName()
         val subOrg = seedRequest(subOrgCollection, "test.$primary", ttlMillis = -1_000)
-        val foreign = seedRequest(adapterCollection, orgId, ttlMillis = -1_000)
+        val foreign = seedRequest(foreignCollection, foreignOrgId, ttlMillis = -1_000)
 
         eventExpiryService.expireOverdueEvents()
 
         assertThat(eventStore.findByCorrId(subOrg.corrId, subOrgCollection)?.status)
             .isEqualTo(EventState.EXPIRED)
-        assertThat(eventStore.findByCorrId(foreign.corrId, adapterCollection)?.status)
+        assertThat(eventStore.findByCorrId(foreign.corrId, foreignCollection)?.status)
             .isEqualTo(EventState.PENDING)
 
         mongoTemplate.dropCollection(subOrgCollection)
+        mongoTemplate.dropCollection(foreignCollection)
     }
 
     @Test

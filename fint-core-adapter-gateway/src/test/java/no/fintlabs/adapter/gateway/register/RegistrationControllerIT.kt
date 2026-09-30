@@ -32,6 +32,6 @@ class RegistrationControllerIT
 
             val adapterIds = contractService.getAdapterIds()
 
-            assert(adapterIds.contains("https://test.com/test.org.no/utdanning/elev"))
+            assert(adapterIds.contains("https://test.com/test.fintlabs.no/utdanning/elev"))
         }
     }

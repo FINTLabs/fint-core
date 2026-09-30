@@ -1,6 +1,8 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.ProviderProperties
+import no.fintlabs.adapter.gateway.register.ContractService
 import no.novari.resource.server.authentication.CorePrincipal
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -8,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Configuration
@@ -39,6 +42,9 @@ import org.springframework.web.context.WebApplicationContext
 class SecurityConfigurationIT {
     @Autowired
     private lateinit var context: WebApplicationContext
+
+    @MockitoBean
+    private lateinit var contractService: ContractService
 
     private lateinit var mockMvc: MockMvc
 
@@ -222,7 +228,13 @@ class SecurityConfigurationIT {
     @Configuration
     @Profile(PROFILE)
     @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
-    @Import(SecurityConfiguration::class, SecurityProblemDetailHandler::class, Endpoints::class)
+    @EnableConfigurationProperties(ProviderProperties::class)
+    @Import(
+        SecurityConfiguration::class,
+        SecurityProblemDetailHandler::class,
+        AdapterAuthorization::class,
+        Endpoints::class,
+    )
     class TestApp
 
     @RestController
