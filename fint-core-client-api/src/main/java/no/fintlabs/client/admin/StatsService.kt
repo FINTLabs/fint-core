@@ -41,8 +41,8 @@ class StatsService(
             val coord =
                 ResourceCoordinate(
                     orgId,
-                    consumerConfiguration.domain,
-                    consumerConfiguration.packageName,
+                    domainName,
+                    packageName,
                     resource,
                 )
 
