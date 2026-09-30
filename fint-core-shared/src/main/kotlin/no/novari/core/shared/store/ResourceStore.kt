@@ -2,7 +2,9 @@ package no.novari.core.shared.store
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.FintModel
 import org.bson.Document
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.BulkOperations
@@ -277,6 +279,18 @@ class ResourceStore(
     }
 
     fun getCacheSize(coordinate: ResourceCoordinate): Long = count(null, coordinate.toCollectionName())
+
+    /**
+     * The resource types [orgId] has a collection for, sorted by type. A collection stays after an
+     * eviction empties it, so a type that was synced once is still listed.
+     */
+    fun storedCoordinates(orgId: OrgId): List<ResourceCoordinate> {
+        val existing = template.collectionNames
+        return FintModel.refs
+            .map { ResourceCoordinate.of(orgId, it) }
+            .filter { it.toCollectionName() in existing }
+            .sortedBy { it.toResourceUri() }
+    }
 
     fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
         val collectionName = coordinate.toCollectionName()
