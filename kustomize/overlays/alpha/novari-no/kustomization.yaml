@@ -15,4 +15,4 @@ patches:
         value: 'Host(`alpha.felleskomponent.no`) && PathPrefix(`/`) && !PathPrefix(`/provider`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `^novari\.no$`)'
       - op: add
         path: /spec/routes/0/priority
-        value: 55
+        value: 1000
