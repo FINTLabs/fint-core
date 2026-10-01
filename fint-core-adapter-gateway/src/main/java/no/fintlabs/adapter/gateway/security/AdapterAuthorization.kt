@@ -131,6 +131,38 @@ class AdapterAuthorization(
         }
     }
 
+    /**
+     * The packages under [domainName] the adapter holds a component role for, sorted.
+     */
+    fun componentsIn(
+        authentication: Authentication,
+        domainName: String,
+    ): List<String> {
+        val principal = adapterOrNull(authentication) ?: return emptyList()
+        val prefix = "${domainName.trim().lowercase()}_"
+        return principal.components
+            .filter { it.startsWith(prefix) }
+            .map { it.removePrefix(prefix) }
+            .sorted()
+    }
+
+    /**
+     * The JWT assets that this gateway serves. Assets for another main org are dropped, so a
+     * gateway never reads or writes another org's data.
+     */
+    fun servedOrgs(authentication: Authentication): List<OrgId> {
+        val principal = adapterOrNull(authentication) ?: return emptyList()
+        return principal.assets.mapNotNull(::asOrgId).filter { it.belongsTo(providerProperties.orgId) }
+    }
+
+    fun hasContract(
+        authentication: Authentication,
+        orgId: OrgId,
+    ): Boolean {
+        val principal = adapterOrNull(authentication) ?: return false
+        return contractService.lookup(principal.username, orgId.value) is ContractLookup.Found
+    }
+
     private fun contractCovers(
         username: String,
         orgId: String,

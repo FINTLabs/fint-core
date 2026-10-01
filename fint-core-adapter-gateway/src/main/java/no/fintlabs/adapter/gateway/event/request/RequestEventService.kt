@@ -14,20 +14,17 @@ class RequestEventService(
     private val clock: Clock,
 ) {
     fun getEvents(
-        assets: Set<String>,
-        scope: EventScope,
+        orgs: Collection<OrgId>,
+        scopes: Collection<EventScope>,
         size: Int = 0,
     ): List<RequestFintEvent> {
         val now = clock.instant()
 
-        return assets
-            .flatMap { asset ->
-                eventStore.findPending(
-                    OrgId.from(asset).toEventCollectionName(),
-                    now,
-                    scope,
-                    size,
-                )
+        return orgs
+            .flatMap { org ->
+                scopes.flatMap { scope ->
+                    eventStore.findPending(org.toEventCollectionName(), now, scope, size)
+                }
             }.sortedBy { it.created }
             .let { if (size > 0) it.take(size) else it }
     }

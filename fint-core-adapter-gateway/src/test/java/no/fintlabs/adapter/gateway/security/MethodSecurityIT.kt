@@ -23,6 +23,8 @@ import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
+import no.novari.core.shared.event.EventScope
+import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
@@ -50,6 +52,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
@@ -403,6 +406,58 @@ class MethodSecurityIT {
         verifyNoInteractions(responseEventService)
     }
 
+    @Test
+    fun `event fetch denies a package the adapter has no role for`() {
+        mockMvc
+            .perform(get("/event/utdanning/vurdering").with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
+
+        verifyNoInteractions(requestEventService)
+    }
+
+    @Test
+    fun `event fetch denies an adapter with no contract and says to register one`() {
+        whenever(contractService.lookup(any(), any())).thenReturn(ContractLookup.Absent)
+
+        mockMvc
+            .perform(get("/event/utdanning/elev").with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.NO_REGISTERED_CONTRACT.detail))
+
+        verifyNoInteractions(requestEventService)
+    }
+
+    @Test
+    fun `event fetch covers only the orgs the adapter has a contract for`() {
+        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(emptySet()))
+        whenever(contractService.lookup(USERNAME, "test.fintlabs.no")).thenReturn(ContractLookup.Absent)
+
+        mockMvc
+            .perform(get("/event/utdanning/elev").with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))))
+            .andExpect(status().isOk)
+
+        verify(requestEventService).getEvents(listOf(OrgId.from("fintlabs.no")), listOf(EventScope("utdanning", "elev")), 0)
+    }
+
+    @Test
+    fun `event fetch for a domain covers only the packages the adapter has a role for`() {
+        val adapter =
+            adapter(
+                roles = listOf("FINT_Adapter_utdanning_elev", "FINT_Adapter_utdanning_vurdering", "FINT_Adapter_administrasjon_personal"),
+            )
+
+        mockMvc
+            .perform(get("/event/utdanning").param("size", "5").with(authentication(adapter)))
+            .andExpect(status().isOk)
+
+        verify(requestEventService).getEvents(
+            listOf(OrgId.from("fintlabs.no")),
+            listOf(EventScope("utdanning", "elev"), EventScope("utdanning", "vurdering")),
+            5,
+        )
+    }
+
     private fun adapter(
         assets: String = "fintlabs.no",
         roles: List<String> = listOf("FINT_Adapter_utdanning_elev"),
@@ -475,6 +530,7 @@ class MethodSecurityIT {
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
         AdapterAuthorization::class,
+        EventAuthorization::class,
         SyncController::class,
         HeartbeatController::class,
         RegistrationController::class,

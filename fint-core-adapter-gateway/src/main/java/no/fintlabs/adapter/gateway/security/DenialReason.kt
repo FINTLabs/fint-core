@@ -45,6 +45,10 @@ enum class DenialReason(
         "The adapter's contract for the organization does not include the requested resource. " +
             "Add the resource to the contract's capabilities and register again.",
     ),
+    NO_REGISTERED_CONTRACT(
+        "The adapter has not registered a contract for any of its organizations. " +
+            "Register a contract with POST /provider/register for each organization before fetching events.",
+    ),
     ;
 
     val type: URI get() = URI.create(TYPE_PREFIX + name.lowercase().replace('_', '-'))

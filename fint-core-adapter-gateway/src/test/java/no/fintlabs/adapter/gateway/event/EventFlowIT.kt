@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.event
 
 import no.fintlabs.adapter.gateway.GatewayIntegrationTestBase
 import no.fintlabs.adapter.gateway.config.ProviderProperties
+import no.fintlabs.adapter.gateway.security.DenialReason
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
@@ -68,18 +69,66 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `serves pending requests to the adapter and filters by component`() {
+    fun `serves pending requests for the component the adapter has a role for`() {
         val request = seedRequest(adapterCollection, orgId)
 
         mockMvc
             .perform(get("/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].corrId").value(request.corrId))
+    }
+
+    @Test
+    fun `refuses to serve a domain the adapter has no role in`() {
+        seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
 
         mockMvc
             .perform(get("/event/administrasjon").with(authentication(mockPrincipal)))
-            .andExpect(status().isOk)
-            .andExpect(content().json("[]"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
+    }
+
+    @Test
+    fun `an answer for a component the adapter has no role for is refused and the event stays pending`() {
+        val request = seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
+
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(responseFor(request)))
+                    .with(authentication(mockPrincipal)),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
+
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.PENDING)
+    }
+
+    @Test
+    fun `an answer cannot claim another sub-org's event`() {
+        val otherOrg = "other.fintlabs.no"
+        val otherCollection = OrgId.from(otherOrg).toEventCollectionName()
+        val request = seedRequest(otherCollection, otherOrg)
+
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(responseFor(request)))
+                    .with(authentication(mockPrincipal)),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.ORG_NOT_IN_ASSETS.detail))
+
+        mockMvc
+            .perform(
+                post("/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(responseFor(request).apply { orgId = this@EventFlowIT.orgId }))
+                    .with(authentication(mockPrincipal)),
+            ).andExpect(status().isNotFound)
+
+        assertThat(eventStore.findByCorrId(request.corrId, otherCollection)?.status).isEqualTo(EventState.PENDING)
+        mongoTemplate.dropCollection(otherCollection)
     }
 
     @Test
@@ -305,13 +354,15 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         collectionName: String,
         requestOrgId: String,
         ttlMillis: Long = 900_000,
+        domain: String = domainName,
+        pkg: String = packageName,
     ): RequestFintEvent {
         val request =
             RequestFintEvent().apply {
                 corrId = UUID.randomUUID().toString()
                 orgId = requestOrgId
-                domainName = this@EventFlowIT.domainName
-                packageName = this@EventFlowIT.packageName
+                domainName = domain
+                packageName = pkg
                 resourceName = this@EventFlowIT.resourceName
                 operationType = OperationType.CREATE
                 created = System.currentTimeMillis()

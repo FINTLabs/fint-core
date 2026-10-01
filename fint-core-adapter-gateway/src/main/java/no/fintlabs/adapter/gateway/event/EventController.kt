@@ -2,9 +2,9 @@ package no.fintlabs.adapter.gateway.event
 
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
 import no.fintlabs.adapter.gateway.event.response.ResponseEventService
+import no.fintlabs.adapter.gateway.security.EventAuthorization
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
-import no.novari.core.shared.event.EventScope
 import no.novari.resource.server.authentication.CorePrincipal
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -21,7 +21,13 @@ import org.springframework.web.bind.annotation.RestController
 class EventController(
     private val requestEventService: RequestEventService,
     private val responseEventService: ResponseEventService,
+    private val eventAuthorization: EventAuthorization,
 ) {
+    /**
+     * Serves pending events only for the packages the adapter holds a role for and the orgs it
+     * has a contract for, so it never receives an event it would be refused to answer. The role
+     * is checked before the contract, because a missing role is not fixed by registering.
+     */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
         corePrincipal: CorePrincipal,
@@ -29,14 +35,11 @@ class EventController(
         @PathVariable(required = false) packageName: String?,
         @PathVariable(required = false) resourceName: String?,
         @RequestParam(defaultValue = "0") size: Int,
-    ): ResponseEntity<List<RequestFintEvent>> =
-        ResponseEntity.ok(
-            requestEventService.getEvents(
-                corePrincipal.assets,
-                EventScope.of(domainName, packageName, resourceName),
-                size,
-            ),
-        )
+    ): ResponseEntity<List<RequestFintEvent>> {
+        val scopes = eventAuthorization.readableScopes(corePrincipal, domainName, packageName, resourceName)
+        val orgs = eventAuthorization.readableOrgs(corePrincipal)
+        return ResponseEntity.ok(requestEventService.getEvents(orgs, scopes, size))
+    }
 
     /**
      * The org check runs here because the body carries the orgId. The role check cannot: the
