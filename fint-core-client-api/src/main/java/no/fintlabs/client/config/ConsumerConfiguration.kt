@@ -15,7 +15,6 @@ data class ConsumerConfiguration(
     val packageName: String,
     val podUrl: String,
     val autorelation: AutorelationConfig = AutorelationConfig(),
-    val coreVersionHeader: String = "2",
     val kafka: KafkaConfiguration = KafkaConfiguration(),
     val paging: PagingProperties = PagingProperties(),
 ) {
