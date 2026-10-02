@@ -23,7 +23,7 @@ spring:
           non_contextual_creation: true
       enable_lazy_load_no_trans: true
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
   kafka:
     # MAGIC HAPPENS HERE: This variable is automatically populated by the @EmbeddedKafka annotation
     bootstrap-servers: localhost:19092  #${spring.embedded.kafka.brokers}
