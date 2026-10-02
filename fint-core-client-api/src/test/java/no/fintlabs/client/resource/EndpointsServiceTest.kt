@@ -13,9 +13,6 @@ class EndpointsServiceTest {
             ConsumerConfiguration(
                 baseUrl = baseUrl,
                 orgIdValue = "fintlabs.no",
-                domain = "utdanning",
-                packageName = "vurdering",
-                podUrl = "http://localhost",
             ),
         )
 

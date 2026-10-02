@@ -42,9 +42,6 @@ import kotlin.test.assertTrue
     properties = [
         "fint.consumer.base-url=https://api.felleskomponent.no",
         "fint.consumer.org-id=fintlabs.no",
-        "fint.consumer.domain=utdanning",
-        "fint.consumer.package-name=elev",
-        "fint.consumer.pod-url=http://localhost",
     ],
 )
 class ResourceEventEndpointsIT {
@@ -90,6 +87,21 @@ class ResourceEventEndpointsIT {
 
         assertEquals(202, response.statusCode())
         assertEquals("$statusUrlBase/corr-1", locationOf(response))
+    }
+
+    @Test
+    fun `the status location points to the component that was posted to`() {
+        val fravar = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "elevfravar")
+        given(requestFintEventService.createAndPublish(fravar, mapOf("navn" to "Testesen"), false))
+            .willReturn(eventWith("corr-fravar", resourceName = "elevfravar"))
+
+        val response = post("/utdanning/vurdering/elevfravar", """{"navn":"Testesen"}""")
+
+        assertEquals(202, response.statusCode())
+        assertEquals(
+            "https://api.felleskomponent.no/utdanning/vurdering/elevfravar/status/corr-fravar",
+            locationOf(response),
+        )
     }
 
     @Test
@@ -174,10 +186,13 @@ class ResourceEventEndpointsIT {
         assertEquals(500, statusOf("error").statusCode())
     }
 
-    private fun eventWith(id: String): RequestFintEvent =
+    private fun eventWith(
+        id: String,
+        resourceName: String = "elev",
+    ): RequestFintEvent =
         RequestFintEvent().apply {
             corrId = id
-            resourceName = "elev"
+            this.resourceName = resourceName
         }
 
     private fun post(

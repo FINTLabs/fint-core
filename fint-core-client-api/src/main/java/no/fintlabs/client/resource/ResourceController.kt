@@ -153,7 +153,7 @@ class ResourceController(
                 ResourceCoordinate(orgId, domainName, packageName, resourceName),
                 resourceData,
                 validateOnly,
-            ).toAcceptedResponse()
+            ).toAcceptedResponse(domainName, packageName)
 
     @PutMapping(EndpointsConstants.BY_ID)
     fun putResource(
@@ -170,7 +170,7 @@ class ResourceController(
                 ResourceCoordinate(orgId, domainName, packageName, resourceName),
                 resourceData,
                 OperationType.UPDATE,
-            ).toAcceptedResponse()
+            ).toAcceptedResponse(domainName, packageName)
 
     private fun RequestFailed.FailureType.toHttpStatus() =
         when (this) {
@@ -179,11 +179,17 @@ class ResourceController(
             RequestFailed.FailureType.ERROR -> HttpStatus.INTERNAL_SERVER_ERROR
         }
 
-    private fun RequestFintEvent.toLocationUri(): URI =
-        URI.create("${consumerConfig.componentUrl}/$resourceName/status/$corrId")
-
-    private fun RequestFintEvent.toAcceptedResponse(): ResponseEntity<Nothing> =
-        ResponseEntity.accepted().location(toLocationUri()).build()
+    private fun RequestFintEvent.toAcceptedResponse(
+        domainName: String,
+        packageName: String,
+    ): ResponseEntity<Nothing> =
+        ResponseEntity
+            .accepted()
+            .location(
+                URI.create(
+                    "${consumerConfig.baseUrl}/$domainName/$packageName/$resourceName/status/$corrId".lowercase(),
+                ),
+            ).build()
 
     companion object {
         private val logger = LoggerFactory.getLogger(ResourceController::class.java)
