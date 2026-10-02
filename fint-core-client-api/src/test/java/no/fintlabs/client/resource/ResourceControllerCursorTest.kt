@@ -94,9 +94,6 @@ class ResourceControllerCursorTest {
         ConsumerConfiguration(
             baseUrl = baseUrl,
             orgIdValue = "fintlabs.no",
-            domain = "utdanning",
-            packageName = "vurdering",
-            podUrl = "http://localhost",
             autorelation = AutorelationConfig(enabled = true),
         )
 }

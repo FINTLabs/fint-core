@@ -57,9 +57,6 @@ import org.testcontainers.utility.DockerImageName
     properties = [
         "fint.consumer.base-url=https://api.felleskomponent.no",
         "fint.consumer.org-id=fintlabs.no",
-        "fint.consumer.domain=utdanning",
-        "fint.consumer.package-name=elev",
-        "fint.consumer.pod-url=http://localhost",
     ],
 )
 class OpaAccessIT {

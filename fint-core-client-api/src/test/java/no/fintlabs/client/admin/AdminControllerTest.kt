@@ -64,8 +64,5 @@ class AdminControllerTest {
         ConsumerConfiguration(
             baseUrl = "https://api.felleskomponent.no",
             orgIdValue = "fintlabs.no",
-            domain = "utdanning",
-            packageName = "elev",
-            podUrl = "http://localhost",
         )
 }

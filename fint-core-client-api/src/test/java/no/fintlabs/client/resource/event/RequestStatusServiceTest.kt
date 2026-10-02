@@ -35,9 +35,6 @@ class RequestStatusServiceTest {
         ConsumerConfiguration(
             baseUrl = "https://api.felleskomponent.no",
             orgIdValue = "fintlabs.no",
-            domain = "utdanning",
-            packageName = "vurdering",
-            podUrl = "http://localhost",
         )
 
     private val service = RequestStatusService(eventStore, resourceStore, configuration, clock)

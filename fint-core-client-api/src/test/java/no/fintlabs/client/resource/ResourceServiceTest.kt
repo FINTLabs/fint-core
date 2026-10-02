@@ -594,9 +594,6 @@ class ResourceServiceTest {
         ConsumerConfiguration(
             baseUrl = "https://api.felleskomponent.no",
             orgIdValue = "fintlabs.no",
-            domain = "utdanning",
-            packageName = "elev",
-            podUrl = "http://localhost",
             autorelation = AutorelationConfig(enabled = autorelationEnabled),
         )
 
