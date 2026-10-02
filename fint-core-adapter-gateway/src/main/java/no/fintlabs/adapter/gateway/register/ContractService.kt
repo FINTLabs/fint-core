@@ -1,9 +1,15 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterContract
+import no.novari.core.shared.model.OrgId
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
+/**
+ * The contract store. One contract per username and orgId pair, so an adapter that delivers
+ * for several orgs registers once per org and each registration stands on its own.
+ */
 @Service
 class ContractService(
     private val contractJpaRepository: ContractJpaRepository,
@@ -12,40 +18,45 @@ class ContractService(
 
     fun getAdapterIds(): Set<String> = contractJpaRepository.getAdapterIds()
 
+    @Transactional
     fun saveContract(adapterContract: AdapterContract) {
-        contractJpaRepository.save(ContractEntity(adapterContract))
-        log.info("AdapterContract saved: {}", adapterContract.username)
+        val id = contractId(adapterContract.username, adapterContract.orgId)
+
+        val entity =
+            contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId)
+                ?: ContractEntity().apply {
+                    userName = id.username
+                    orgId = id.orgId
+                }
+
+        entity.applyContract(adapterContract)
+        contractJpaRepository.save(entity)
+
+        log.info("Contract saved for '{}' on '{}'", id.username, id.orgId)
     }
 
-    /**
-     * @return `true` if capability matches, `false` if not, `null` if contract not found.
-     */
-    fun adapterCanPerformCapability(
+    fun lookup(
         username: String,
-        domainName: String,
-        packageName: String,
-        entityName: String,
-    ): Boolean? =
-        contractJpaRepository
-            .findByUserNameWithCapabilities(username)
-            .map { contract -> contract.capabilityEntityset.any { it.matches(domainName, packageName, entityName) } }
-            .orElse(null)
+        orgId: String,
+    ): ContractLookup {
+        val id = contractId(username, orgId)
+        val contract = contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId) ?: return ContractLookup.Absent
 
-    /**
-     * @return `true` if username matches, `false` if not, `null` if contract not found.
-     */
-    fun userCanAccessAdapter(
+        return ContractLookup.Found(contract.toCapabilityKeys())
+    }
+
+    private fun ContractEntity.toCapabilityKeys(): Set<CapabilityKey> =
+        capabilityEntityset
+            .map { CapabilityKey.of(it.domainName, it.pkgName, it.resourceName) }
+            .toSet()
+
+    private fun contractId(
         username: String,
-        adapterId: String,
-    ): Boolean? =
-        contractJpaRepository
-            .findById(username)
-            .map { it.adapterId == adapterId }
-            .orElse(null)
+        orgId: String,
+    ): ContractId = ContractId(username, OrgId.from(orgId).value)
 
-    private fun CapabilityEntity.matches(
-        domainName: String,
-        packageName: String,
-        resourceName: String,
-    ): Boolean = this.domainName == domainName && this.pkgName == packageName && this.resourceName == resourceName
+    private data class ContractId(
+        val username: String,
+        val orgId: String,
+    )
 }

@@ -2,13 +2,12 @@ package no.fintlabs.adapter.gateway.event
 
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
 import no.fintlabs.adapter.gateway.event.response.ResponseEventService
-import no.fintlabs.adapter.gateway.security.AdapterRequestValidator
+import no.fintlabs.adapter.gateway.security.EventAuthorization
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
-import no.novari.core.shared.event.EventScope
 import no.novari.resource.server.authentication.CorePrincipal
-import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -22,10 +21,13 @@ import org.springframework.web.bind.annotation.RestController
 class EventController(
     private val requestEventService: RequestEventService,
     private val responseEventService: ResponseEventService,
-    private val requestValidator: AdapterRequestValidator,
+    private val eventAuthorization: EventAuthorization,
 ) {
-    private val logger = LoggerFactory.getLogger(javaClass)
-
+    /**
+     * Serves pending events only for the packages the adapter holds a role for and the orgs it
+     * has a contract for, so it never receives an event it would be refused to answer. The role
+     * is checked before the contract, because a missing role is not fixed by registering.
+     */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
         corePrincipal: CorePrincipal,
@@ -34,29 +36,21 @@ class EventController(
         @PathVariable(required = false) resourceName: String?,
         @RequestParam(defaultValue = "0") size: Int,
     ): ResponseEntity<List<RequestFintEvent>> {
-        if (corePrincipal.assets.isEmpty()) {
-            logger.error("No assets present in principal for user: {}", corePrincipal.username)
-            return ResponseEntity.ok(emptyList())
-        }
-
-        return ResponseEntity.ok(
-            requestEventService.getEvents(
-                corePrincipal.assets,
-                EventScope.of(domainName, packageName, resourceName),
-                size,
-            ),
-        )
+        val scopes = eventAuthorization.readableScopes(corePrincipal, domainName, packageName, resourceName)
+        val orgs = eventAuthorization.readableOrgs(corePrincipal)
+        return ResponseEntity.ok(requestEventService.getEvents(orgs, scopes, size))
     }
 
+    /**
+     * The org check runs here because the body carries the orgId. The role check cannot: the
+     * response body does not say which resource it answers, so that is checked against the
+     * stored request inside [ResponseEventService].
+     */
     @PostMapping
+    @PreAuthorize("@adapterAuth.canAnswerFor(authentication, #responseFintEvent.orgId)")
     fun postEvent(
-        corePrincipal: CorePrincipal,
         @RequestBody responseFintEvent: ResponseFintEvent,
     ): ResponseEntity<Void> {
-        requestValidator.validateOrgId(corePrincipal, responseFintEvent.orgId)
-//        requestValidator.validateAdapterId(corePrincipal, responseFintEvent.getAdapterId());
-        // TODO: Skal vi stoppe response hvis adapteret har ikke en kontrakt? Og skal vi sjekke capabilities til kontrakten?
-
         responseEventService.handleEvent(responseFintEvent)
         return ResponseEntity.ok().build()
     }

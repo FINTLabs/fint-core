@@ -10,128 +10,153 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import java.util.Optional
 
 class ContractServiceTest {
-    private val contractJpaRepository: ContractJpaRepository = mockk(relaxed = true)
+    private val contractJpaRepository = mockk<ContractJpaRepository>()
     private val contractService = ContractService(contractJpaRepository)
 
-    private val adapterId = "https://test.com/test.org.no/utdanning/elev"
-    private val username = "test@adapter.test.org.no"
+    @BeforeEach
+    fun saveReturnsTheEntityItWasGiven() {
+        every { contractJpaRepository.save(any<ContractEntity>()) } answers { firstArg() }
+    }
+
+    @Nested
+    inner class Lookup {
+        @Test
+        fun `reports the capabilities of a stored contract`() {
+            givenStoredContract(capability("utdanning", "elev", "elev"))
+
+            val lookup = contractService.lookup(USERNAME, ORG_ID)
+
+            assertThat(lookup)
+                .isEqualTo(ContractLookup.Found(setOf(CapabilityKey("utdanning", "elev", "elev"))))
+        }
+
+        @Test
+        fun `reports absent when the adapter has no contract for the org`() {
+            every { contractJpaRepository.findByUserNameAndOrgId(any(), any()) } returns null
+
+            assertThat(contractService.lookup(USERNAME, ORG_ID)).isEqualTo(ContractLookup.Absent)
+        }
+
+        @Test
+        fun `looks up the same contract whichever separator the caller uses`() {
+            givenStoredContract(capability("utdanning", "elev", "elev"))
+
+            contractService.lookup(USERNAME, "test-org-no")
+
+            verify { contractJpaRepository.findByUserNameAndOrgId(USERNAME, ORG_ID) }
+        }
+
+        @Test
+        fun `matches capabilities regardless of the case the adapter registered them in`() {
+            givenStoredContract(capability("Utdanning", "Elev", "Elev"))
+
+            val lookup = contractService.lookup(USERNAME, ORG_ID)
+
+            assertThat(lookup)
+                .isEqualTo(ContractLookup.Found(setOf(CapabilityKey("utdanning", "elev", "elev"))))
+        }
+    }
 
     @Nested
     inner class SaveContract {
         @Test
-        fun `should save contract entity to repository`() {
-            val contract = createContract()
-            val entitySlot = slot<ContractEntity>()
+        fun `stores a new contract for a username and org pair that has none`() {
+            every { contractJpaRepository.findByUserNameAndOrgId(any(), any()) } returns null
+            val saved = slot<ContractEntity>()
+            every { contractJpaRepository.save(capture(saved)) } answers { saved.captured }
 
-            every { contractJpaRepository.save(capture(entitySlot)) } answers { entitySlot.captured }
+            contractService.saveContract(contract())
 
-            contractService.saveContract(contract)
+            assertThat(saved.captured.userName).isEqualTo(USERNAME)
+            assertThat(saved.captured.orgId).isEqualTo(ORG_ID)
+            assertThat(saved.captured.capabilityEntityset.map { it.resourceName }).containsExactly("elev")
+        }
 
-            verify { contractJpaRepository.save(any<ContractEntity>()) }
-            assertThat(entitySlot.captured.adapterId).isEqualTo(adapterId)
+        @Test
+        fun `updates the existing row rather than adding a second one for the same org`() {
+            val existing = ContractEntity(contract())
+            every { contractJpaRepository.findByUserNameAndOrgId(any(), any()) } returns existing
+            val saved = slot<ContractEntity>()
+            every { contractJpaRepository.save(capture(saved)) } answers { saved.captured }
+
+            contractService.saveContract(contract(capabilities = setOf(capability("utdanning", "elev", "skoleressurs"))))
+
+            assertThat(saved.captured).isSameAs(existing)
+            assertThat(saved.captured.capabilityEntityset.map { it.resourceName }).containsExactly("skoleressurs")
+        }
+
+        @Test
+        fun `keeps a second org's contract separate from the first for the same adapter`() {
+            every { contractJpaRepository.findByUserNameAndOrgId(USERNAME, ORG_ID) } returns
+                ContractEntity(contract(orgId = ORG_ID))
+            every { contractJpaRepository.findByUserNameAndOrgId(USERNAME, OTHER_ORG_ID) } returns null
+            val saved = slot<ContractEntity>()
+            every { contractJpaRepository.save(capture(saved)) } answers { saved.captured }
+
+            contractService.saveContract(
+                contract(orgId = OTHER_ORG_ID, capabilities = setOf(capability("administrasjon", "personal", "person"))),
+            )
+
+            assertThat(saved.captured.orgId).isEqualTo(OTHER_ORG_ID)
+            verify(exactly = 0) { contractJpaRepository.save(match { it.orgId == ORG_ID }) }
+        }
+
+        @Test
+        fun `normalizes the org so one contract cannot be stored twice under two spellings`() {
+            every { contractJpaRepository.findByUserNameAndOrgId(any(), any()) } returns null
+            val saved = slot<ContractEntity>()
+            every { contractJpaRepository.save(capture(saved)) } answers { saved.captured }
+
+            contractService.saveContract(contract(orgId = "test-org-no"))
+
+            assertThat(saved.captured.orgId).isEqualTo(ORG_ID)
         }
     }
 
-    @Nested
-    inner class AdapterCanPerformCapability {
-        @Test
-        fun `should return true when capability matches`() {
-            every { contractJpaRepository.findByUserNameWithCapabilities(adapterId) } returns
-                Optional.of(createContractEntity())
+    @Test
+    fun `returns the distinct adapter ids the store knows about`() {
+        val ids = setOf("adapter-1", "adapter-2")
+        every { contractJpaRepository.getAdapterIds() } returns ids
 
-            val result = contractService.adapterCanPerformCapability(adapterId, "utdanning", "elev", "elev")
-
-            assertThat(result).isTrue()
-        }
-
-        @Test
-        fun `should return false when capability does not match`() {
-            every { contractJpaRepository.findByUserNameWithCapabilities(adapterId) } returns
-                Optional.of(createContractEntity())
-
-            val result = contractService.adapterCanPerformCapability(adapterId, "utdanning", "elev", "skoleressurs")
-
-            assertThat(result).isFalse()
-        }
-
-        @Test
-        fun `should return null when contract not found`() {
-            every { contractJpaRepository.findByUserNameWithCapabilities(adapterId) } returns Optional.empty()
-
-            val result = contractService.adapterCanPerformCapability(adapterId, "utdanning", "elev", "elev")
-
-            assertThat(result).isNull()
-        }
+        assertThat(contractService.getAdapterIds()).isEqualTo(ids)
     }
 
-    @Nested
-    inner class UserCanAccessAdapter {
-        @Test
-        fun `should return true when username matches`() {
-            every { contractJpaRepository.findById(username) } returns Optional.of(createContractEntity())
-
-            val result = contractService.userCanAccessAdapter(username, adapterId)
-
-            assertThat(result).isTrue()
-        }
-
-        @Test
-        fun `should return false when username does not match`() {
-            every { contractJpaRepository.findById("wrong@user.no") } returns
-                Optional.of(
-                    createContractEntity().apply {
-                        adapterId = "something-else"
-                    },
-                )
-
-            val result = contractService.userCanAccessAdapter("wrong@user.no", adapterId)
-
-            assertThat(result).isFalse()
-        }
-
-        @Test
-        fun `should return null when contract not found`() {
-            every { contractJpaRepository.findById(username) } returns Optional.empty()
-
-            val result = contractService.userCanAccessAdapter(username, adapterId)
-
-            assertThat(result).isNull()
-        }
+    private fun givenStoredContract(vararg capabilities: AdapterCapability) {
+        every {
+            contractJpaRepository.findByUserNameAndOrgId(any(), any())
+        } returns ContractEntity(contract(capabilities = capabilities.toSet()))
     }
 
-    @Nested
-    inner class GetAdapterIds {
-        @Test
-        fun `should return adapter ids from repository`() {
-            val ids = setOf("adapter-1", "adapter-2")
-            every { contractJpaRepository.getAdapterIds() } returns ids
-
-            val result = contractService.getAdapterIds()
-
-            assertThat(result).containsExactlyInAnyOrderElementsOf(ids)
-        }
-    }
-
-    private fun createContract(): AdapterContract =
+    private fun contract(
+        orgId: String = ORG_ID,
+        capabilities: Set<AdapterCapability> = setOf(capability("utdanning", "elev", "elev")),
+    ): AdapterContract =
         AdapterContract().apply {
-            this.adapterId = this@ContractServiceTest.adapterId
-            this.orgId = "test.org.no"
-            this.username = this@ContractServiceTest.username
+            this.adapterId = "adapter-1"
+            this.orgId = orgId
+            this.username = USERNAME
             this.heartbeatIntervalInMinutes = 5
-            this.capabilities =
-                setOf(
-                    AdapterCapability().apply {
-                        this.domainName = "utdanning"
-                        this.packageName = "elev"
-                        this.resourceName = "elev"
-                        this.fullSyncIntervalInDays = 1
-                        this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
-                    },
-                )
+            this.capabilities = capabilities
         }
 
-    private fun createContractEntity(): ContractEntity = ContractEntity(createContract())
+    private fun capability(
+        domain: String,
+        pkg: String,
+        resource: String,
+    ): AdapterCapability =
+        AdapterCapability().apply {
+            this.domainName = domain
+            this.packageName = pkg
+            this.resourceName = resource
+            this.fullSyncIntervalInDays = 1
+            this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
+        }
+
+    private companion object {
+        const val ORG_ID = "test.org.no"
+        const val OTHER_ORG_ID = "sub.test.org.no"
+        const val USERNAME = "test@adapter.test.org.no"
+    }
 }

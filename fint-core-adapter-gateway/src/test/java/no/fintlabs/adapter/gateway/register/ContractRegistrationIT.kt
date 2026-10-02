@@ -41,7 +41,7 @@ class ContractRegistrationIT {
     private lateinit var mockMvc: MockMvc
     private lateinit var principal: CorePrincipal
 
-    private val orgId = "test.org.no"
+    private val orgId = "test.fintlabs.no"
     private val domainName = "utdanning"
     private val packageName = "elev"
     private val username = "test@adapter.$orgId"
@@ -75,7 +75,7 @@ class ContractRegistrationIT {
     fun `register persists contract and capabilities`() {
         postRegister(contract(heartbeat = 5, capabilities = setOf(capability(resource = "elev"))))
 
-        val stored = contractJpaRepository.findByUserNameWithCapabilities(username).orElseThrow()
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
 
         assertThat(stored.userName).isEqualTo(username)
         assertThat(stored.adapterId).isEqualTo(adapterId)
@@ -104,7 +104,7 @@ class ContractRegistrationIT {
             ),
         )
 
-        val stored = contractJpaRepository.findByUserNameWithCapabilities(username).orElseThrow()
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
 
         assertThat(stored.capabilityEntityset.map { it.resourceName })
             .containsExactly("elevfravar")
@@ -115,7 +115,7 @@ class ContractRegistrationIT {
         postRegister(contract(heartbeat = 5))
         postRegister(contract(heartbeat = 15))
 
-        val stored = contractJpaRepository.findById(username).orElseThrow()
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
 
         assertThat(stored.heartbeatIntervalInMinutes).isEqualTo(15)
         assertThat(contractJpaRepository.count()).isEqualTo(1)
@@ -126,28 +126,73 @@ class ContractRegistrationIT {
         postRegister(contract(capabilities = setOf(capability(resource = "elev"))))
         postRegister(contract(capabilities = emptySet()))
 
-        val stored = contractJpaRepository.findByUserNameWithCapabilities(username).orElseThrow()
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
 
         assertThat(stored.capabilityEntityset).isEmpty()
     }
 
-    private fun postRegister(contract: AdapterContract) {
+    @Test
+    fun `registering a second org for the same adapter keeps both contracts`() {
+        val subOrg = "sub.$orgId"
+        val multiOrgPrincipal = principal(assets = "$orgId,$subOrg")
+
+        postRegister(contract(capabilities = setOf(capability(resource = "elev"))), multiOrgPrincipal)
+        postRegister(
+            contract(orgId = subOrg, capabilities = setOf(capability(pkg = "vurdering", resource = "elevfravar"))),
+            multiOrgPrincipal,
+        )
+
+        assertThat(contractJpaRepository.count()).isEqualTo(2)
+        assertThat(
+            contractJpaRepository
+                .findByUserNameAndOrgId(username, orgId)!!
+                .capabilityEntityset
+                .map { it.resourceName },
+        ).containsExactly("elev")
+        assertThat(
+            contractJpaRepository
+                .findByUserNameAndOrgId(username, subOrg)!!
+                .capabilityEntityset
+                .map { it.resourceName },
+        ).containsExactly("elevfravar")
+    }
+
+    private fun postRegister(
+        contract: AdapterContract,
+        authenticatedAs: CorePrincipal = principal,
+    ) {
         mockMvc
             .perform(
                 post("/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract))
-                    .with(authentication(principal)),
+                    .with(authentication(authenticatedAs)),
             ).andExpect(status().isOk)
     }
 
+    private fun principal(assets: String): CorePrincipal {
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", assets)
+                .claim("scope", listOf("fint-adapter"))
+                .claim("Roles", listOf("FINT_Adapter_${domainName}_$packageName"))
+                .build()
+        return CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_ADAPTER")))
+    }
+
     private fun contract(
+        orgId: String = this.orgId,
         heartbeat: Int = 5,
         capabilities: Set<AdapterCapability> = setOf(capability(resource = "elev")),
     ): AdapterContract =
         AdapterContract().apply {
             this.adapterId = this@ContractRegistrationIT.adapterId
-            this.orgId = this@ContractRegistrationIT.orgId
+            this.orgId = orgId
             this.username = this@ContractRegistrationIT.username
             this.heartbeatIntervalInMinutes = heartbeat
             this.capabilities = capabilities

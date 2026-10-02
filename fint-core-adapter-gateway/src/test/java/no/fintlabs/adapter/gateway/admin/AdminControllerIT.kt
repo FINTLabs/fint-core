@@ -7,12 +7,15 @@ import io.mockk.verify
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
 import no.fintlabs.adapter.gateway.config.ClockConfig
 import no.fintlabs.adapter.gateway.config.OrgIdConverter
+import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.config.ResourceSelectionConverter
+import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.relation.RelationEdgeDrift
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobRunner
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobs
 import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuild
 import no.fintlabs.adapter.gateway.relation.RelationEdgeRebuilder
+import no.fintlabs.adapter.gateway.security.AdapterAuthorization
 import no.fintlabs.adapter.gateway.security.SecurityConfiguration
 import no.fintlabs.adapter.gateway.security.SecurityProblemDetailHandler
 import no.novari.core.shared.model.OrgId
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Bean
@@ -294,9 +298,11 @@ class AdminControllerIT {
     @Configuration
     @Profile(PROFILE)
     @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
+    @EnableConfigurationProperties(ProviderProperties::class)
     @Import(
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
+        AdapterAuthorization::class,
         AdminController::class,
         RelationEdgeJobs::class,
         RelationEdgeJobRunner::class,
@@ -307,6 +313,9 @@ class AdminControllerIT {
     class TestApp {
         @Bean
         fun relationEdgeRebuilder(): RelationEdgeRebuilder = mockk()
+
+        @Bean
+        fun contractService(): ContractService = mockk()
 
         @Bean
         fun resourceStore(): ResourceStore = mockk()
