@@ -92,7 +92,7 @@ abstract class GatewayIntegrationTestBase {
     protected fun registerAdapter() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(adapterContract()))
                     .with(authentication(mockPrincipal)),

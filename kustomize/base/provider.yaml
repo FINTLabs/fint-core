@@ -30,6 +30,10 @@ spec:
         path: /provider
         headers:
           x-allowed-asset-ids: REPLACE
+      - host: REPLACE
+        path: /adapter
+        headers:
+          x-allowed-asset-ids: REPLACE
   kafka:
     enabled: true
     acls:

@@ -73,7 +73,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         val request = seedRequest(adapterCollection, orgId)
 
         mockMvc
-            .perform(get("/event/$domainName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].corrId").value(request.corrId))
     }
@@ -83,7 +83,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
 
         mockMvc
-            .perform(get("/event/administrasjon").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/administrasjon").with(authentication(mockPrincipal)))
             .andExpect(status().isForbidden)
             .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
     }
@@ -94,7 +94,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseFor(request)))
                     .with(authentication(mockPrincipal)),
@@ -112,7 +112,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseFor(request)))
                     .with(authentication(mockPrincipal)),
@@ -121,7 +121,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseFor(request).apply { orgId = this@EventFlowIT.orgId }))
                     .with(authentication(mockPrincipal)),
@@ -136,7 +136,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         seedRequest(adapterCollection, orgId, ttlMillis = -1_000)
 
         mockMvc
-            .perform(get("/event/$domainName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(content().json("[]"))
     }
@@ -148,7 +148,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(response))
                     .with(authentication(mockPrincipal)),
@@ -163,13 +163,13 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(entry!!.lastModified.toEpochMilli()).isEqualTo(stored!!.response!!.handledAt)
 
         mockMvc
-            .perform(get("/event/$domainName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(content().json("[]"))
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(response))
                     .with(authentication(mockPrincipal)),
@@ -183,7 +183,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(response))
                     .with(authentication(mockPrincipal)),
@@ -206,7 +206,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(response))
                     .with(authentication(mockPrincipal)),
@@ -218,7 +218,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
 
         mockMvc
-            .perform(get("/event/$domainName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$[0].corrId").value(request.corrId))
     }
@@ -255,7 +255,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(response))
                     .with(authentication(mockPrincipal)),

@@ -1,20 +1,23 @@
 package no.fintlabs.adapter.gateway.register
 
+import no.fintlabs.adapter.gateway.AdapterApiPaths
 import no.fintlabs.adapter.models.AdapterContract
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
+@RequestMapping(AdapterApiPaths.V1, AdapterApiPaths.V2)
 class RegistrationController(
     private val registrationService: RegistrationService,
 ) {
     private val logger = LoggerFactory.getLogger(RegistrationController::class.java)
 
-    @PostMapping("register")
+    @PostMapping("/register")
     @PreAuthorize(OWNS_CONTRACT)
     fun register(
         @RequestBody adapterContract: AdapterContract,

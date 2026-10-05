@@ -19,7 +19,7 @@ class RegistrationControllerIT
         fun `Should successfully register adapter`() {
             mockMvc
                 .perform(
-                    post("/register")
+                    post("/provider/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(adapterContract()))
                         .with(authentication(mockPrincipal)),

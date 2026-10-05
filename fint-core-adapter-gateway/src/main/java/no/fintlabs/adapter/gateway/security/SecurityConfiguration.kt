@@ -1,6 +1,9 @@
 package no.fintlabs.adapter.gateway.security
 
 import jakarta.servlet.DispatcherType
+import no.fintlabs.adapter.gateway.AdapterApiPaths.ROOT
+import no.fintlabs.adapter.gateway.AdapterApiPaths.V1
+import no.fintlabs.adapter.gateway.AdapterApiPaths.V2
 import no.novari.resource.server.converter.CorePrincipalConverter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -38,11 +41,11 @@ class SecurityConfiguration(
                     .denyAll()
                     .requestMatchers(*OPEN_PATHS)
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, SYNC_PATH)
+                    .requestMatchers(HttpMethod.POST, *SYNC_PATHS)
                     .access(requireAdapterWithComponent())
-                    .requestMatchers(HttpMethod.PATCH, SYNC_PATH)
+                    .requestMatchers(HttpMethod.PATCH, *SYNC_PATHS)
                     .access(requireAdapterWithComponent())
-                    .requestMatchers(HttpMethod.DELETE, SYNC_PATH)
+                    .requestMatchers(HttpMethod.DELETE, *SYNC_PATHS)
                     .access(requireAdapterWithComponent())
                     .anyRequest()
                     .access(requireAdapter())
@@ -73,18 +76,22 @@ class SecurityConfiguration(
         }
 
     companion object {
-        private const val SYNC_PATH = "/{domainName}/{packageName}/{entity}"
-        private const val RELATION_EDGE_REBUILD_PATH = "/admin/relation-edges/rebuild"
-        private const val RELATION_EDGE_DRIFT_PATH = "/admin/relation-edges/drift"
-        private const val RELATION_EDGE_JOB_PATH = "/admin/relation-edges/jobs/{id}"
+        private val SYNC_PATHS =
+            arrayOf(
+                "$V1/{domainName}/{packageName}/{entity}",
+                "$V2/sync/{domainName}/{packageName}/{entity}",
+            )
+        private const val RELATION_EDGE_REBUILD_PATH = "$ROOT/admin/relation-edges/rebuild"
+        private const val RELATION_EDGE_DRIFT_PATH = "$ROOT/admin/relation-edges/drift"
+        private const val RELATION_EDGE_JOB_PATH = "$ROOT/admin/relation-edges/jobs/{id}"
         private const val RELATION_EDGE_ADMIN_ORG_ID = "novari.no"
-        private const val ADMIN_PATHS = "/admin/**"
+        private const val ADMIN_PATHS = "$ROOT/admin/**"
         private val OPEN_PATHS =
             arrayOf(
-                "/swagger-ui/**",
-                "/swagger-ui.html",
-                "/v3/api-docs/**",
-                "/actuator/health",
+                "$ROOT/swagger-ui/**",
+                "$ROOT/swagger-ui.html",
+                "$ROOT/api-docs/**",
+                "$ROOT/actuator/health",
             )
     }
 }

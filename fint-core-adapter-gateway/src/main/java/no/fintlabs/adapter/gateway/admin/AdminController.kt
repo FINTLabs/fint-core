@@ -1,7 +1,7 @@
 package no.fintlabs.adapter.gateway.admin
 
 import io.swagger.v3.oas.annotations.Parameter
-import jakarta.servlet.http.HttpServletRequest
+import no.fintlabs.adapter.gateway.AdapterApiPaths
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJob
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobRunningException
 import no.fintlabs.adapter.gateway.relation.RelationEdgeJobs
@@ -33,7 +33,7 @@ import java.util.UUID
  * until the job is no longer `RUNNING`.
  */
 @RestController
-@RequestMapping("/admin")
+@RequestMapping(AdapterApiPaths.ROOT + "/admin")
 class AdminController(
     private val jobs: RelationEdgeJobs,
 ) {
@@ -48,8 +48,7 @@ class AdminController(
         @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
         @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
-        request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, scope, principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startRebuild(orgId, scope, principal.username))
 
     /**
      * Starts a check of what [rebuild] would change, without writing anything: edges missing,
@@ -62,8 +61,7 @@ class AdminController(
         @Parameter(description = SCOPE_DESCRIPTION, example = "utdanning/elev/person")
         @RequestParam scope: ResourceSelection,
         principal: CorePrincipal,
-        request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, scope, principal.username), request)
+    ): ResponseEntity<RelationEdgeJob> = accepted(jobs.startDrift(orgId, scope, principal.username))
 
     /** A rebuild or drift check started earlier, with the result of each resource that is done. */
     @GetMapping("/relation-edges/jobs/{id}")
@@ -97,13 +95,10 @@ class AdminController(
     fun missingParameter(exception: MissingServletRequestParameterException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Missing ${exception.parameterName}")
 
-    private fun accepted(
-        job: RelationEdgeJob,
-        request: HttpServletRequest,
-    ): ResponseEntity<RelationEdgeJob> =
+    private fun accepted(job: RelationEdgeJob): ResponseEntity<RelationEdgeJob> =
         ResponseEntity
             .accepted()
-            .location(URI.create("${request.contextPath}/admin/relation-edges/jobs/${job.id}"))
+            .location(URI.create("${AdapterApiPaths.ROOT}/admin/relation-edges/jobs/${job.id}"))
             .body(job)
 
     companion object {

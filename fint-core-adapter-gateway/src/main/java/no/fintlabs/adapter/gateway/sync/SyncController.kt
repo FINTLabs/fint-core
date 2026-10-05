@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.sync
 
+import no.fintlabs.adapter.gateway.AdapterApiPaths
 import no.fintlabs.adapter.models.sync.DeleteSyncPage
 import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
@@ -14,13 +15,15 @@ import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
+@RequestMapping(AdapterApiPaths.V1, AdapterApiPaths.V2 + "/sync")
 class SyncController(
     private val syncPageService: SyncPageService,
 ) {
-    @PostMapping("{domainName}/{packageName}/{resourceName}")
+    @PostMapping("/{domainName}/{packageName}/{resourceName}")
     @PreAuthorize(CAN_SYNC)
     fun fullSync(
         @RequestBody syncPage: FullSyncPage,
@@ -29,7 +32,7 @@ class SyncController(
         @PathVariable resourceName: String,
     ): ResponseEntity<Void> = handleSync(syncPage, domainName, packageName, resourceName, HttpStatus.CREATED)
 
-    @PatchMapping("{domainName}/{packageName}/{resourceName}")
+    @PatchMapping("/{domainName}/{packageName}/{resourceName}")
     @PreAuthorize(CAN_SYNC)
     fun deltaSync(
         @RequestBody syncPage: DeltaSyncPage,
@@ -38,7 +41,7 @@ class SyncController(
         @PathVariable resourceName: String,
     ): ResponseEntity<Void> = handleSync(syncPage, domainName, packageName, resourceName, HttpStatus.CREATED)
 
-    @DeleteMapping("{domainName}/{packageName}/{resourceName}")
+    @DeleteMapping("/{domainName}/{packageName}/{resourceName}")
     @PreAuthorize(CAN_SYNC)
     fun deleteSync(
         @RequestBody syncPage: DeleteSyncPage,

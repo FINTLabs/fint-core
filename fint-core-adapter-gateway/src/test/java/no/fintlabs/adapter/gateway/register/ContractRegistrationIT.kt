@@ -163,7 +163,7 @@ class ContractRegistrationIT {
     ) {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract))
                     .with(authentication(authenticatedAs)),

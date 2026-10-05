@@ -34,6 +34,7 @@ replacements:
           name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.headers.x-allowed-asset-ids
+          - spec.ingress.routes.1.headers.x-allowed-asset-ids
 
   - source:
       kind: ConfigMap
@@ -149,3 +150,4 @@ replacements:
           name: fint-core-adapter-gateway
         fieldPaths:
           - spec.ingress.routes.0.host
+          - spec.ingress.routes.1.host

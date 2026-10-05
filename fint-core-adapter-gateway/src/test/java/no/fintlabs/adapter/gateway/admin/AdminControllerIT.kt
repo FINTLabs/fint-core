@@ -89,7 +89,7 @@ class AdminControllerIT {
 
         assertEquals(202, response.statusCode(), response.body())
         val id = json.readTree(response.body())["id"].asString()
-        assertEquals("/provider/admin/relation-edges/jobs/$id", response.headers().firstValue("Location").orElse(null))
+        assertEquals("/adapter/admin/relation-edges/jobs/$id", response.headers().firstValue("Location").orElse(null))
     }
 
     @Test
@@ -262,7 +262,7 @@ class AdminControllerIT {
                 .headers()
                 .firstValue("Location")
                 .orElseThrow()
-                .removePrefix("/provider")
+                .removePrefix("/adapter")
         var job: JsonNode? = null
         await.atMost(Duration.ofSeconds(5)).until {
             job = json.readTree(get(location, NOVARI_ADAPTER).body())
@@ -288,7 +288,7 @@ class AdminControllerIT {
     ): HttpResponse<String> {
         val request =
             HttpRequest
-                .newBuilder(URI.create("http://localhost:$port/provider$pathAndQuery"))
+                .newBuilder(URI.create("http://localhost:$port/adapter$pathAndQuery"))
                 .method(method, HttpRequest.BodyPublishers.noBody())
                 .header("Authorization", "Bearer $token")
                 .build()
