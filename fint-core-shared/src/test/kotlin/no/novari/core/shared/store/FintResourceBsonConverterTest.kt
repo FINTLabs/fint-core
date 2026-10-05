@@ -12,6 +12,14 @@ class FintResourceBsonConverterTest {
     private val converter = FintResourceBsonConverter()
 
     @Test
+    fun `the same content gives the same hash`() {
+        val one = elevforhold().apply { addLink("elev", Link("elevnummer", "E-1")) }
+        val other = elevforhold().apply { addLink("elev", Link("elevnummer", "E-1")) }
+
+        assertEquals(converter.toStorageForm(one).contentHash, converter.toStorageForm(other).contentHash)
+    }
+
+    @Test
     fun `a link to another resource gives another hash`() {
         val one = elevforhold().apply { addLink("elev", Link("elevnummer", "E-1")) }
         val other = elevforhold().apply { addLink("elev", Link("elevnummer", "E-2")) }
