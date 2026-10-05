@@ -1,49 +1,44 @@
 package no.fintlabs.adapter.gateway.event.response
 
+import no.fintlabs.adapter.gateway.event.EventAnswering
 import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException
 import no.fintlabs.adapter.gateway.security.EventAuthorization
-import no.fintlabs.adapter.gateway.storage.MongoTransactions
-import no.fintlabs.adapter.gateway.storage.ResourceIngest
-import no.fintlabs.adapter.gateway.storage.ResourceWritePipeline
 import no.fintlabs.adapter.gateway.sync.InvalidSyncPageEntryException
-import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
+import no.fintlabs.adapter.models.sync.SyncPageEntry
+import no.fintlabs.adapter.models.v2.event.EventOperation
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.ClaimOutcome
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.StoredEvent
 import no.novari.core.shared.event.toEventCollectionName
-import no.novari.core.shared.json.FintJson
+import no.novari.core.shared.event.toEventResponse
 import no.novari.core.shared.model.OrgId
-import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.model.toResourceClass
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Instant
 
 /**
- * The answer claim and the resource write happen in one Mongo transaction: either the event is
- * marked answered AND the resource is in the store, or neither happened. The claim runs first
- * inside the transaction so a lost race does no entity work, and the feed publish comes last,
- * after commit. handledAt is stamped from the provider's clock at receipt, so every storage
- * timestamp comparison stays on one clock. An answer arriving after the deadline is rejected
- * like an unknown corrId, both up front and inside the claim itself, so the provider and the
- * consumer's status derivation agree on when an event died.
+ * Handles answers from v1 adapters. The answer is stored in the v2 shape through
+ * [EventAnswering], and the v1 answer as received goes to the Kafka feed after commit.
+ * handledAt is stamped from the provider's clock at receipt, so every storage timestamp
+ * comparison stays on one clock. An answer arriving after the deadline is rejected like an
+ * unknown corrId, both up front and inside the claim itself, so the provider and the consumer's
+ * status derivation agree on when an event died. A read event is never served to a v1 adapter,
+ * so a v1 answer to one is treated as an unknown corrId too.
  */
 @Service
 class ResponseEventService(
     private val eventStore: EventStore,
-    private val resourceWritePipeline: ResourceWritePipeline,
+    private val eventAnswering: EventAnswering,
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val clock: Clock,
-    private val transactions: MongoTransactions,
     private val eventAuthorization: EventAuthorization,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
-    private val storageMapper = FintJson.storageMapper()
 
     fun handleEvent(responseFintEvent: ResponseFintEvent) {
         val collectionName = OrgId.from(responseFintEvent.orgId).toEventCollectionName()
@@ -53,7 +48,7 @@ class ResponseEventService(
             eventStore.findByCorrId(responseFintEvent.corrId, collectionName)
                 ?: throw NoRequestFoundException(responseFintEvent.corrId)
 
-        if (stored.status != EventState.PENDING || stored.isExpired(now)) {
+        if (stored.status != EventState.PENDING || stored.isExpired(now) || stored.request.operation == EventOperation.READ) {
             throw NoRequestFoundException(responseFintEvent.corrId)
         }
 
@@ -61,45 +56,26 @@ class ResponseEventService(
         validateEvent(responseFintEvent)
         responseFintEvent.handledAt = now.toEpochMilli()
 
-        resourceWritePipeline.prepare(stored.toCoordinate())
-
         val outcome =
-            transactions.inTransaction {
-                val claim = eventStore.markAnswered(responseFintEvent, collectionName)
-                if (claim == ClaimOutcome.Claimed) persistEntity(stored.request, responseFintEvent)
-                claim
-            }
+            eventAnswering.claim(
+                stored,
+                collectionName,
+                responseFintEvent.toEventResponse(),
+                now,
+                resourceToSave(responseFintEvent),
+            )
 
         if (outcome != ClaimOutcome.Claimed) throw NoRequestFoundException(responseFintEvent.corrId)
 
         responseFintEventProducer.publish(responseFintEvent)
     }
 
-    private fun persistEntity(
-        request: RequestFintEvent,
-        response: ResponseFintEvent,
-    ) {
+    private fun resourceToSave(response: ResponseFintEvent): SyncPageEntry? {
         if (createRequestFailed(response) || response.operationType == OperationType.VALIDATE) {
             logger.info("Not sending entity to storage because it is a validate event or create request failed")
-            return
+            return null
         }
-
-        val coordinate =
-            ResourceCoordinate(
-                request.orgId,
-                request.domainName,
-                request.packageName,
-                request.resourceName,
-            )
-
-        resourceWritePipeline.apply(
-            ResourceIngest.Save(
-                coordinate = coordinate,
-                resourceId = response.value.identifier,
-                resource = storageMapper.convertValue(response.value.resource, coordinate.toResourceClass()),
-                timestamp = Instant.ofEpochMilli(response.handledAt),
-            ),
-        )
+        return response.value
     }
 
     // TODO: Use Jakatra validation in fint-core-infra-models instead
@@ -135,12 +111,4 @@ class ResponseEventService(
         }
 
     private fun StoredEvent.isExpired(now: Instant): Boolean = !now.isBefore(deadline)
-
-    private fun StoredEvent.toCoordinate(): ResourceCoordinate =
-        ResourceCoordinate(
-            request.orgId,
-            request.domainName,
-            request.packageName,
-            request.resourceName,
-        )
 }

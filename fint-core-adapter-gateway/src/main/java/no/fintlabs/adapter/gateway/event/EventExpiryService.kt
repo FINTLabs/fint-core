@@ -1,15 +1,18 @@
 package no.fintlabs.adapter.gateway.event
 
+import no.fintlabs.adapter.gateway.config.EventProperties
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.response.ResponseFintEventProducer
-import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
+import no.fintlabs.adapter.models.v2.event.EventOperation
+import no.fintlabs.adapter.models.v2.event.EventRequest
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.org.OrgStore
 import org.slf4j.LoggerFactory
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.scheduling.annotation.SchedulingConfigurer
+import org.springframework.scheduling.config.ScheduledTaskRegistrar
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Instant
@@ -27,7 +30,7 @@ import java.time.Instant
  * PENDING event past its deadline, so when an adapter answers at the same instant, or another
  * replica sweeps the same event, exactly one writer wins. The expired ResponseFintEvent below
  * exists only as a Kafka feed record for external consumers, and only the replica whose flip
- * won publishes it.
+ * won publishes it. Read events are left off the feed, like their answers.
  */
 @Service
 class EventExpiryService(
@@ -36,10 +39,14 @@ class EventExpiryService(
     private val providerProperties: ProviderProperties,
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val clock: Clock,
-) {
+    private val eventProperties: EventProperties,
+) : SchedulingConfigurer {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedDelayString = $$"${fint.provider.event.expiry-sweep-interval:PT30S}")
+    override fun configureTasks(registrar: ScheduledTaskRegistrar) {
+        registrar.addFixedDelayTask(::expireOverdueEvents, eventProperties.expirySweepInterval)
+    }
+
     fun expireOverdueEvents() {
         val now = clock.instant()
 
@@ -55,14 +62,14 @@ class EventExpiryService(
         now: Instant,
     ) {
         eventStore.findExpired(collectionName, now).forEach { request ->
-            if (eventStore.markExpired(request.corrId, collectionName, now)) {
+            if (eventStore.markExpired(request.corrId, collectionName, now) && request.operation != EventOperation.READ) {
                 logger.info("Event {} expired. Publishing expired response to the feed.", request.corrId)
                 responseFintEventProducer.publish(request.toExpiredResponse())
             }
         }
     }
 
-    private fun RequestFintEvent.toExpiredResponse(): ResponseFintEvent =
+    private fun EventRequest.toExpiredResponse(): ResponseFintEvent =
         ResponseFintEvent().apply {
             corrId = this@toExpiredResponse.corrId
             orgId = this@toExpiredResponse.orgId

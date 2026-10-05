@@ -13,6 +13,7 @@ interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
         select distinct c
         from ContractEntity c
         left join fetch c.capabilityEntityset
+        left join fetch c.eventCapabilityEntitySet
         where c.userName = :userName and c.orgId = :orgId
         """,
     )

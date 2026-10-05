@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.gateway.event.InvalidOrgIdException;
 import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException;
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException;
+import no.fintlabs.adapter.gateway.event.v2.InvalidEventAnswerException;
 import no.fintlabs.adapter.gateway.register.AdapterNotRegisteredException;
 import no.fintlabs.adapter.gateway.register.InvalidAdapterCapabilityException;
 import no.fintlabs.adapter.gateway.security.InvalidJwtException;
@@ -16,11 +17,16 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import tools.jackson.core.JacksonException;
 
 import java.net.URI;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @ControllerAdvice
@@ -31,6 +37,36 @@ public class ExceptionController {
     @ExceptionHandler(InvalidResponseFintEventException.class)
     public ResponseEntity<String> handleInvalidResponseFintEventException(Throwable e) {
         return ResponseEntity.badRequest().body(e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidEventAnswerException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidEventAnswerException(
+            InvalidEventAnswerException exception,
+            HttpServletRequest request
+    ) {
+        return problemResponse(badRequestProblem(exception.getMessage(), request));
+    }
+
+    /**
+     * Answers a body that fails Bean Validation with one entry per field, so the adapter sees
+     * every problem at once instead of fixing them one request at a time.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ProblemDetail> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception,
+            HttpServletRequest request
+    ) {
+        List<Map<String, String>> errors = exception.getBindingResult().getFieldErrors().stream()
+                .sorted(Comparator.comparing(FieldError::getField))
+                .map(error -> Map.of(
+                        "field", error.getField(),
+                        "message", String.valueOf(error.getDefaultMessage())
+                ))
+                .toList();
+
+        ProblemDetail problem = badRequestProblem("The request body is not valid.", request);
+        problem.setProperty("errors", errors);
+        return problemResponse(problem);
     }
 
     @ExceptionHandler(AdapterNotRegisteredException.class)
@@ -93,6 +129,12 @@ public class ExceptionController {
             return "Required request body is missing";
         }
         return cause.getMessage() != null ? cause.getMessage() : "Request body could not be parsed";
+    }
+
+    private ResponseEntity<ProblemDetail> problemResponse(ProblemDetail problem) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem);
     }
 
     private ProblemDetail badRequestProblem(String detail, HttpServletRequest request) {

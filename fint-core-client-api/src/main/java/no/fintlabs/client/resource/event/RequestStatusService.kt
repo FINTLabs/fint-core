@@ -9,6 +9,7 @@ import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.StoredEvent
 import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.event.toResponseFintEvent
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.json.toLinkResponses
 import no.novari.core.shared.model.ResourceCoordinate
@@ -46,7 +47,8 @@ class RequestStatusService(
         stored: StoredEvent,
     ): RequestStatus {
         val response =
-            stored.response ?: throw IllegalStateException("Answered event ${stored.request.corrId} has no response")
+            stored.response?.toResponseFintEvent(stored.request.operation, stored.handledAt)
+                ?: throw IllegalStateException("Answered event ${stored.request.corrId} has no response")
 
         return if (response.isError()) {
             handleErrorResponse(coordinate, response)

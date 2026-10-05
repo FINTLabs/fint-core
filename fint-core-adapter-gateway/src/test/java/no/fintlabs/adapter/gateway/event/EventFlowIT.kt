@@ -6,11 +6,14 @@ import no.fintlabs.adapter.gateway.security.DenialReason
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
+import no.fintlabs.adapter.models.v2.event.EventStatus
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.ClaimOutcome
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.event.toEventRequest
+import no.novari.core.shared.event.toEventResponse
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
@@ -160,7 +163,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         val entry = resourceStore.findByResourceId("123", resourceCollection)
         assertThat(entry).isNotNull
-        assertThat(entry!!.lastModified.toEpochMilli()).isEqualTo(stored!!.response!!.handledAt)
+        assertThat(entry!!.lastModified).isEqualTo(stored!!.handledAt)
 
         mockMvc
             .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
@@ -192,7 +195,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.response).isNull()
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
 
-        val outcome = eventStore.markAnswered(response, adapterCollection)
+        val outcome = markAnswered(request, response, adapterCollection)
         assertThat(outcome).isEqualTo(ClaimOutcome.Expired)
     }
 
@@ -237,7 +240,8 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(flipped).isTrue
 
         val outcome =
-            eventStore.markAnswered(
+            markAnswered(
+                request,
                 responseFor(request).apply { handledAt = request.timeToLive - 1 },
                 adapterCollection,
             )
@@ -340,14 +344,14 @@ class EventFlowIT : GatewayIntegrationTestBase() {
                 orgId = providerProperties.orgId.value
                 handledAt = request.timeToLive - 1
             }
-        eventStore.markAnswered(adapterResponse, sweeperCollection)
+        markAnswered(request, adapterResponse, sweeperCollection)
 
         eventExpiryService.expireOverdueEvents()
 
         val stored = eventStore.findByCorrId(request.corrId, sweeperCollection)
         assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
-        assertThat(stored?.response?.isFailed).isFalse
-        assertThat(stored?.response?.handledAt).isEqualTo(adapterResponse.handledAt)
+        assertThat(stored?.response?.status).isEqualTo(EventStatus.SUCCEEDED)
+        assertThat(stored?.handledAt).isEqualTo(Instant.ofEpochMilli(adapterResponse.handledAt))
     }
 
     private fun seedRequest(
@@ -370,9 +374,21 @@ class EventFlowIT : GatewayIntegrationTestBase() {
                 value = """{"systemId":{"identifikatorverdi":"123"}}"""
             }
 
-        eventStore.save(request, Instant.ofEpochMilli(request.created).plusSeconds(1_800), collectionName)
+        eventStore.save(request.toEventRequest(), Instant.ofEpochMilli(request.created).plusSeconds(1_800), collectionName)
         return request
     }
+
+    private fun markAnswered(
+        request: RequestFintEvent,
+        response: ResponseFintEvent,
+        collectionName: String,
+    ): ClaimOutcome =
+        eventStore.markAnswered(
+            request.toEventRequest(),
+            response.toEventResponse(),
+            Instant.ofEpochMilli(response.handledAt),
+            collectionName,
+        )
 
     private fun responseFor(request: RequestFintEvent): ResponseFintEvent =
         ResponseFintEvent().apply {

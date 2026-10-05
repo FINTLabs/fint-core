@@ -1,6 +1,8 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterCapability
+import no.fintlabs.adapter.models.EventCapability
+import no.fintlabs.adapter.models.v2.event.EventOperation
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
@@ -65,6 +67,32 @@ class AdapterRegistrationValidatorTest {
 
         assertThrows<InvalidAdapterCapabilityException> { sut.validateCapabilities(listOf(capability)) }
     }
+
+    @Test
+    fun `reads and writes on a resource without full sync are valid`() {
+        val operations = createEventCapability(operations = setOf(EventOperation.READ, EventOperation.CREATE))
+
+        assertDoesNotThrow { sut.validateEventCapabilities(listOf(operations)) }
+    }
+
+    @Test
+    fun `an event capability without operations is invalid`() {
+        val empty = createEventCapability(operations = emptySet())
+
+        assertThrows<InvalidAdapterCapabilityException> { sut.validateEventCapabilities(listOf(empty)) }
+    }
+
+    @Test
+    fun `an event capability for a resource the model does not declare is invalid`() {
+        val unknown = createEventCapability(resourceName = "finnesikke", operations = setOf(EventOperation.READ))
+
+        assertThrows<InvalidAdapterCapabilityException> { sut.validateEventCapabilities(listOf(unknown)) }
+    }
+
+    private fun createEventCapability(
+        resourceName: String = this.resourceName,
+        operations: Set<EventOperation>,
+    ) = EventCapability(domainName, packageName, resourceName, operations)
 
     private fun createCapability(
         domainName: String = this.domainName,

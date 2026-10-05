@@ -86,7 +86,6 @@ class AdapterApiV2PathsIT : GatewayIntegrationTestBase() {
     @ParameterizedTest
     @ValueSource(
         strings = [
-            "/adapter/v2/event/utdanning",
             "/adapter/v2/adapter",
             "/adapter/v2/admin/relation-edges/jobs/5d0c7a3e-8f41-4c55-9a55-2f6b1f0e6c11",
             "/adapter/v2/actuator/health",

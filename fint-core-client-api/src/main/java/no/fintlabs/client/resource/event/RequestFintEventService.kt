@@ -6,6 +6,7 @@ import no.fintlabs.client.config.EventProperties
 import no.fintlabs.client.kafka.event.RequestFintEventProducer
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.event.toEventRequest
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
@@ -55,7 +56,7 @@ class RequestFintEventService(
         val event = coordinate.toRequestFintEvent(resourceData, operationType)
 
         eventStore.save(
-            event,
+            event.toEventRequest(),
             Instant.ofEpochMilli(event.created).plus(eventProperties.retention),
             coordinate.toEventCollectionName(),
         )

@@ -45,6 +45,14 @@ enum class DenialReason(
         "The adapter's contract for the organization does not include the requested resource. " +
             "Add the resource to the contract's capabilities and register again.",
     ),
+    EVENT_NOT_IN_CONTRACT(
+        "The adapter's contract for the organization does not list this resource and operation in eventCapabilities. " +
+            "Add them to the contract's eventCapabilities and register again.",
+    ),
+    NO_EVENT_CAPABILITIES(
+        "The adapter's contracts do not list any of the requested resources in eventCapabilities. " +
+            "Add them to the contract's eventCapabilities and register again before fetching v2 events.",
+    ),
     NO_REGISTERED_CONTRACT(
         "The adapter has not registered a contract for any of its organizations. " +
             "Register a contract with POST /provider/register for each organization before fetching events.",

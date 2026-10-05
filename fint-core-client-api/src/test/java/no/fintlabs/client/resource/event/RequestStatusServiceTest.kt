@@ -11,6 +11,8 @@ import no.fintlabs.client.config.ConsumerConfiguration
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.StoredEvent
+import no.novari.core.shared.event.toEventRequest
+import no.novari.core.shared.event.toEventResponse
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceEntry
@@ -156,17 +158,23 @@ class RequestStatusServiceTest {
         status: EventState = if (response != null) EventState.ANSWERED else EventState.PENDING,
     ) {
         every { eventStore.findByCorrId(corrId, eventCollection) } returns
-            StoredEvent(status, request(), response, deadline)
+            StoredEvent(
+                status,
+                request(response?.operationType ?: OperationType.CREATE).toEventRequest(),
+                response?.toEventResponse(),
+                deadline,
+                response?.let { Instant.ofEpochMilli(it.handledAt) },
+            )
     }
 
-    private fun request(): RequestFintEvent =
+    private fun request(operation: OperationType = OperationType.CREATE): RequestFintEvent =
         RequestFintEvent().apply {
             corrId = this@RequestStatusServiceTest.corrId
             orgId = "fintlabs.no"
             domainName = "utdanning"
             packageName = "vurdering"
             resourceName = "aktivitetsfravar"
-            operationType = OperationType.CREATE
+            operationType = operation
             created = now.minusSeconds(10).toEpochMilli()
             timeToLive = now.plus(Duration.ofMinutes(15)).toEpochMilli()
         }

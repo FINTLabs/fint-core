@@ -6,6 +6,9 @@ import no.fintlabs.adapter.models.AdapterContract;
 import no.novari.core.shared.org.OrgStore;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+import java.util.Set;
+
 @Slf4j
 @RequiredArgsConstructor
 @Service
@@ -18,6 +21,9 @@ public class RegistrationService {
 
     public void register(AdapterContract adapterContract) {
         adapterRegistrationValidator.validateCapabilities(adapterContract.getCapabilities());
+        adapterRegistrationValidator.validateEventCapabilities(
+                Optional.ofNullable(adapterContract.getEventCapabilities()).orElseGet(Set::of)
+        );
         adapterContractProducer.send(adapterContract);
         contractService.saveContract(adapterContract);
         orgStore.upsert(adapterContract.getOrgId());

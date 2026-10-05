@@ -1,7 +1,9 @@
 package no.fintlabs.adapter.gateway.security
 
-import no.fintlabs.adapter.models.event.RequestFintEvent
+import no.fintlabs.adapter.gateway.register.CapabilityKey
+import no.fintlabs.adapter.models.v2.event.EventRequest
 import no.novari.core.shared.event.EventScope
+import no.novari.core.shared.event.OperationScope
 import no.novari.core.shared.model.OrgId
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.Authentication
@@ -59,6 +61,45 @@ class EventAuthorization(
     }
 
     /**
+     * The resources and operations a v2 adapter is served events for, per org: the event
+     * capabilities in its contract for that org that fall inside [scopes]. Denied when no org
+     * has any, so an adapter that forgot eventCapabilities learns why instead of polling an
+     * empty list forever.
+     */
+    fun readableOperationScopes(
+        authentication: Authentication,
+        orgs: List<OrgId>,
+        scopes: List<EventScope>,
+    ): Map<OrgId, List<OperationScope>> {
+        val readable =
+            orgs.associateWith { org ->
+                adapterAuthorization
+                    .eventOperations(authentication, org)
+                    .filterKeys { key -> scopes.any { it.covers(key) } }
+                    .map { (key, operations) ->
+                        OperationScope(key.domainName, key.packageName, key.resourceName, operations)
+                    }
+            }
+
+        if (readable.values.all { it.isEmpty() }) denied(DenialReason.NO_EVENT_CAPABILITIES)
+        return readable
+    }
+
+    /**
+     * Throws [AccessDeniedException] unless the answering v2 adapter lists the resource and
+     * operation of [request] in its event capabilities for the request's org.
+     */
+    fun requireEventCapability(request: EventRequest) {
+        val operations =
+            adapterAuthorization
+                .eventOperations(currentAuthentication(), OrgId.from(request.orgId))[
+                CapabilityKey.of(request.domainName, request.packageName, request.resourceName),
+            ]
+
+        if (operations == null || request.operation !in operations) denied(DenialReason.EVENT_NOT_IN_CONTRACT)
+    }
+
+    /**
      * Throws [AccessDeniedException] unless the answering adapter holds the component role for
      * the domain and package of [request].
      *
@@ -69,15 +110,20 @@ class EventAuthorization(
      * The security context is read here rather than passed in, so the event service stays free
      * of authentication types.
      */
-    fun requireRoleFor(request: RequestFintEvent) {
-        val authentication =
-            SecurityContextHolder.getContext().authentication
-                ?: throw AccessDeniedException("Event answer has no authentication")
-
-        if (!adapterAuthorization.hasComponent(authentication, request.domainName, request.packageName)) {
+    fun requireRoleFor(request: EventRequest) {
+        if (!adapterAuthorization.hasComponent(currentAuthentication(), request.domainName, request.packageName)) {
             denied(DenialReason.MISSING_COMPONENT_ROLE)
         }
     }
+
+    private fun currentAuthentication(): Authentication =
+        SecurityContextHolder.getContext().authentication
+            ?: throw AccessDeniedException("Event answer has no authentication")
+
+    private fun EventScope.covers(key: CapabilityKey): Boolean =
+        domainName == key.domainName &&
+            (packageName == null || packageName == key.packageName) &&
+            (resourceName == null || resourceName == key.resourceName)
 
     private fun denied(reason: DenialReason): Nothing {
         DenialRecorder.record(reason)

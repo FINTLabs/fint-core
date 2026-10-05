@@ -6,6 +6,7 @@ import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.EventProperties
 import no.fintlabs.client.kafka.event.RequestFintEventProducer
 import no.novari.core.shared.event.EventStore
+import no.novari.core.shared.event.toEventRequest
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import org.assertj.core.api.Assertions.assertThat
@@ -50,7 +51,7 @@ class RequestFintEventServiceTest {
         assertThat(event.value)
             .contains("\"href\":\"https://api.felleskomponent.no/utdanning/vurdering/aktivitetsfravar/systemid/42\"")
 
-        verify { eventStore.save(event, now.plus(Duration.ofMinutes(30)), "fintlabs_no_events") }
+        verify { eventStore.save(event.toEventRequest(), now.plus(Duration.ofMinutes(30)), "fintlabs_no_events") }
         verify { producer.publish(event) }
     }
 

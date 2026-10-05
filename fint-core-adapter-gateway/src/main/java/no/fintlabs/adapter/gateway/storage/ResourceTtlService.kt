@@ -11,7 +11,8 @@ import no.novari.core.shared.org.OrgStore
 import no.novari.fint.core.model.FintModel
 import org.slf4j.LoggerFactory
 import org.springframework.data.mongodb.core.MongoTemplate
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.scheduling.annotation.SchedulingConfigurer
+import org.springframework.scheduling.config.ScheduledTaskRegistrar
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,11 +36,14 @@ class ResourceTtlService(
     private val providerProperties: ProviderProperties,
     private val properties: ResourceTtlProperties,
     private val clock: Clock,
-) {
+) : SchedulingConfigurer {
     private val log = LoggerFactory.getLogger(javaClass)
     private val sweepQueued = AtomicBoolean(false)
 
-    @Scheduled(fixedDelayString = $$"${fint.provider.resource-ttl.sweep-interval:PT1H}")
+    override fun configureTasks(registrar: ScheduledTaskRegistrar) {
+        registrar.addFixedDelayTask(::expireOldResources, properties.sweepInterval)
+    }
+
     fun expireOldResources() {
         if (!properties.enabled) return
         if (!sweepQueued.compareAndSet(false, true)) {

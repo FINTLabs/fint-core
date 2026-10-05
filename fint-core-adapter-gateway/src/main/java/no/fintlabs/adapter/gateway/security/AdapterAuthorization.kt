@@ -5,6 +5,7 @@ import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.register.CapabilityKey
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.models.v2.event.EventOperation
 import no.novari.core.shared.model.OrgId
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.enums.FintScope
@@ -161,6 +162,21 @@ class AdapterAuthorization(
     ): Boolean {
         val principal = adapterOrNull(authentication) ?: return false
         return contractService.lookup(principal.username, orgId.value) is ContractLookup.Found
+    }
+
+    /**
+     * The event operations the adapter's contract for [orgId] lists, per resource. Empty when
+     * there is no contract.
+     */
+    fun eventOperations(
+        authentication: Authentication,
+        orgId: OrgId,
+    ): Map<CapabilityKey, Set<EventOperation>> {
+        val principal = adapterOrNull(authentication) ?: return emptyMap()
+        return when (val lookup = contractService.lookup(principal.username, orgId.value)) {
+            is ContractLookup.Found -> lookup.eventCapabilities
+            ContractLookup.Absent -> emptyMap()
+        }
     }
 
     private fun contractCovers(

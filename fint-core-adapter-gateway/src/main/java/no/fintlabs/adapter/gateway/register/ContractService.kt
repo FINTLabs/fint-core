@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.models.v2.event.EventOperation
 import no.novari.core.shared.model.OrgId
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -42,13 +43,18 @@ class ContractService(
         val id = contractId(username, orgId)
         val contract = contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId) ?: return ContractLookup.Absent
 
-        return ContractLookup.Found(contract.toCapabilityKeys())
+        return ContractLookup.Found(contract.toCapabilityKeys(), contract.toEventCapabilities())
     }
 
     private fun ContractEntity.toCapabilityKeys(): Set<CapabilityKey> =
         capabilityEntityset
             .map { CapabilityKey.of(it.domainName, it.pkgName, it.resourceName) }
             .toSet()
+
+    private fun ContractEntity.toEventCapabilities(): Map<CapabilityKey, Set<EventOperation>> =
+        eventCapabilityEntitySet
+            .groupBy({ CapabilityKey.of(it.domainName, it.pkgName, it.resourceName) }, { it.operation })
+            .mapValues { (_, operations) -> operations.toSet() }
 
     private fun contractId(
         username: String,

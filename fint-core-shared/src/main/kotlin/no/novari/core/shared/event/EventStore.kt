@@ -1,7 +1,8 @@
 package no.novari.core.shared.event
 
-import no.fintlabs.adapter.models.event.RequestFintEvent
-import no.fintlabs.adapter.models.event.ResponseFintEvent
+import no.fintlabs.adapter.models.v2.event.EventOperation
+import no.fintlabs.adapter.models.v2.event.EventRequest
+import no.fintlabs.adapter.models.v2.event.EventResponse
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.FindAndModifyOptions
 import org.springframework.data.mongodb.core.MongoTemplate
@@ -30,7 +31,7 @@ class EventStore(
     private val indexedCollections = ConcurrentHashMap.newKeySet<String>()
 
     fun save(
-        request: RequestFintEvent,
+        request: EventRequest,
         expireAt: Instant,
         collectionName: String,
     ) {
@@ -43,20 +44,61 @@ class EventStore(
         collectionName: String,
     ): StoredEvent? = template.findById(corrId, EventDocument::class.java, collectionName)?.toStoredEvent()
 
+    /**
+     * The pending events a v1 adapter is served. Reads are left out, because a v1 adapter cannot
+     * read them. Documents from before the v2 shape have no operation field and are not reads.
+     */
     fun findPending(
         collectionName: String,
         now: Instant,
         scope: EventScope? = null,
         limit: Int = 0,
-    ): List<RequestFintEvent> = findInState(collectionName, Criteria.where(DEADLINE).gt(now), scope, limit)
+    ): List<EventRequest> =
+        findInState(
+            collectionName,
+            listOfNotNull(
+                Criteria.where(DEADLINE).gt(now),
+                Criteria.where(OPERATION).ne(EventOperation.READ.name),
+                scope?.toCriteria(),
+            ),
+            limit,
+        )
+
+    /**
+     * The pending events a v2 adapter is served: only the resources and operations in [scopes].
+     */
+    fun findPendingFor(
+        collectionName: String,
+        now: Instant,
+        scopes: Collection<OperationScope>,
+        limit: Int = 0,
+    ): List<EventRequest> {
+        if (scopes.isEmpty()) return emptyList()
+
+        return findInState(
+            collectionName,
+            listOf(
+                Criteria.where(DEADLINE).gt(now),
+                Criteria().orOperator(scopes.map { it.toCriteria() }),
+            ),
+            limit,
+        )
+    }
 
     fun findExpired(
         collectionName: String,
         now: Instant,
-    ): List<RequestFintEvent> = findInState(collectionName, Criteria.where(DEADLINE).lte(now))
+    ): List<EventRequest> = findInState(collectionName, listOf(Criteria.where(DEADLINE).lte(now)))
 
+    /**
+     * Stores the answer if the event is still pending and [handledAt] is before its deadline. The
+     * request is written again in the v2 shape, so a document from before the v2 shape never
+     * ends up with a v1 request and a v2 answer.
+     */
     fun markAnswered(
-        response: ResponseFintEvent,
+        request: EventRequest,
+        response: EventResponse,
+        handledAt: Instant,
         collectionName: String,
     ): ClaimOutcome {
         val claimed =
@@ -65,13 +107,16 @@ class EventStore(
                     Criteria().andOperator(
                         Criteria.where(ID).`is`(response.corrId),
                         Criteria.where(STATUS).`is`(EventState.PENDING),
-                        Criteria.where(DEADLINE).gt(Instant.ofEpochMilli(response.handledAt)),
+                        Criteria.where(DEADLINE).gt(handledAt),
                     ),
                 ),
                 Update()
                     .set(STATUS, EventState.ANSWERED)
+                    .set(REQUEST, request.toStoredJson())
                     .set(RESPONSE, response.toStoredJson())
-                    .set(HANDLED_AT, Instant.ofEpochMilli(response.handledAt)),
+                    .set(HANDLED_AT, handledAt)
+                    .set(FORMAT, CURRENT_FORMAT)
+                    .set(OPERATION, request.operation?.name),
                 FindAndModifyOptions.options().returnNew(true),
                 EventDocument::class.java,
                 collectionName,
@@ -110,22 +155,12 @@ class EventStore(
 
     private fun findInState(
         collectionName: String,
-        deadlineCriteria: Criteria,
-        scope: EventScope? = null,
+        criteria: List<Criteria>,
         limit: Int = 0,
-    ): List<RequestFintEvent> {
+    ): List<EventRequest> {
         ensureIndexes(collectionName)
 
-        val filters =
-            buildList {
-                add(Criteria.where(STATUS).`is`(EventState.PENDING))
-                add(deadlineCriteria)
-                scope?.let {
-                    add(Criteria.where(DOMAIN_NAME).`is`(it.domainName))
-                    it.packageName?.let { name -> add(Criteria.where(PACKAGE_NAME).`is`(name)) }
-                    it.resourceName?.let { name -> add(Criteria.where(RESOURCE_NAME).`is`(name)) }
-                }
-            }
+        val filters = listOf(Criteria.where(STATUS).`is`(EventState.PENDING)) + criteria
 
         val query =
             Query
@@ -138,6 +173,23 @@ class EventStore(
             .find(query, EventDocument::class.java, collectionName)
             .map { it.parseRequest() }
     }
+
+    private fun EventScope.toCriteria(): Criteria =
+        Criteria().andOperator(
+            listOfNotNull(
+                Criteria.where(DOMAIN_NAME).`is`(domainName),
+                packageName?.let { Criteria.where(PACKAGE_NAME).`is`(it) },
+                resourceName?.let { Criteria.where(RESOURCE_NAME).`is`(it) },
+            ),
+        )
+
+    private fun OperationScope.toCriteria(): Criteria =
+        Criteria().andOperator(
+            Criteria.where(DOMAIN_NAME).`is`(domainName),
+            Criteria.where(PACKAGE_NAME).`is`(packageName),
+            Criteria.where(RESOURCE_NAME).`is`(resourceName),
+            Criteria.where(OPERATION).`in`(operations.map { it.name }),
+        )
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -156,7 +208,10 @@ class EventStore(
     companion object {
         private const val ID = "_id"
         private const val STATUS = "status"
+        private const val REQUEST = "request"
         private const val RESPONSE = "response"
+        private const val FORMAT = "format"
+        private const val OPERATION = "operation"
         private const val HANDLED_AT = "handledAt"
         private const val DEADLINE = "deadline"
         private const val CREATED = "created"
