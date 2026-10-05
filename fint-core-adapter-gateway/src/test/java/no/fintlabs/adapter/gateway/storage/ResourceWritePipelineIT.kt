@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.storage
 
 import com.mongodb.client.MongoClients
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
@@ -66,7 +67,8 @@ class ResourceWritePipelineIT {
     }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
-    private val pipeline by lazy { ResourceWritePipeline(resourceStore, relationEdgeStore, transactions) }
+    private val meterRegistry = SimpleMeterRegistry()
+    private val pipeline by lazy { ResourceWritePipeline(resourceStore, relationEdgeStore, transactions, meterRegistry) }
 
     private val outsideTemplate by lazy { MongoTemplate(SimpleMongoClientDatabaseFactory(client, DATABASE)) }
     private val outsideStore by lazy { ResourceStore(outsideTemplate, FintResourceBsonConverter()) }
@@ -84,7 +86,7 @@ class ResourceWritePipelineIT {
                 override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult =
                     throw IllegalStateException("edge write failed")
             }
-        val failingPipeline = ResourceWritePipeline(resourceStore, failingEdgeStore, transactions)
+        val failingPipeline = ResourceWritePipeline(resourceStore, failingEdgeStore, transactions, meterRegistry)
 
         assertThrows<IllegalStateException> { failingPipeline.applyAll(listOf(save("EF-123", base))) }
 
@@ -119,12 +121,12 @@ class ResourceWritePipelineIT {
         transactions.inTransaction {
             attempts++
             mongoTemplate.findById("EF-123", ResourceEntry::class.java, RESOURCE_COLLECTION)
-            if (attempts == 1) bumpOutside("EF-123", bumped)
+            if (attempts == 1) deliverOutside("EF-123", bumped)
             pipeline.applyAll(listOf(save("EF-123", base.plusSeconds(60), elevLink = "E-NEW")))
         }
 
         assertEquals(2, attempts)
-        assertEquals(bumped, storedResource("EF-123")!!.lastModified)
+        assertEquals(bumped, storedResource("EF-123")!!.lastDelivered)
         assertEquals(listOf("E-456"), elevTargets())
     }
 
@@ -146,22 +148,79 @@ class ResourceWritePipelineIT {
         assertTrue(allEdges().isEmpty())
     }
 
-    private fun bumpOutside(
+    @Test
+    fun `a resource delivered again unchanged keeps its edges and writes none`() {
+        val recordingEdgeStore = RecordingEdgeStore(mongoTemplate)
+        val recordingPipeline = ResourceWritePipeline(resourceStore, recordingEdgeStore, transactions, meterRegistry)
+        recordingPipeline.applyAll(listOf(save("EF-123", base)))
+
+        recordingPipeline.applyAll(listOf(save("EF-123", base.plusSeconds(60))))
+
+        assertTrue(recordingEdgeStore.batches.last().isEmpty(), "an unchanged delivery must not write edges again")
+        assertEquals(listOf("E-456"), elevTargets())
+        assertEquals(base, storedResource("EF-123")!!.lastModified)
+        assertEquals(base.plusSeconds(60), storedResource("EF-123")!!.lastDelivered)
+        assertEquals(1.0, written("new"))
+        assertEquals(1.0, written("unchanged"))
+    }
+
+    @Test
+    fun `a resource delivered again with another link writes its edges and counts as changed`() {
+        pipeline.applyAll(listOf(save("EF-123", base)))
+
+        pipeline.applyAll(listOf(save("EF-123", base.plusSeconds(60), elevLink = "E-NEW")))
+
+        assertTrue("E-NEW" in elevTargets())
+        assertEquals(base.plusSeconds(60), storedResource("EF-123")!!.lastModified)
+        assertEquals(1.0, written("new"))
+        assertEquals(1.0, written("changed"))
+    }
+
+    @Test
+    fun `a delivery older than the stored one counts as stale and writes nothing`() {
+        pipeline.applyAll(listOf(save("EF-123", base)))
+
+        pipeline.applyAll(listOf(save("EF-123", base.minusSeconds(60), elevLink = "E-OLD")))
+
+        assertEquals(listOf("E-456"), elevTargets())
+        assertEquals(1.0, written("stale"))
+    }
+
+    private class RecordingEdgeStore(
+        template: MongoTemplate,
+    ) : RelationEdgeStore(template) {
+        val batches = mutableListOf<List<RelationEdgeWrite>>()
+
+        override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult {
+            batches += writes
+            return super.applyAll(writes)
+        }
+    }
+
+    private fun written(result: String): Double =
+        meterRegistry
+            .find(ResourceWritePipeline.WRITES_COUNTER)
+            .tag("resource", "utdanning/elev/elevforhold")
+            .tag("result", result)
+            .counter()
+            ?.count() ?: 0.0
+
+    private fun deliverOutside(
         id: String,
-        lastModified: Instant,
+        delivered: Instant,
     ) {
         outsideTemplate.updateFirst(
             Query.query(Criteria.where("_id").`is`(id)),
-            Update().set("lastModified", Date.from(lastModified)),
+            Update().set("lastModified", Date.from(delivered)).set("lastDelivered", Date.from(delivered)),
             RESOURCE_COLLECTION,
         )
     }
 
     private fun insertOutside(
         id: String,
-        lastModified: Instant,
+        delivered: Instant,
     ) {
-        outsideStore.saveAll(listOf(Save(id, RESOURCE_COLLECTION, elevforhold(id, "E-456"), lastModified)))
+        outsideStore.saveAll(listOf(Save(id, RESOURCE_COLLECTION, elevforhold(id, "E-456"), delivered)))
     }
 
     private fun save(

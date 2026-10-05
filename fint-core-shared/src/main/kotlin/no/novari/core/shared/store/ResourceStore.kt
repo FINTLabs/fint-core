@@ -17,6 +17,7 @@ import org.springframework.data.mongodb.core.findOne
 import org.springframework.data.mongodb.core.index.Index
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
@@ -35,79 +36,133 @@ class ResourceStore(
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
-     * Applies a batch of writes and deletes, grouped by collection, and returns the writes that
-     * took effect. If the batch holds several operations for the same id, only the one with the
-     * newest timestamp is applied. A write takes effect unless the store already holds a newer
-     * `lastModified` for that id, so a late resource can never update or delete a newer one. If
-     * both have the exact same timestamp, the new one wins. The original `createdAt` value is
-     * always kept.
+     * Applies a batch of writes and deletes, grouped by collection, and reports what happened to
+     * each. If the batch holds several operations for the same id, only the one with the newest
+     * `lastDelivered` timestamp is applied, and only that one is reported.
+     * A write is stale, and skipped, when the store already holds a newer delivery for that id,
+     * so a late resource can never update or delete a newer one. If both have the exact same timestamp,
+     * the new one wins.
      *
-     * The store reads the stored timestamps first and only sends the writes that will take
-     * effect. The returned list is only trustworthy inside a Mongo transaction.
+     * A save whose content matches what is stored only moves `lastDelivered`. A save with other
+     * content, or for an id that is not stored, stores the content and its hash and moves
+     * `lastModified` and `lastDelivered` together. `createdAt` is set once and kept.
+     *
+     * The store reads the stored timestamps and hashes first and only sends what has to change.
+     * The outcomes are only trustworthy inside a Mongo transaction.
      */
-    fun applyAll(writes: List<ResourceWrite>): List<ResourceWrite> =
+    fun applyAll(writes: List<ResourceWrite>): List<WriteOutcome> =
         writes
             .groupBy { it.collectionName }
             .flatMap { (collectionName, collectionWrites) -> applyToCollection(collectionName, collectionWrites) }
 
+    // TODO: Can be removed, old api. Kept only so tests wont be refactored in unrelated branches.
+    fun saveAll(writes: List<Save>): List<WriteOutcome> = applyAll(writes)
+
     private fun applyToCollection(
         collectionName: String,
         writes: List<ResourceWrite>,
-    ): List<ResourceWrite> {
+    ): List<WriteOutcome> {
         ensureIndexes(collectionName)
 
         val latestById = writes.sortedBy { it.timestamp }.associateBy { it.resourceId }
-        val storedLastModified = findLastModified(latestById.keys, collectionName)
-        val effective = latestById.values.filter { it.takesEffect(storedLastModified[it.resourceId]) }
-        if (effective.isEmpty()) return effective
+        val stored = findFingerprints(latestById.keys, collectionName)
+        val planned = latestById.values.map { it.plan(stored[it.resourceId]) }
 
         val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
-        effective.forEach { bulkOps.add(it) }
-        bulkOps.execute()
+        val sent = planned.count { bulkOps.add(it) }
+        if (sent > 0) bulkOps.execute()
 
-        return effective
+        return planned.map { WriteOutcome(it.write, it.result) }
     }
 
-    private fun findLastModified(
+    private fun findFingerprints(
         ids: Collection<String>,
         collectionName: String,
-    ): Map<String, Instant> {
+    ): Map<String, ResourceFingerprint> {
         val query = Query.query(Criteria.where("_id").`in`(ids))
-        query.fields().include("lastModified")
+        query.fields().include("lastModified", "lastDelivered", "contentHash")
 
         return template
-            .find(query, ResourceTimestamp::class.java, collectionName)
-            .associate { it.id to it.lastModified }
+            .find(query, ResourceFingerprint::class.java, collectionName)
+            .associateBy { it.id }
     }
 
-    private fun ResourceWrite.takesEffect(storedLastModified: Instant?): Boolean =
-        storedLastModified == null || !storedLastModified.isAfter(timestamp)
+    private fun ResourceWrite.plan(stored: ResourceFingerprint?): PlannedWrite {
+        if (stored != null && stored.delivered.isAfter(timestamp)) return PlannedWrite(this, WriteResult.STALE)
 
-    fun saveAll(writes: List<Save>): List<ResourceWrite> = applyAll(writes)
-
-    private fun BulkOperations.add(operation: ResourceWrite) {
-        val byId = Query.query(Criteria.where("_id").`is`(operation.resourceId))
-
-        when (operation) {
-            is Save -> upsert(byId, operation.toGuardedUpdate())
-            is Delete -> remove(byId.addCriteria(notNewerThan(operation.timestamp)))
+        return when (this) {
+            is Delete -> PlannedWrite(this, WriteResult.DELETED)
+            is Save -> planSave(stored)
         }
     }
 
-    private fun notNewerThan(timestamp: Instant) = Criteria.where("lastModified").lte(Date.from(timestamp))
+    /**
+     * Decides what a save does by comparing its hash with the stored one. Nothing stored means
+     * the resource is new. The same hash means nothing changed. Any other case counts as a
+     * change and is written, including a document stored before hashes existed, since it has
+     * no hash to compare with.
+     */
+    private fun Save.planSave(stored: ResourceFingerprint?): PlannedWrite {
+        val form = bsonConverter.toStorageForm(resource)
+        val result =
+            when {
+                stored == null -> WriteResult.NEW
+                stored.contentHash == form.contentHash -> WriteResult.UNCHANGED
+                else -> WriteResult.CHANGED
+            }
+
+        return PlannedWrite(this, result, form)
+    }
+
+    private class PlannedWrite(
+        val write: ResourceWrite,
+        val result: WriteResult,
+        val form: StorageForm? = null,
+    )
 
     /**
-     * Only updates the document if its newer than the existing document.
+     * Adds the operation the plan calls for and says whether one was added. A stale write adds
+     * nothing. An unchanged save only moves `lastDelivered` forward, through `$max`, so a late
+     * duplicate can never move it back.
      */
-    private fun Save.toGuardedUpdate(): AggregationUpdate {
+    private fun BulkOperations.add(planned: PlannedWrite): Boolean {
+        val write = planned.write
+        val byId = Query.query(Criteria.where("_id").`is`(write.resourceId))
+
+        when (planned.result) {
+            WriteResult.STALE -> {
+                return false
+            }
+
+            WriteResult.DELETED -> {
+                remove(byId.addCriteria(deliveredAtOrBefore(write.timestamp)))
+            }
+
+            WriteResult.UNCHANGED -> {
+                updateOne(byId, Update().max("lastDelivered", Date.from(write.timestamp)))
+            }
+
+            WriteResult.NEW, WriteResult.CHANGED -> {
+                upsert(byId, (write as Save).toGuardedUpdate(checkNotNull(planned.form)))
+            }
+        }
+        return true
+    }
+
+    /**
+     * Stores the content unless the document already holds a newer delivery. The check runs
+     * inside Mongo, so a write that lands between the read and this update still cannot be
+     * overtaken by an older one. Each field is set through `$cond`, which is Mongo's if-else:
+     * when the stored delivery time is newer than the incoming timestamp the stored value is kept,
+     * otherwise the incoming one is written. A document without `lastDelivered` compares its
+     * `lastModified` instead.
+     */
+    private fun Save.toGuardedUpdate(form: StorageForm): AggregationUpdate {
         val incomingTimestamp = Date.from(timestamp)
         val identifierDocuments =
             resource.toIdentifierRefs().map { Document("field", it.field).append("value", it.value) }
+        val storedDelivery = Document("\$ifNull", listOf("\$lastDelivered", "\$lastModified"))
 
-        // `$cond` is Mongo's version of a ternary operator: `condition ? ifTrue : ifFalse`.
-        // Calling keepUnlessStale("data", newData) builds:
-        //   { $cond: [ { $gt: ["$lastModified", incomingTimestamp] }, "$data", newData ] }
-        // which Mongo reads as: storedLastModified > incomingTimestamp ? storedData : newData
         fun keepUnlessStale(
             field: String,
             incoming: Any,
@@ -115,7 +170,7 @@ class ResourceStore(
             Document(
                 "\$cond",
                 listOf(
-                    Document("\$gt", listOf("\$lastModified", incomingTimestamp)),
+                    Document("\$gt", listOf(storedDelivery, incomingTimestamp)),
                     "$$field",
                     incoming,
                 ),
@@ -123,10 +178,12 @@ class ResourceStore(
 
         val set =
             Document()
-                .append("data", keepUnlessStale("data", bsonConverter.toDocument(resource)))
+                .append("data", keepUnlessStale("data", form.document))
                 .append("identifiers", keepUnlessStale("identifiers", identifierDocuments))
+                .append("contentHash", keepUnlessStale("contentHash", form.contentHash))
                 .append("createdAt", Document("\$ifNull", listOf("\$createdAt", incomingTimestamp)))
                 .append("lastModified", keepUnlessStale("lastModified", incomingTimestamp))
+                .append("lastDelivered", keepUnlessStale("lastDelivered", incomingTimestamp))
 
         return AggregationUpdate.from(listOf(AggregationOperation { Document("\$set", set) }))
     }
@@ -292,17 +349,16 @@ class ResourceStore(
             .sortedBy { it.toResourceUri() }
     }
 
+    /**
+     * When an adapter last delivered anything to the resource type, changed or not, which is what
+     * `last-updated` reports. Before any document has `lastDelivered` it falls back to the newest
+     * `lastModified`, which was the delivery time when those documents were written.
+     */
     fun getLastUpdated(coordinate: ResourceCoordinate): Instant? {
         val collectionName = coordinate.toCollectionName()
 
-        val query =
-            Query()
-                .with(Sort.by(Sort.Direction.DESC, "lastModified"))
-                .limit(1)
-
-        return template
-            .findOne<ResourceEntry>(query, collectionName)
-            ?.lastModified
+        return newestBy("lastDelivered", collectionName)?.lastDelivered
+            ?: newestBy("lastModified", collectionName)?.lastModified
     }
 
     fun findStoredIds(
@@ -317,9 +373,19 @@ class ResourceStore(
         return template.find(query, Document::class.java, collectionName).mapTo(mutableSetOf()) { it.getString("_id") }
     }
 
+    private fun newestBy(
+        field: String,
+        collectionName: String,
+    ): ResourceEntry? =
+        template.findOne<ResourceEntry>(
+            Query().with(Sort.by(Sort.Direction.DESC, field)).limit(1),
+            collectionName,
+        )
+
     /**
-     * Reads up to [limit] ids of entries modified before [threshold], through the `last_modified`
-     * index.
+     * Reads up to [limit] ids of entries last delivered before [threshold], through the
+     * `last_delivered` index. An entry written before `lastDelivered` existed is read by its
+     * `lastModified` instead, which was its delivery time back then.
      */
     fun findIdsOlderThan(
         threshold: Instant,
@@ -328,9 +394,9 @@ class ResourceStore(
     ): List<String> {
         val query =
             Query
-                .query(Criteria.where("lastModified").lt(Date.from(threshold)))
+                .query(deliveredBefore(threshold))
                 .limit(limit)
-                .withHint(LAST_MODIFIED_INDEX)
+                .withHint(LAST_DELIVERED_INDEX)
         query.fields().include("_id")
 
         return template.find(query, ResourceId::class.java, collectionName).map { it.id }
@@ -343,17 +409,29 @@ class ResourceStore(
     ): Long {
         if (ids.isEmpty()) return 0
 
-        val query =
-            Query.query(
-                Criteria
-                    .where("_id")
-                    .`in`(ids)
-                    .and("lastModified")
-                    .lt(Date.from(threshold)),
-            )
+        val query = Query.query(Criteria.where("_id").`in`(ids)).addCriteria(deliveredBefore(threshold))
 
         return template.remove(query, collectionName).deletedCount
     }
+
+    private fun deliveredBefore(threshold: Instant): Criteria = delivered { lt(Date.from(threshold)) }
+
+    private fun deliveredAtOrBefore(timestamp: Instant): Criteria = delivered { lte(Date.from(timestamp)) }
+
+    /**
+     * Matches entries by their delivery time: `lastDelivered` when the entry has one, otherwise
+     * `lastModified`. Both branches start on `lastDelivered`, so the `last_delivered` index can
+     * serve them.
+     */
+    private fun delivered(compare: Criteria.() -> Criteria): Criteria =
+        Criteria().orOperator(
+            Criteria.where("lastDelivered").compare(),
+            Criteria
+                .where("lastDelivered")
+                .`is`(null)
+                .and("lastModified")
+                .compare(),
+        )
 
     /**
      * Drops the whole collection. A write that lands at the same moment creates the collection
@@ -410,6 +488,10 @@ class ResourceStore(
         )
 
         template.indexOps(collectionName).createIndex(
+            Index().on("lastDelivered", Sort.Direction.ASC).named(LAST_DELIVERED_INDEX),
+        )
+
+        template.indexOps(collectionName).createIndex(
             Index()
                 .on("createdAt", Sort.Direction.ASC)
                 .on("_id", Sort.Direction.ASC)
@@ -420,5 +502,6 @@ class ResourceStore(
     companion object {
         const val CREATED_AT_ID_INDEX = "created_at_id"
         const val LAST_MODIFIED_INDEX = "last_modified"
+        const val LAST_DELIVERED_INDEX = "last_delivered"
     }
 }
