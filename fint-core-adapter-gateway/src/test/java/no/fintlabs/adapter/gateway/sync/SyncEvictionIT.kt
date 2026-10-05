@@ -384,8 +384,8 @@ class SyncEvictionIT {
         )
         assertEquals(
             Instant.ofEpochMilli(AFTER),
-            resourceStore.findByResourceId(survivor, elevforholdCollection)!!.lastModified,
-            "the refreshed write is what is stored, not the old one",
+            resourceStore.findByResourceId(survivor, elevforholdCollection)!!.lastDelivered,
+            "the refreshed delivery is what is stored, not the old one",
         )
     }
 
