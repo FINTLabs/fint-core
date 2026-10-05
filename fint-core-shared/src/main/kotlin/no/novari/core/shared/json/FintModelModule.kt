@@ -7,6 +7,7 @@ import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.FintTypeMetadata
 import no.novari.fint.core.model.Link
 import tools.jackson.databind.annotation.JsonDeserialize
+import tools.jackson.databind.annotation.JsonSerialize
 import tools.jackson.databind.module.SimpleModule
 
 /**
@@ -36,12 +37,15 @@ abstract class FintObjectMixin {
 /**
  * `links` crosses every boundary as `_links`, and everything inbound funnels through
  * [FintLinksDeserializer] so hrefs and stored id-forms alike land as the same [Link] shape.
+ * Outbound, [SortedLinksSerializer] writes them sorted, so the same links always give the same
+ * JSON.
  * `nestedResources` is a derived traversal view over attribute fields, not data: serializing it
  * would duplicate every nested resource in the document, and reading it back fails on the
  * setterless getter.
  */
 abstract class FintResourceMixin {
     @get:JsonProperty("_links")
+    @get:JsonSerialize(using = SortedLinksSerializer::class)
     @get:JsonDeserialize(using = FintLinksDeserializer::class)
     abstract val links: MutableMap<String, MutableList<Link>>
 
