@@ -13,7 +13,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/routes/0/match
-        value: 'Host(`beta.felleskomponent.no`) && PathPrefix(`/`) && !PathPrefix(`/provider`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `.+`) && !HeadersRegexp(`x-org-id`, `(^|\.)(afk\.no|agderfk\.no|bfk\.no|ffk\.no|innlandetfylke\.no|mrfylke\.no|nfk\.no|ofk\.no|oslo\.kommune\.no|rogfk\.no|telemarkfylke\.no|tromsfylke\.no|trondelagfylke\.no|vestfoldfylke\.no|vlfk\.no)$`)'
+        value: 'Host(`beta.felleskomponent.no`) && PathPrefix(`/`) && !PathPrefix(`/provider`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && (!PathPrefix(`/okonomi`) || (HeadersRegexp(`x-fint-version-override`, `(?i)^v4$`) || (!HeadersRegexp(`x-fint-version-override`, `(?i)^v3$`) && HeadersRegexp(`x-fint-model-version`, `(?i)^v4$`)))) && HeadersRegexp(`x-org-id`, `.+`) && !HeadersRegexp(`x-org-id`, `(^|\.)(afk\.no|agderfk\.no|bfk\.no|ffk\.no|innlandetfylke\.no|mrfylke\.no|nfk\.no|ofk\.no|oslo\.kommune\.no|rogfk\.no|telemarkfylke\.no|tromsfylke\.no|trondelagfylke\.no|vestfoldfylke\.no|vlfk\.no)$`)'
       - op: add
         path: /spec/routes/0/priority
         value: 1000
