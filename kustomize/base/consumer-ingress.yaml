@@ -14,7 +14,7 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: 'Host(`REPLACE`) && (PathPrefix(`/administrasjon`) || PathPrefix(`/felles`) || PathPrefix(`/okonomi`) || PathPrefix(`/personvern`) || PathPrefix(`/ressurs`) || PathPrefix(`/utdanning`)) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `REPLACE`)'
+      match: 'Host(`REPLACE`) && (PathPrefix(`/felles`) || PathPrefix(`/okonomi`) || PathPrefix(`/personvern`) || PathPrefix(`/ressurs`) || PathPrefix(`/utdanning`)) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `REPLACE`)'
       services:
         - name: fint-core-client-api
           namespace: REPLACE-DASHED

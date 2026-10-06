@@ -1,0 +1,22 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: fint-core-adapter-gateway-ingress
+  namespace: novari-no
+  labels:
+    app.kubernetes.io/name: fint-core-adapter-gateway
+    app.kubernetes.io/component: provider
+    app.kubernetes.io/part-of: fint-core
+    fintlabs.no/team: core
+    fintlabs.no/org-id: novari.no
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: 'Host(`beta.felleskomponent.no`) && PathPrefix(`/provider`) && HeadersRegexp(`x-allowed-asset-ids`, `.+`) && !HeadersRegexp(`x-allowed-asset-ids`, `(^|[,.])(afk\.no|agderfk\.no|bfk\.no|ffk\.no|innlandetfylke\.no|mrfylke\.no|nfk\.no|ofk\.no|oslo\.kommune\.no|rogfk\.no|telemarkfylke\.no|tromsfylke\.no|trondelagfylke\.no|vestfoldfylke\.no|vlfk\.no)(,|$)`)'
+      priority: 1000
+      services:
+        - name: fint-core-adapter-gateway
+          namespace: novari-no
+          port: 8080
