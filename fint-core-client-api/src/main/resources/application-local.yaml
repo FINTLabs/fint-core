@@ -15,6 +15,9 @@ spring:
       protocol: PLAINTEXT
     consumer:
       group-id: fint-core-client-api
+  mongodb:
+    ssl:
+      enabled: false
 logging:
   level:
     org.apache.kafka: OFF
