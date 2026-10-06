@@ -1,7 +1,7 @@
 version: '3'
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.9.2
+    image: confluentinc/cp-zookeeper:7.9.10
     networks:
       - broker-kafka
     environment:
@@ -9,7 +9,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
-    image: confluentinc/cp-kafka:7.9.2
+    image: confluentinc/cp-kafka:8.3.2
     networks:
       - broker-kafka
     depends_on:
@@ -53,7 +53,7 @@ services:
   mongodb:
     # Pinned because later MongoDB 8.0 images reject Docker Desktop's LinuxKit 7.0.12 kernel
     # (SERVER-121912). Upgrade to the cluster's patch when Docker Desktop provides kernel 7.0.14+.
-    image: mongo:8.0.4
+    image: mongo:9.0.2
     # Command required to have transactions work locally
     command: ["--replSet", "rs0", "--bind_ip_all"]
     healthcheck:
