@@ -8,7 +8,8 @@ data:
   id-dotted: novari.no
   id-dashed: novari-no
   id-underscore: novari_no
-  asset-regex: 're:(^|,)novari\.no(,|$)'
+  org-id-regex: 're:(^|\.)novari\.no$'
+  asset-regex: 're:(^|[,.])novari\.no(,|$)'
   host: beta.felleskomponent.no
   base-url: https://beta.felleskomponent.no
   onepassword-itempath: "vaults/aks-beta-vault/items/fint-core-client-api-cluster-beta"

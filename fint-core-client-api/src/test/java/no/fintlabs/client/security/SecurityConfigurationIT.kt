@@ -1,15 +1,17 @@
 package no.fintlabs.client.security
 
 import no.fintlabs.client.resource.ResourceExceptionHandler
+import no.fintlabs.client.security.opa.OpaClient
+import no.fintlabs.client.security.opa.OpaProperties
+import no.fintlabs.client.security.opa.OpaService
 import no.novari.resource.server.authentication.CorePrincipal
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
@@ -49,17 +51,26 @@ class SecurityConfigurationIT {
                 .build()
     }
 
-    @ParameterizedTest
-    @ValueSource(
-        strings = ["/swagger-ui", "/swagger-ui/index.html", "/swagger-ui.html", "/v3/api-docs", "/actuator/health"],
-    )
-    fun `open paths are reachable without authentication`(path: String) {
+    @Test
+    fun `health probe is answered by the actuator without authentication`() {
         mockMvc
-            .perform(get(path))
-            .andExpect { result ->
-                val code = result.response.status
-                check(code != 401 && code != 403) { "expected $path to be open, got $code" }
-            }
+            .perform(get("/actuator/health"))
+            .andExpect(jsonPath("$.status").exists())
+    }
+
+    @Test
+    fun `prometheus scrape is answered with metrics without authentication`() {
+        mockMvc
+            .perform(get("/actuator/prometheus"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("jvm_")))
+    }
+
+    @Test
+    fun `other actuator endpoints still require a client token`() {
+        mockMvc
+            .perform(get("/actuator/env"))
+            .andExpect(status().isUnauthorized)
     }
 
     @Test
@@ -87,8 +98,14 @@ class SecurityConfigurationIT {
     @Test
     fun `token whose assets do not include the requested org is denied`() {
         mockMvc
-            .perform(resourceRequest("othercounty.no").with(authentication(client(assets = "fintlabs.no"))))
-            .andExpect(status().isForbidden)
+            .perform(
+                resourceRequest("othercounty.no")
+                    .with(
+                        authentication(
+                            client(assets = "fintlabs.no", roles = listOf("FINT_Client_utdanning_vurdering")),
+                        ),
+                    ),
+            ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.detail").value(containsString("organisation")))
     }
 
@@ -100,6 +117,15 @@ class SecurityConfigurationIT {
                     .with(authentication(client(roles = listOf("FINT_Client_utdanning_vurdering")))),
             ).andExpect(status().isBadRequest)
             .andExpect(content().string(containsString("x-org-id")))
+    }
+
+    @Test
+    fun `request with a blank org-id header is rejected as a client error, not a server error`() {
+        mockMvc
+            .perform(
+                resourceRequest("")
+                    .with(authentication(client(roles = listOf("FINT_Client_utdanning_vurdering")))),
+            ).andExpect(status().is4xxClientError)
     }
 
     @Test
@@ -152,10 +178,13 @@ class SecurityConfigurationIT {
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
+    @EnableConfigurationProperties(OpaProperties::class)
     @Import(
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
         ResourceExceptionHandler::class,
+        OpaClient::class,
+        OpaService::class,
         Endpoints::class,
     )
     class SliceApplication

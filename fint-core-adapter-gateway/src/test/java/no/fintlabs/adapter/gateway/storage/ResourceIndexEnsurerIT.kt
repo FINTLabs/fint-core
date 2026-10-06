@@ -47,7 +47,7 @@ class ResourceIndexEnsurerIT {
         ensurer.ensureIndexes()
 
         assertThat(indexNames("test_org_no_utdanning_elev_elev"))
-            .containsExactlyInAnyOrder("_id_", "last_modified", "created_at_id")
+            .containsExactlyInAnyOrder("_id_", "last_modified", "last_delivered", "created_at_id")
         assertThat(indexNames("test_org_no_relation_edges"))
             .containsExactlyInAnyOrder("_id_", "target_lookup", "source_lookup")
     }

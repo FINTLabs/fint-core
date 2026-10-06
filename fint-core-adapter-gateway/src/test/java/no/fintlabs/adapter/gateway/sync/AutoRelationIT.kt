@@ -4,6 +4,7 @@ import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.fintlabs.adapter.gateway.storage.EvictionService
+import no.fintlabs.adapter.gateway.storage.InlineEvictionRunner
 import no.fintlabs.adapter.gateway.storage.MongoTransactions
 import no.fintlabs.adapter.gateway.storage.ResourceWritePipeline
 import no.novari.core.shared.json.FintJson
@@ -13,6 +14,7 @@ import no.novari.core.shared.kafka.EntityHeaders.ORG_ID
 import no.novari.core.shared.kafka.EntityHeaders.PACKAGE_NAME
 import no.novari.core.shared.kafka.EntityHeaders.RESOURCE_NAME
 import no.novari.core.shared.kafka.toHeaderBytes
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.mergeInto
@@ -22,6 +24,7 @@ import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link
+import no.novari.fint.core.model.felles.Person
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import no.novari.fint.core.model.utdanning.elev.Elevforhold
@@ -55,29 +58,46 @@ class AutoRelationIT {
         @Container
         @JvmStatic
         val MONGO = mongoTestContainer()
+
+        private const val PARENT = "FNR-PARENT"
+        private const val CHILD = "FNR-CHILD"
+        private const val SIBLING = "FNR-SIBLING"
     }
 
-    private val factory by lazy { SimpleMongoClientDatabaseFactory(MongoClients.create(MONGO.connectionString), "autorelation-it") }
+    private val factory by lazy {
+        SimpleMongoClientDatabaseFactory(
+            MongoClients.create(MONGO.connectionString),
+            "autorelation-it",
+        )
+    }
     private val mongoTemplate by lazy { MongoTemplate(factory) }
-    private val transactions by lazy { MongoTransactions(TransactionTemplate(MongoTransactionManager(factory)), factory) }
+    private val transactions by lazy {
+        MongoTransactions(
+            TransactionTemplate(MongoTransactionManager(factory)),
+            factory,
+        )
+    }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()) }
+    private val evictionService by lazy { EvictionService(resourceStore, relationEdgeStore, transactions, SimpleMeterRegistry()) }
     private val syncProgressStore by lazy { SyncProgressStore(mongoTemplate) }
     private val bufferReader by lazy {
         BufferReader(
             ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
-            SyncCompletionTracker(syncProgressStore, evictionService),
+            SyncCompletionTracker(syncProgressStore, FullSyncStatusStore(mongoTemplate), evictionService, InlineEvictionRunner()),
         )
     }
 
     private val edgeCollection = "fintlabs_no_relation_edges"
+    private val personCollection = "fintlabs_no_utdanning_elev_person"
+    private val personCoordinate = ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person")
     private val storageMapper = FintJson.storageMapper()
 
     @BeforeEach
     fun clean() {
         mongoTemplate.remove(Query(), edgeCollection)
         mongoTemplate.remove(Query(), "fintlabs_no_utdanning_elev_elevforhold")
+        mongoTemplate.remove(Query(), personCollection)
     }
 
     @Test
@@ -139,7 +159,12 @@ class AutoRelationIT {
 
     @Test
     fun `a tombstone removes the edges the resource created and leaves other sources alone`() {
-        bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123"), elevforholdRecord(resourceId = "EF-999")))
+        bufferReader.readMessage(
+            listOf(
+                elevforholdRecord(resourceId = "EF-123"),
+                elevforholdRecord(resourceId = "EF-999"),
+            ),
+        )
         assertEquals(4, allEdges().size)
 
         bufferReader.readMessage(listOf(elevforholdRecord(resourceId = "EF-123", resource = null)))
@@ -212,6 +237,78 @@ class AutoRelationIT {
         assertNotNull(mongoTemplate.findById("EF-123", Document::class.java, "fintlabs_no_utdanning_elev_elevforhold"))
     }
 
+    @Test
+    fun `a source saved again without any qualifying link no longer owns edges`() {
+        bufferReader.readMessage(listOf(elevforholdRecord(lastModified = 1_000L)))
+        assertEquals(2, allEdges().size)
+
+        val withoutQualifyingLinks =
+            Elevforhold(systemId = Identifikator(identifikatorverdi = "EF-123")).apply {
+                addLink("kategori", Link("systemid", "K-1"))
+            }
+        bufferReader.readMessage(listOf(elevforholdRecord(resource = withoutQualifyingLinks, lastModified = 2_000L)))
+
+        assertTrue(allEdges().isEmpty(), "expected no edges, got ${allEdges()}")
+    }
+
+    @Test
+    fun `a parent's foreldreansvar gives every child a foreldre back-link to that parent`() {
+        bufferReader.readMessage(
+            listOf(
+                personRecord(parent(PARENT, CHILD, SIBLING)),
+                personRecord(person(CHILD)),
+                personRecord(person(SIBLING)),
+            ),
+        )
+
+        assertEquals(listOf("fodselsnummer" to PARENT), servedPerson(CHILD).backLinks("foreldre"))
+        assertEquals(listOf("fodselsnummer" to PARENT), servedPerson(SIBLING).backLinks("foreldre"))
+        assertTrue(allEdges().all { it.targetType == "utdanning/elev/person" && it.inverseName == "foreldre" })
+    }
+
+    @Test
+    fun `a child written after its parent still gets the foreldre back-link`() {
+        bufferReader.readMessage(listOf(personRecord(parent(PARENT, CHILD))))
+        bufferReader.readMessage(listOf(personRecord(person(CHILD))))
+
+        assertEquals(listOf("fodselsnummer" to PARENT), servedPerson(CHILD).backLinks("foreldre"))
+    }
+
+    @Test
+    fun `a child removed by a full sync gets its parent's back-link again when it returns`() {
+        bufferReader.readMessage(
+            listOf(
+                personRecord(parent(PARENT, CHILD), lastModified = 3_000L),
+                personRecord(person(CHILD), lastModified = 1_000L),
+            ),
+        )
+
+        evictionService.evict(personCoordinate, Instant.ofEpochMilli(2_000L))
+
+        assertNull(resourceStore.findByIdentifier("fodselsnummer", CHILD, personCollection))
+        assertNotNull(resourceStore.findByIdentifier("fodselsnummer", PARENT, personCollection))
+
+        bufferReader.readMessage(listOf(personRecord(person(CHILD), lastModified = 4_000L)))
+
+        assertEquals(listOf("fodselsnummer" to PARENT), servedPerson(CHILD).backLinks("foreldre"))
+    }
+
+    @Test
+    fun `a child saved again without its foreldre link no longer gives the parent a foreldreansvar back-link`() {
+        bufferReader.readMessage(
+            listOf(
+                personRecord(person(PARENT), lastModified = 1_000L),
+                personRecord(child(CHILD, PARENT), lastModified = 1_000L),
+            ),
+        )
+        assertEquals(listOf("fodselsnummer" to CHILD), servedPerson(PARENT).backLinks("foreldreansvar"))
+
+        bufferReader.readMessage(listOf(personRecord(person(CHILD), lastModified = 2_000L)))
+
+        assertEquals(emptyList(), servedPerson(CHILD).backLinks("foreldre"))
+        assertEquals(emptyList(), servedPerson(PARENT).backLinks("foreldreansvar"))
+    }
+
     private fun elevforhold(
         systemId: String = "EF-123",
         elevLink: String = "E-456",
@@ -240,6 +337,53 @@ class AutoRelationIT {
             headers().add(RESOURCE_NAME, "elevforhold".toByteArray())
             lastModified?.let { headers().add(LAST_MODIFIED, it.toHeaderBytes()) }
         }
+
+    private fun person(fodselsnummer: String) = Person(fodselsnummer = Identifikator(identifikatorverdi = fodselsnummer))
+
+    private fun parent(
+        fodselsnummer: String,
+        vararg children: String,
+    ) = person(fodselsnummer).apply {
+        children.forEach { addLink("foreldreansvar", Link("fodselsnummer", it)) }
+    }
+
+    private fun child(
+        fodselsnummer: String,
+        vararg parents: String,
+    ) = person(fodselsnummer).apply {
+        parents.forEach { addLink("foreldre", Link("fodselsnummer", it)) }
+    }
+
+    private fun personRecord(
+        person: Person,
+        lastModified: Long? = null,
+    ): ConsumerRecord<String, String> =
+        ConsumerRecord<String, String>(
+            "buffer-topic",
+            0,
+            0L,
+            person.fodselsnummer!!.identifikatorverdi,
+            storageMapper.writeValueAsString(person),
+        ).apply {
+            headers().add(ORG_ID, "fintlabs.no".toByteArray())
+            headers().add(DOMAIN_NAME, "utdanning".toByteArray())
+            headers().add(PACKAGE_NAME, "elev".toByteArray())
+            headers().add(RESOURCE_NAME, "person".toByteArray())
+            lastModified?.let { headers().add(LAST_MODIFIED, it.toHeaderBytes()) }
+        }
+
+    /** Reads a stored person and attaches its back-links the way the client-api serves it. */
+    private fun servedPerson(fodselsnummer: String): Person {
+        val entry = assertNotNull(resourceStore.findByIdentifier("fodselsnummer", fodselsnummer, personCollection))
+        val person = storageMapper.convertValue(entry.data, Person::class.java)
+        relationEdgeStore
+            .findByTargets(edgeCollection, "utdanning/elev/person", entry.identifiers)
+            .mergeInto(listOf(entry to (person as FintResource)))
+        return person
+    }
+
+    private fun FintResource.backLinks(relationName: String): List<Pair<String?, String?>> =
+        links[relationName].orEmpty().map { it.idField to it.idValue }
 
     private fun allEdges(): List<RelationEdge> = mongoTemplate.find(Query(), RelationEdge::class.java, edgeCollection)
 }

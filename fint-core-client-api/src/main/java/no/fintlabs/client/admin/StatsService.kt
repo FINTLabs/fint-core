@@ -1,6 +1,5 @@
 package no.fintlabs.client.admin
 
-import no.fintlabs.client.config.ConsumerConfiguration
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
@@ -10,7 +9,6 @@ import java.util.Date
 
 @Service
 class StatsService(
-    private val consumerConfiguration: ConsumerConfiguration,
     private val resourceStore: ResourceStore,
     private val orgStore: OrgStore,
 ) {
@@ -41,8 +39,8 @@ class StatsService(
             val coord =
                 ResourceCoordinate(
                     orgId,
-                    consumerConfiguration.domain,
-                    consumerConfiguration.packageName,
+                    domainName,
+                    packageName,
                     resource,
                 )
 

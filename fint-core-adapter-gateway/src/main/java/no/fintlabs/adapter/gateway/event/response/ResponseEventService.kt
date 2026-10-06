@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.event.response
 
 import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException
+import no.fintlabs.adapter.gateway.security.EventAuthorization
 import no.fintlabs.adapter.gateway.storage.MongoTransactions
 import no.fintlabs.adapter.gateway.storage.ResourceIngest
 import no.fintlabs.adapter.gateway.storage.ResourceWritePipeline
@@ -39,6 +40,7 @@ class ResponseEventService(
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val clock: Clock,
     private val transactions: MongoTransactions,
+    private val eventAuthorization: EventAuthorization,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val storageMapper = FintJson.storageMapper()
@@ -55,6 +57,7 @@ class ResponseEventService(
             throw NoRequestFoundException(responseFintEvent.corrId)
         }
 
+        eventAuthorization.requireRoleFor(stored.request)
         validateEvent(responseFintEvent)
         responseFintEvent.handledAt = now.toEpochMilli()
 

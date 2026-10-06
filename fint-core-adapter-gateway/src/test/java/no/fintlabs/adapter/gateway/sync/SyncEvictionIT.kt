@@ -2,8 +2,10 @@ package no.fintlabs.adapter.gateway.sync
 
 import com.mongodb.client.MongoClients
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import no.fintlabs.adapter.gateway.config.EvictionProperties
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.fintlabs.adapter.gateway.storage.EvictionService
+import no.fintlabs.adapter.gateway.storage.InlineEvictionRunner
 import no.fintlabs.adapter.gateway.storage.MongoTransactions
 import no.fintlabs.adapter.gateway.storage.ResourceWritePipeline
 import no.fintlabs.adapter.models.sync.SyncType
@@ -18,12 +20,15 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_MARKER
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.toHeaderBytes
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
+import no.novari.core.shared.relation.RelationEdgeWrite
 import no.novari.core.shared.relation.mergeInto
 import no.novari.core.shared.store.FintResourceBsonConverter
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
+import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -39,7 +44,10 @@ import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @Testcontainers
@@ -52,6 +60,7 @@ class SyncEvictionIT {
         private const val BEFORE = 1_000L
         private const val DURING = 2_000L
         private const val AFTER = 3_000L
+        private const val BATCH_SIZE = 2
     }
 
     private val factory by lazy { SimpleMongoClientDatabaseFactory(MongoClients.create(MONGO.connectionString), "eviction-it") }
@@ -59,16 +68,10 @@ class SyncEvictionIT {
     private val transactions by lazy { MongoTransactions(TransactionTemplate(MongoTransactionManager(factory)), factory) }
     private val relationEdgeStore by lazy { RelationEdgeStore(mongoTemplate) }
     private val resourceStore by lazy { ResourceStore(mongoTemplate, FintResourceBsonConverter()) }
-    private val bufferReader by lazy {
-        BufferReader(
-            ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
-            SyncCompletionTracker(
-                SyncProgressStore(mongoTemplate),
-                EvictionService(resourceStore, relationEdgeStore, SimpleMeterRegistry()),
-            ),
-        )
-    }
+    private val meterRegistry = SimpleMeterRegistry()
+    private val bufferReader by lazy { readerEvictingWith(resourceStore, relationEdgeStore) }
 
+    private val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elevforhold")
     private val edgeCollection = "fintlabs_no_relation_edges"
     private val elevforholdCollection = "fintlabs_no_utdanning_elev_elevforhold"
     private val elevCollection = "fintlabs_no_utdanning_elev_elev"
@@ -77,8 +80,13 @@ class SyncEvictionIT {
 
     @BeforeEach
     fun clean() {
-        listOf(edgeCollection, elevforholdCollection, elevCollection, SyncProgressStore.COLLECTION_NAME)
-            .forEach { mongoTemplate.remove(Query(), it) }
+        listOf(
+            edgeCollection,
+            elevforholdCollection,
+            elevCollection,
+            SyncProgressStore.COLLECTION_NAME,
+            FullSyncStatusStore.COLLECTION_NAME,
+        ).forEach { mongoTemplate.remove(Query(), it) }
         nextOffset = 0
     }
 
@@ -191,6 +199,24 @@ class SyncEvictionIT {
     }
 
     @Test
+    fun `a completed full sync records when it completed, which is where the resource TTL counts from`() {
+        bufferReader.readMessage(
+            listOf(elevforholdRecord("EF-1", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
+        )
+
+        assertNotNull(fullSyncStatus()?.lastCompletedAt)
+    }
+
+    @Test
+    fun `a full sync that has not delivered everything it announced records no completion`() {
+        bufferReader.readMessage(
+            listOf(elevforholdRecord("EF-1", writtenAt = DURING, sync = fullSync("S-1", totalSize = 2))),
+        )
+
+        assertNull(fullSyncStatus())
+    }
+
+    @Test
     fun `a full sync carrying nothing resets the resource, edges included`() {
         bufferReader.readMessage(
             listOf(
@@ -273,6 +299,96 @@ class SyncEvictionIT {
         )
     }
 
+    @Test
+    fun `an eviction larger than one batch removes everything the sync did not carry`() {
+        bufferReader.readMessage((1..5).map { elevforholdRecord("EF-OLD-$it", writtenAt = BEFORE) })
+
+        bufferReader.readMessage(
+            listOf(elevforholdRecord("EF-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
+        )
+
+        assertEquals(listOf("EF-KEEP"), storedIds(elevforholdCollection))
+        assertEquals(listOf("EF-KEEP"), edgesTargeting("elevnummer", "E-1").map { it.sourceId })
+        assertEquals(5.0, evictedCount("fint.core.eviction.resources"), "batches of two, two and one add up to five")
+        assertEquals(5.0, evictedCount("fint.core.eviction.edges"))
+    }
+
+    @Test
+    fun `a batch that fails keeps its resources and their edges together, the batches before it are done`() {
+        val failingStore =
+            object : ResourceStore(mongoTemplate, FintResourceBsonConverter()) {
+                private var deletes = 0
+
+                override fun deleteStaleByIds(
+                    ids: Collection<String>,
+                    threshold: Instant,
+                    collectionName: String,
+                ): Long {
+                    if (++deletes == 2) throw IllegalStateException("resource delete failed")
+                    return super.deleteStaleByIds(ids, threshold, collectionName)
+                }
+            }
+        val reader = readerEvictingWith(failingStore, relationEdgeStore)
+
+        reader.readMessage((1..5).map { elevforholdRecord("EF-OLD-$it", writtenAt = BEFORE) })
+        reader.readMessage(
+            listOf(elevforholdRecord("EF-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
+        )
+
+        val remaining = storedIds(elevforholdCollection).sorted()
+        assertEquals(4, remaining.size, "the first batch of two is gone, the failed batch and the one after it stay")
+        assertTrue("EF-KEEP" in remaining)
+        assertEquals(
+            remaining,
+            edgesTargeting("elevnummer", "E-1").map { it.sourceId }.sorted(),
+            "the failed batch had deleted its edges inside the transaction, the rollback must bring them back",
+        )
+    }
+
+    @Test
+    fun `a resource refreshed while its batch is being evicted survives with its edge`() {
+        val outsideTemplate =
+            MongoTemplate(SimpleMongoClientDatabaseFactory(MongoClients.create(MONGO.connectionString), "eviction-it"))
+        val outsideResourceStore =
+            ResourceStore(outsideTemplate, FintResourceBsonConverter()).apply { prepareCollection(elevforholdCollection) }
+        val outsideEdgeStore = RelationEdgeStore(outsideTemplate).apply { prepareCollection(edgeCollection) }
+        var refreshed: String? = null
+        val interceptingEdgeStore =
+            object : RelationEdgeStore(mongoTemplate) {
+                override fun deleteBySources(
+                    collectionName: String,
+                    sourceType: String,
+                    sourceIds: Collection<String>,
+                ): Long {
+                    if (refreshed == null) {
+                        val resourceId = sourceIds.first()
+                        refreshed = resourceId
+                        refreshOutside(resourceId, AFTER, outsideResourceStore, outsideEdgeStore)
+                    }
+                    return super.deleteBySources(collectionName, sourceType, sourceIds)
+                }
+            }
+        val reader = readerEvictingWith(resourceStore, interceptingEdgeStore)
+
+        reader.readMessage((1..5).map { elevforholdRecord("EF-OLD-$it", writtenAt = BEFORE) })
+        reader.readMessage(
+            listOf(elevforholdRecord("EF-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
+        )
+
+        val survivor = checkNotNull(refreshed)
+        assertEquals(listOf("EF-KEEP", survivor).sorted(), storedIds(elevforholdCollection).sorted())
+        assertEquals(
+            listOf("EF-KEEP", survivor).sorted(),
+            edgesTargeting("elevnummer", "E-1").map { it.sourceId }.sorted(),
+            "the survivor keeps supplying its back-link, the evicted ones stop",
+        )
+        assertEquals(
+            Instant.ofEpochMilli(AFTER),
+            resourceStore.findByResourceId(survivor, elevforholdCollection)!!.lastDelivered,
+            "the refreshed delivery is what is stored, not the old one",
+        )
+    }
+
     private data class SyncMetadataFixture(
         val corrId: String,
         val type: SyncType,
@@ -291,14 +407,16 @@ class SyncEvictionIT {
         sync: SyncMetadataFixture? = null,
         partition: Int = 0,
         offset: Long = nextOffset++,
-    ): ConsumerRecord<String, String> {
-        val elevforhold =
-            Elevforhold(systemId = Identifikator(identifikatorverdi = resourceId)).apply {
-                addLink("elev", Link("elevnummer", elevnummer))
-            }
+    ): ConsumerRecord<String, String> =
+        record(resourceId, elevforhold(resourceId, elevnummer), "elevforhold", writtenAt, sync, partition, offset)
 
-        return record(resourceId, elevforhold, "elevforhold", writtenAt, sync, partition, offset)
-    }
+    private fun elevforhold(
+        resourceId: String,
+        elevnummer: String,
+    ): Elevforhold =
+        Elevforhold(systemId = Identifikator(identifikatorverdi = resourceId)).apply {
+            addLink("elev", Link("elevnummer", elevnummer))
+        }
 
     private fun elevRecord(
         resourceId: String,
@@ -360,6 +478,55 @@ class SyncEvictionIT {
                 headers().add(SYNC_TOTAL_SIZE, it.totalSize.toHeaderBytes())
             }
         }
+
+    /**
+     * Wires a reader whose eviction goes through the given stores, so a test can make eviction
+     * fail or act between batches while the writes before it use the plain stores.
+     */
+    private fun readerEvictingWith(
+        evictionResourceStore: ResourceStore,
+        evictionEdgeStore: RelationEdgeStore,
+    ): BufferReader =
+        BufferReader(
+            ResourceWritePipeline(resourceStore, relationEdgeStore, transactions),
+            SyncCompletionTracker(
+                SyncProgressStore(mongoTemplate),
+                FullSyncStatusStore(mongoTemplate),
+                EvictionService(
+                    evictionResourceStore,
+                    evictionEdgeStore,
+                    transactions,
+                    meterRegistry,
+                    EvictionProperties(batchSize = BATCH_SIZE),
+                ),
+                InlineEvictionRunner(),
+            ),
+        )
+
+    /**
+     * Writes the resource again through stores bound to another connection, so the write lands
+     * outside the transaction open on the calling thread, the way a concurrent writer's would.
+     */
+    private fun refreshOutside(
+        resourceId: String,
+        writtenAt: Long,
+        outsideResourceStore: ResourceStore,
+        outsideEdgeStore: RelationEdgeStore,
+    ) {
+        val resource = elevforhold(resourceId, "E-1")
+        outsideResourceStore.saveAll(listOf(Save(resourceId, elevforholdCollection, resource, Instant.ofEpochMilli(writtenAt))))
+        outsideEdgeStore.applyAll(listOf(RelationEdgeWrite.Replace.of(coordinate, resourceId, resource)))
+    }
+
+    private fun evictedCount(counter: String): Double =
+        meterRegistry
+            .get(counter)
+            .tag("resource", "utdanning/elev/elevforhold")
+            .counter()
+            .count()
+
+    private fun fullSyncStatus(): FullSyncStatus? =
+        mongoTemplate.findById(elevforholdCollection, FullSyncStatus::class.java, FullSyncStatusStore.COLLECTION_NAME)
 
     private fun storedIds(collectionName: String): List<String> =
         mongoTemplate

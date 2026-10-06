@@ -9,6 +9,7 @@ import no.novari.core.shared.org.OrgEntry
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import org.junit.jupiter.api.Test
+import org.mockito.Mock
 import java.time.Instant
 import java.util.Date
 import kotlin.test.assertEquals
@@ -17,7 +18,7 @@ import kotlin.test.assertNull
 class StatsServiceTest {
     private val resourceStore = mockk<ResourceStore>()
     private val orgStore = mockk<OrgStore>()
-    private val statsService = StatsService(consumerConfiguration(), resourceStore, orgStore)
+    private val statsService = StatsService(resourceStore, orgStore)
 
     @Test
     fun `getLastUpdated returns epoch millis from resource store`() {
@@ -116,8 +117,5 @@ class StatsServiceTest {
         ConsumerConfiguration(
             baseUrl = "https://api.felleskomponent.no",
             orgIdValue = "fintlabs.no",
-            domain = "utdanning",
-            packageName = "elev",
-            podUrl = "http://localhost",
         )
 }

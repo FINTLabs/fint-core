@@ -3,22 +3,18 @@ fint:
     base-url: https://api.felleskomponent.no
   consumer:
     base-url: ${fint.relation.base-url}
-    domain: utdanning
-    package: vurdering
-    packageName: ${fint.consumer.package}
     org-id: fintlabs.no
-    kafka:
-      bootstrap-topics: true
-      startup-jitter: 0s
 
 spring:
   threads:
     virtual:
       enabled: true
   kafka:
+    bootstrap-servers: localhost:9092
+    security:
+      protocol: PLAINTEXT
     consumer:
       group-id: fint-core-client-api
-    bootstrap-servers: localhost:9092
   mongodb:
     ssl:
       enabled: false

@@ -2,17 +2,12 @@ package no.fintlabs.adapter.gateway.security
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import no.fintlabs.adapter.gateway.kafka.ProviderError
-import no.novari.resource.server.authentication.CorePrincipal
-import no.novari.resource.server.enums.FintScope
-import no.novari.resource.server.enums.FintType
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.AuthenticationException
-import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.stereotype.Component
@@ -31,7 +26,8 @@ class SecurityProblemDetailHandler(
         response: HttpServletResponse,
         accessDeniedException: AccessDeniedException,
     ) {
-        val detail = describeDenial()
+        val reason = DenialRecorder.read(request)
+        val detail = reason?.detail ?: "The adapter is not allowed to perform this request."
         logger.warn("Access denied on {} {}: {}", request.method, request.requestURI, detail)
         writeProblemDetail(
             request = request,
@@ -39,17 +35,8 @@ class SecurityProblemDetailHandler(
             status = HttpStatus.FORBIDDEN,
             title = "Forbidden",
             detail = detail,
+            type = reason?.type,
         )
-    }
-
-    private fun describeDenial(): String {
-        val auth = SecurityContextHolder.getContext().authentication
-        return when {
-            auth !is CorePrincipal -> "Principal is not a FINT adapter"
-            auth.type != FintType.ADAPTER -> "Principal type must be ADAPTER"
-            FintScope.FINT_ADAPTER !in auth.scopes -> "JWT is missing required 'fint-adapter' scope"
-            else -> "Adapter is missing required role for the requested component"
-        }
     }
 
     override fun commence(
@@ -73,11 +60,13 @@ class SecurityProblemDetailHandler(
         status: HttpStatus,
         title: String,
         detail: String,
+        type: URI? = null,
     ) {
         val problem =
             ProblemDetail.forStatusAndDetail(status, detail).apply {
                 this.title = title
                 this.instance = URI.create(request.requestURI)
+                if (type != null) this.type = type
             }
         response.status = status.value()
         response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE

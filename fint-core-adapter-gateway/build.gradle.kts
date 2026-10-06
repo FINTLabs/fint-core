@@ -18,8 +18,10 @@ dependencies {
     implementation("no.fint:fint-event-model:3.0.2")
     implementation("no.novari:fint-core-principal:4.1.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
 
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
     testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
     testImplementation("org.testcontainers:testcontainers-kafka")

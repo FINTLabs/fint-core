@@ -17,12 +17,13 @@ import java.time.Instant
  * Tests the store reads behind `total_items` and `sinceTimeStamp`. Five entries are stored with
  * timestamps 10 to 50. A timestamp filter uses `lastModified >= since`, so the entry exactly at
  * the timestamp is included. The count and the page use the same filter, so the count always
- * matches what the page shows. Pages are ordered by `createdAt`, so an entry that is updated
- * later keeps its place in the order. One test deletes an entry and checks that the count
- * without a filter follows. A page read takes the timestamp together with the number of entries
- * it matches, which is what the service gets back from the count. The unfiltered count is cached,
- * so the tests that check its timing build their own store with a short TTL instead of using the
- * shared one.
+ * matches what the page shows. Pages are ordered by `createdAt`, so an entry whose content
+ * changes later keeps its place in the order. An entry delivered again with the same content
+ * does not count as modified, so it stays out of a page from a later timestamp. One test deletes
+ * an entry and checks that the count without a filter follows. A page read takes the timestamp
+ * together with the number of entries it matches, which is what the service gets back from the
+ * count. The unfiltered count is cached, so the tests that check its timing build their own
+ * store with a short TTL instead of using the shared one.
  */
 @Testcontainers
 class ResourceStorePagingIT {
@@ -120,11 +121,19 @@ class ResourceStorePagingIT {
     }
 
     @Test
-    fun `an entry updated after the timestamp keeps its original place in the page`() {
-        store.saveAll(listOf(save("A", 60)))
+    fun `an entry whose content changes after the timestamp keeps its original place in the page`() {
+        store.saveAll(listOf(saveChanged("A", 60)))
 
         assertThat(store.count(since(30), collection)).isEqualTo(4)
         assertThat(ids(store.findPage(filter(30, 4), 2, 0, collection))).containsExactly("A", "C")
+    }
+
+    @Test
+    fun `an entry delivered again unchanged after the timestamp stays out of the page and the count`() {
+        store.saveAll(listOf(save("A", 60)))
+
+        assertThat(store.count(since(30), collection)).isEqualTo(3)
+        assertThat(ids(store.findPage(filter(30, 3), 2, 0, collection))).containsExactly("C", "D")
     }
 
     private fun since(timestamp: Long): Instant = Instant.ofEpochMilli(timestamp)
@@ -140,4 +149,14 @@ class ResourceStorePagingIT {
         id: String,
         timestamp: Long,
     ) = Save(id, collection, Elev(systemId = Identifikator(identifikatorverdi = id)), Instant.ofEpochMilli(timestamp))
+
+    private fun saveChanged(
+        id: String,
+        timestamp: Long,
+    ) = Save(
+        id,
+        collection,
+        Elev(systemId = Identifikator(identifikatorverdi = id), elevnummer = Identifikator(identifikatorverdi = "E-$id")),
+        Instant.ofEpochMilli(timestamp),
+    )
 }

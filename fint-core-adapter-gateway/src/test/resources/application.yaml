@@ -8,6 +8,8 @@ fint:
     org-id: fintlabs.no
     kafka:
       replicas: 1
+    resource-ttl:
+      enabled: false
   metamodel:
     base-url: http://localhost:8082 # You can mock this using WireMock later if your service actually calls it
 spring:
@@ -21,7 +23,7 @@ spring:
           non_contextual_creation: true
       enable_lazy_load_no_trans: true
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
   kafka:
     # MAGIC HAPPENS HERE: This variable is automatically populated by the @EmbeddedKafka annotation
     bootstrap-servers: localhost:19092  #${spring.embedded.kafka.brokers}
