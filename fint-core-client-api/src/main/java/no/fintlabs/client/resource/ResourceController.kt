@@ -8,6 +8,8 @@ import no.fintlabs.client.config.EndpointsConstants
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.LastUpdatedResponse
 import no.fintlabs.client.resource.dto.ResourceCacheSizeResponse
+import no.fintlabs.client.resource.event.LiveReadService
+import no.fintlabs.client.resource.event.PreferHeader
 import no.fintlabs.client.resource.event.RequestAccepted
 import no.fintlabs.client.resource.event.RequestFailed
 import no.fintlabs.client.resource.event.RequestFintEventService
@@ -16,6 +18,9 @@ import no.fintlabs.client.resource.event.RequestStatusService
 import no.fintlabs.client.resource.event.RequestValidated
 import no.fintlabs.client.resource.event.ResourceCreated
 import no.fintlabs.client.resource.event.ResourceDeleted
+import no.fintlabs.client.resource.event.ResourceNotRead
+import no.fintlabs.client.resource.event.ResourceRead
+import no.fintlabs.client.resource.event.ResourcesRead
 import no.fintlabs.client.resource.paging.PageCursor
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
@@ -33,12 +38,19 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.net.URI
 
+/**
+ * A read answers from the cache unless the client prefers an asynchronous answer and the read
+ * can go live. Then the read is sent to the adapter as an event, and the client gets `202`
+ * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
+ * the result once the adapter has answered.
+ */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
+    private val liveReadService: LiveReadService,
     private val consumerConfig: ConsumerConfiguration,
     private val statsService: StatsService,
 ) {
@@ -53,16 +65,18 @@ class ResourceController(
         @RequestParam(required = false, name = "\$filter") filter: String?,
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
-    ): ResponseEntity<FintResourcesResponse> =
-        resourceService
-            .getResources(
-                ResourceCoordinate(orgId, domainName, packageName, resourceName),
-                size,
-                offset,
-                sinceTimeStamp,
-                filter,
-                cursor,
-            ).let { ResponseEntity.ok(it) }
+        @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
+    ): ResponseEntity<FintResourcesResponse> {
+        val coordinate = ResourceCoordinate(orgId, domainName, packageName, resourceName)
+
+        liveReadService
+            .startByFilter(coordinate, filter, ListOptions(size, offset, sinceTimeStamp, cursor), prefer)
+            ?.let { return it.toLiveReadAccepted(domainName, packageName) }
+
+        return resourceService
+            .getResources(coordinate, size, offset, sinceTimeStamp, filter, cursor)
+            .let { ResponseEntity.ok(it) }
+    }
 
     @PostMapping("/\$query")
     fun getResourceByOdataFilter(
@@ -75,8 +89,20 @@ class ResourceController(
         @RequestBody(required = false) filter: String?,
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
+        @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
     ): ResponseEntity<FintResourcesResponse> =
-        getResource(domainName, packageName, resourceName, size, offset, sinceTimeStamp, filter, orgId, cursor)
+        getResource(
+            domainName,
+            packageName,
+            resourceName,
+            size,
+            offset,
+            sinceTimeStamp,
+            filter,
+            orgId,
+            cursor,
+            prefer,
+        )
 
     @GetMapping(EndpointsConstants.BY_ID)
     fun getResourceById(
@@ -86,14 +112,19 @@ class ResourceController(
         @PathVariable idField: String,
         @PathVariable idValue: String,
         @RequestHeader("x-org-id") orgId: String,
-    ): ResponseEntity<FintResource> =
-        resourceService
-            .getResourceById(
-                ResourceCoordinate(orgId, domainName, packageName, resourceName),
-                idField.lowercase(),
-                idValue,
-            )?.let { ResponseEntity.ok(it) }
+        @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
+    ): ResponseEntity<FintResource> {
+        val coordinate = ResourceCoordinate(orgId, domainName, packageName, resourceName)
+
+        liveReadService
+            .startById(coordinate, idField, idValue, prefer)
+            ?.let { return it.toLiveReadAccepted(domainName, packageName) }
+
+        return resourceService
+            .getResourceById(coordinate, idField.lowercase(), idValue)
+            ?.let { ResponseEntity.ok(it) }
             ?: ResponseEntity.notFound().build()
+    }
 
     @GetMapping(EndpointsConstants.LAST_UPDATED)
     fun getLastUpdated(
@@ -132,6 +163,9 @@ class ResourceController(
                 when (result) {
                     is ResourceCreated -> ResponseEntity.created(result.location).body(result.body)
                     is RequestValidated -> ResponseEntity.ok(result.body)
+                    is ResourcesRead -> ResponseEntity.ok(result.body)
+                    is ResourceRead -> ResponseEntity.ok(result.body)
+                    is ResourceNotRead -> ResponseEntity.notFound().build()
                     is ResourceDeleted -> ResponseEntity.noContent().build()
                     is RequestAccepted -> ResponseEntity.accepted().build()
                     is RequestGone -> ResponseEntity.status(HttpStatus.GONE).build()
@@ -185,11 +219,23 @@ class ResourceController(
     ): ResponseEntity<Nothing> =
         ResponseEntity
             .accepted()
-            .location(
-                URI.create(
-                    "${consumerConfig.baseUrl}/$domainName/$packageName/$resourceName/status/$corrId".lowercase(),
-                ),
-            ).build()
+            .location(statusLocation(domainName, packageName))
+            .build()
+
+    private fun <T : Any> RequestFintEvent.toLiveReadAccepted(
+        domainName: String,
+        packageName: String,
+    ): ResponseEntity<T> =
+        ResponseEntity
+            .accepted()
+            .header(PreferHeader.APPLIED, PreferHeader.RESPOND_ASYNC)
+            .location(statusLocation(domainName, packageName))
+            .build<T>()
+
+    private fun RequestFintEvent.statusLocation(
+        domainName: String,
+        packageName: String,
+    ): URI = URI.create("${consumerConfig.baseUrl}/$domainName/$packageName/$resourceName/status/$corrId".lowercase())
 
     companion object {
         private val logger = LoggerFactory.getLogger(ResourceController::class.java)

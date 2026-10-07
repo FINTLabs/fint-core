@@ -1,9 +1,11 @@
 package no.fintlabs.client.resource.event
 
 import no.fintlabs.adapter.models.event.EventBodyResponse
+import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.RequestFailed.FailureType
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
@@ -13,7 +15,10 @@ import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.json.toLinkResponses
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
+import no.novari.core.shared.relation.RelationEdgeStore
+import no.novari.core.shared.relation.mergeIntoResources
 import no.novari.core.shared.store.ResourceStore
+import no.novari.core.shared.store.toIdentifierRefs
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.net.URI
@@ -23,6 +28,7 @@ import java.time.Clock
 class RequestStatusService(
     private val eventStore: EventStore,
     private val resourceStore: ResourceStore,
+    private val relationEdgeStore: RelationEdgeStore,
     private val consumerConfiguration: ConsumerConfiguration,
     private val clock: Clock = Clock.systemUTC(),
 ) {
@@ -51,7 +57,7 @@ class RequestStatusService(
         return if (response.isError()) {
             handleErrorResponse(coordinate, response)
         } else {
-            handleSuccessfulResponse(coordinate, response)
+            handleSuccessfulResponse(coordinate, stored.request, response)
         }
     }
 
@@ -70,15 +76,62 @@ class RequestStatusService(
     private fun StoredEvent.toExpiredFailure(): RequestStatus =
         RequestFailed(EventBodyResponse.ofResponseEvent(toExpiredResponse()), FailureType.ERROR)
 
+    /**
+     * The stored request says what was asked, so it decides what a successful answer means. The
+     * operation type on the answer is the adapter's word and is not trusted here.
+     */
     private fun handleSuccessfulResponse(
         coordinate: ResourceCoordinate,
+        request: RequestFintEvent,
         response: ResponseFintEvent,
     ): RequestStatus =
-        when (response.operationType) {
+        when (request.operationType) {
+            OperationType.READ -> readResult(coordinate, request, response)
             OperationType.VALIDATE -> RequestValidated(EventBodyResponse.ofResponseEvent(response))
             OperationType.DELETE -> ResourceDeleted
             else -> ensureStoreConsistency(coordinate, response)
         }
+
+    /**
+     * The resources the adapter found, served like a read from the cache: each one is bound to
+     * its model class and given the back-links autorelation holds for it. A read by id answers
+     * with the one resource or nothing, a read by filter with a list, empty or not.
+     */
+    private fun readResult(
+        coordinate: ResourceCoordinate,
+        request: RequestFintEvent,
+        response: ResponseFintEvent,
+    ): RequestStatus {
+        val resources = response.values.map { storageMapper.convertValue(it.resource, coordinate.toResourceClass()) }
+        mergeRelationEdges(coordinate, resources)
+
+        if (request.id != null) return resources.firstOrNull()?.let(::ResourceRead) ?: ResourceNotRead
+
+        return ResourcesRead(
+            createFintResourcesResponse(
+                baseUrl = consumerConfiguration.baseUrl,
+                resourceUri = coordinate.toResourceUri(),
+                entries = resources,
+                offset = 0,
+                size = 0,
+                totalItems = resources.size,
+            ),
+        )
+    }
+
+    private fun mergeRelationEdges(
+        coordinate: ResourceCoordinate,
+        resources: List<FintResource>,
+    ) {
+        if (!consumerConfiguration.autorelation.enabled || resources.isEmpty()) return
+
+        relationEdgeStore
+            .findByTargets(
+                coordinate.toEdgeCollectionName(),
+                coordinate.toResourceUri(),
+                resources.flatMap { it.toIdentifierRefs() },
+            ).mergeIntoResources(resources)
+    }
 
     /**
      * The provider writes the resource to storage before it attaches the response, so once a
