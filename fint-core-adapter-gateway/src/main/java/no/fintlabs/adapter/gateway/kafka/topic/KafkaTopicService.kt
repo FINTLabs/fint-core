@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.kafka.topic
 
 import no.fintlabs.adapter.gateway.config.KafkaProperties
+import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_CONFIG
 import org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_DELETE
 import org.apache.kafka.common.config.TopicConfig.RETENTION_MS_CONFIG
@@ -31,6 +32,18 @@ class KafkaTopicService(
                 .build(),
         )
     }
+
+    fun listTopicNames(): Set<String> = withAdminClient { it.listTopics().names().get() }
+
+    fun deleteTopics(topicNames: Collection<String>): Map<String, Throwable?> =
+        withAdminClient { client ->
+            client
+                .deleteTopics(topicNames)
+                .topicNameValues()
+                .mapValues { (_, future) -> runCatching { future.get() }.exceptionOrNull() }
+        }
+
+    private fun <T> withAdminClient(action: (AdminClient) -> T): T = AdminClient.create(kafkaAdmin.configurationProperties).use(action)
 
     private companion object {
         val EVENT_SEGMENT_DURATION: Duration = Duration.ofHours(12)

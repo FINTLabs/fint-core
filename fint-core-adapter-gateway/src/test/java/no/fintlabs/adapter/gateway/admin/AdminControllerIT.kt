@@ -76,9 +76,12 @@ class AdminControllerIT {
     @Autowired
     private lateinit var resourceStore: ResourceStore
 
+    @Autowired
+    private lateinit var topicCleanup: TopicCleanup
+
     @BeforeEach
     fun resetRebuilder() {
-        clearMocks(rebuilder, resourceStore)
+        clearMocks(rebuilder, resourceStore, topicCleanup)
         every { rebuilder.rebuild(any()) } returns REBUILT
         every { rebuilder.drift(any()) } returns RelationEdgeDrift.NONE
     }
@@ -246,6 +249,33 @@ class AdminControllerIT {
     }
 
     @Test
+    fun `a Novari adapter can run a topic cleanup, and it is a dry run unless it says otherwise`() {
+        every { topicCleanup.cleanup(any(), any(), any()) } returns EMPTY_REPORT
+
+        val response = postJson("/admin/kafka/topics/delete", NOVARI_ADAPTER, """{"pattern": ".*entity.*"}""")
+
+        assertEquals(200, response.statusCode(), response.body())
+        verify { topicCleanup.cleanup(match { it.pattern == ".*entity.*" }, true, any()) }
+    }
+
+    @Test
+    fun `a topic cleanup with dryRun false is passed on as a real run`() {
+        every { topicCleanup.cleanup(any(), any(), any()) } returns EMPTY_REPORT
+
+        postJson("/admin/kafka/topics/delete", NOVARI_ADAPTER, """{"pattern": ".*entity.*", "dryRun": false}""")
+
+        verify { topicCleanup.cleanup(any(), false, any()) }
+    }
+
+    @Test
+    fun `a topic cleanup with a pattern that is not a regex is a bad request`() {
+        val response = postJson("/admin/kafka/topics/delete", NOVARI_ADAPTER, """{"pattern": "(["}""")
+
+        assertEquals(400, response.statusCode(), response.body())
+        verify(exactly = 0) { topicCleanup.cleanup(any(), any(), any()) }
+    }
+
+    @Test
     fun `a FINT client is refused the rebuild`() {
         val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&scope=utdanning/elev/person", NOVARI_CLIENT)
 
@@ -281,6 +311,21 @@ class AdminControllerIT {
         token: String,
     ): HttpResponse<String> = send("GET", pathAndQuery, token)
 
+    private fun postJson(
+        path: String,
+        token: String,
+        body: String,
+    ): HttpResponse<String> {
+        val request =
+            HttpRequest
+                .newBuilder(URI.create("http://localhost:$port/provider$path"))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "application/json")
+                .build()
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
     private fun send(
         method: String,
         pathAndQuery: String,
@@ -313,6 +358,9 @@ class AdminControllerIT {
     class TestApp {
         @Bean
         fun relationEdgeRebuilder(): RelationEdgeRebuilder = mockk()
+
+        @Bean
+        fun topicCleanup(): TopicCleanup = mockk()
 
         @Bean
         fun contractService(): ContractService = mockk()
@@ -350,6 +398,7 @@ class AdminControllerIT {
     companion object {
         const val PROFILE = "admin-controller-it"
         private val REBUILT = RelationEdgeRebuild(resourcesRead = 1, edgesWritten = 1, edgesRemoved = 0)
+        private val EMPTY_REPORT = TopicCleanupReport(".*", true, emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
         private const val NOVARI_CLIENT = "novari-client"
         private const val NOVARI_ADAPTER = "novari-adapter"
     }
