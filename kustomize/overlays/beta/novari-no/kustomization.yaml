@@ -25,3 +25,12 @@ patches:
         path: /spec/ingress
         value:
           enabled: false
+  - target:
+      kind: Application
+      name: fint-core-adapter-gateway
+    patch: |-
+      - op: add
+        path: /spec/kafka/acls/-
+        value:
+          topic: "*fint-core*"
+          permission: admin
