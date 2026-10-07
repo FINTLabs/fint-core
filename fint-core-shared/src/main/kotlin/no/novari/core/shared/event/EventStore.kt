@@ -47,8 +47,7 @@ class EventStore(
         collectionName: String,
         now: Instant,
         scope: EventScope? = null,
-        limit: Int = 0,
-    ): List<RequestFintEvent> = findInState(collectionName, Criteria.where(DEADLINE).gt(now), scope, limit)
+    ): List<RequestFintEvent> = findInState(collectionName, Criteria.where(DEADLINE).gt(now), scope)
 
     fun findExpired(
         collectionName: String,
@@ -112,7 +111,6 @@ class EventStore(
         collectionName: String,
         deadlineCriteria: Criteria,
         scope: EventScope? = null,
-        limit: Int = 0,
     ): List<RequestFintEvent> {
         ensureIndexes(collectionName)
 
@@ -131,8 +129,6 @@ class EventStore(
             Query
                 .query(Criteria().andOperator(*filters.toTypedArray()))
                 .with(Sort.by(Sort.Direction.ASC, CREATED))
-
-        if (limit > 0) query.limit(limit)
 
         return template
             .find(query, EventDocument::class.java, collectionName)
