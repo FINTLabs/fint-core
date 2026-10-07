@@ -19,7 +19,6 @@ class EventTopicEnsurer(
         with(adapterKafkaProperties) {
             listOf(
                 TopicNamesConstants.ADAPTER_HEARTBEAT to heartbeatRetentionTime,
-                TopicNamesConstants.ADAPTER_CONTRACT to registerRetentionTime,
                 TopicNamesConstants.ADAPTER_FULL_SYNC to fullSyncRetentionTime,
                 TopicNamesConstants.ADAPTER_DELTA_SYNC to deltaSyncRetentionTime,
                 TopicNamesConstants.ADAPTER_DELETE_SYNC to deleteSyncRetentionTime,
@@ -30,5 +29,9 @@ class EventTopicEnsurer(
                     retentionTime,
                 )
             }
+            kafkaTopicService.createOrModifyCompactedTopic(
+                KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_CONTRACT),
+                partitions,
+            )
         }
 }

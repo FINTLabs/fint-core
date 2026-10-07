@@ -37,4 +37,17 @@ class KafkaTopicServiceTest {
             assertThat(configs()).containsEntry(SEGMENT_MS_CONFIG, Duration.ofHours(12).toMillis().toString())
         }
     }
+
+    @Test
+    fun `compacted topic keeps the latest record per key forever`() {
+        service.createOrModifyCompactedTopic("novari-no.fint-core.fint-felleskomponent-adapter-contract", 1)
+
+        with(topic.captured) {
+            assertThat(numPartitions()).isEqualTo(1)
+            assertThat(replicationFactor()).isEqualTo(2.toShort())
+            assertThat(configs()).containsEntry(CLEANUP_POLICY_CONFIG, "compact")
+            assertThat(configs()).containsEntry(RETENTION_MS_CONFIG, "-1")
+            assertThat(configs()).containsEntry(SEGMENT_MS_CONFIG, Duration.ofHours(12).toMillis().toString())
+        }
+    }
 }
