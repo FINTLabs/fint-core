@@ -6,6 +6,7 @@ import no.novari.core.shared.kafka.KafkaTopicNames
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
 
 @Component
@@ -14,6 +15,7 @@ class EventTopicEnsurer(
     private val adapterKafkaProperties: AdapterKafkaProperties,
     private val kafkaTopicService: KafkaTopicService,
 ) {
+    @Order(0)
     @EventListener(ApplicationReadyEvent::class)
     fun ensureEventTopics() =
         with(adapterKafkaProperties) {

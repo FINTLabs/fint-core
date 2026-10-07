@@ -20,4 +20,13 @@ interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
         @Param("userName") userName: String,
         @Param("orgId") orgId: String,
     ): ContractEntity?
+
+    @Query(
+        """
+        select distinct c
+        from ContractEntity c
+        left join fetch c.capabilityEntityset
+        """,
+    )
+    fun findAllWithCapabilities(): List<ContractEntity>
 }
