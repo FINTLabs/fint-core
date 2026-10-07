@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.sync
 
+import no.fintlabs.adapter.gateway.ProviderApi
 import no.fintlabs.adapter.models.sync.DeleteSyncPage
 import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
@@ -14,9 +15,11 @@ import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
+@RequestMapping(ProviderApi.PREFIX)
 class SyncController(
     private val syncPageService: SyncPageService,
 ) {

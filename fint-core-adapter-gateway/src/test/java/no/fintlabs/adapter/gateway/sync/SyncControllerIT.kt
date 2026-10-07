@@ -34,7 +34,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/$domainName/$packageName/$resourceName")
+                post("/provider/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(unregisteredPrincipal)),
@@ -57,7 +57,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/$domainName/$packageName/$resourceName")
+                post("/provider/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(mockPrincipal)),
@@ -79,7 +79,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                patch("/$domainName/$packageName/$resourceName")
+                patch("/provider/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(mockPrincipal)),
@@ -101,7 +101,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                delete("/$domainName/$packageName/$resourceName")
+                delete("/provider/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(mockPrincipal)),
@@ -120,7 +120,7 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/$domainName/$packageName/$resourceName")
+                post("/provider/$domainName/$packageName/$resourceName")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(mockPrincipal)),

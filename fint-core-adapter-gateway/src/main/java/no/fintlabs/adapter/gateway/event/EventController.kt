@@ -1,5 +1,6 @@
 package no.fintlabs.adapter.gateway.event
 
+import no.fintlabs.adapter.gateway.ProviderApi
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
 import no.fintlabs.adapter.gateway.event.response.ResponseEventService
 import no.fintlabs.adapter.gateway.security.EventAuthorization
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/event")
+@RequestMapping("${ProviderApi.PREFIX}/event")
 class EventController(
     private val requestEventService: RequestEventService,
     private val responseEventService: ResponseEventService,

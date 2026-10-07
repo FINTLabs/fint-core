@@ -59,7 +59,7 @@ class SecurityErrorBodyIT {
     fun `register without authentication returns 401 with ProblemDetail body`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(AdapterContract())),
             ).andExpect(status().isUnauthorized)
@@ -67,7 +67,7 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.status").value(401))
             .andExpect(jsonPath("$.title").value("Unauthorized"))
             .andExpect(jsonPath("$.detail").exists())
-            .andExpect(jsonPath("$.instance").value("/register"))
+            .andExpect(jsonPath("$.instance").value("/provider/register"))
     }
 
     @Test
@@ -87,7 +87,7 @@ class SecurityErrorBodyIT {
 
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(AdapterContract()))
                     .with(authentication(principalWithoutAdapterScope)),
@@ -96,7 +96,7 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.title").value("Forbidden"))
             .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_SCOPE.detail))
-            .andExpect(jsonPath("$.instance").value("/register"))
+            .andExpect(jsonPath("$.instance").value("/provider/register"))
     }
 
     @Test
@@ -116,7 +116,7 @@ class SecurityErrorBodyIT {
 
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .with(authentication(adapterPrincipal)),
             ).andExpect(status().isBadRequest)
@@ -124,6 +124,6 @@ class SecurityErrorBodyIT {
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.title").value("Bad Request"))
             .andExpect(jsonPath("$.detail").value("Required request body is missing"))
-            .andExpect(jsonPath("$.instance").value("/register"))
+            .andExpect(jsonPath("$.instance").value("/provider/register"))
     }
 }

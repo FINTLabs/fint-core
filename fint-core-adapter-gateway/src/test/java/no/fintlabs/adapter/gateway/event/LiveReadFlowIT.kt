@@ -58,7 +58,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
         val createSkoleressurs = seed(OperationType.CREATE, "skoleressurs")
 
         mockMvc
-            .perform(get("/event/$domainName/$packageName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName/$packageName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.length()").value(2))
             .andExpect(jsonPath("$[?(@.corrId == '${readElev.corrId}')]").exists())
@@ -72,7 +72,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
         val create = seed(OperationType.CREATE, resourceName)
 
         mockMvc
-            .perform(get("/event/$domainName/$packageName/$resourceName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName/$packageName/$resourceName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.length()").value(1))
             .andExpect(jsonPath("$[0].corrId").value(create.corrId))
@@ -86,7 +86,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
         val create = seed(OperationType.CREATE, resourceName)
 
         mockMvc
-            .perform(get("/event/$domainName/$packageName").param("size", "1").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName/$packageName").param("size", "1").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.length()").value(1))
             .andExpect(jsonPath("$[0].corrId").value(create.corrId))
@@ -106,7 +106,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
 
         mockMvc
-            .perform(get("/event/$domainName/$packageName/$resourceName").with(authentication(mockPrincipal)))
+            .perform(get("/provider/event/$domainName/$packageName/$resourceName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.length()").value(0))
     }
@@ -161,7 +161,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
             }
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract))
                     .with(authentication(mockPrincipal)),
@@ -170,7 +170,7 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
 
     private fun answer(response: ResponseFintEvent): ResultActions =
         mockMvc.perform(
-            post("/event")
+            post("/provider/event")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsBytes(response))
                 .with(authentication(mockPrincipal)),

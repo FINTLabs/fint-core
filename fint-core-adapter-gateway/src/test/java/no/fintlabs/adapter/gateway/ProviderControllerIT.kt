@@ -11,7 +11,7 @@ class ProviderControllerIT : GatewayIntegrationTestBase() {
     fun `Status endpoint should return 200 with CorePrincipal`() {
         mockMvc
             .perform(
-                get("/status").with(authentication(mockPrincipal)),
+                get("/provider/status").with(authentication(mockPrincipal)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("Greetings form FINTLabs 👋"))
             .andExpect(jsonPath("$.corePrincipal.username").value(username))
@@ -21,7 +21,7 @@ class ProviderControllerIT : GatewayIntegrationTestBase() {
     fun `Trailing slash on status endpoint is accepted`() {
         mockMvc
             .perform(
-                get("/status/").with(authentication(mockPrincipal)),
+                get("/provider/status/").with(authentication(mockPrincipal)),
             ).andExpect(status().isOk)
     }
 }

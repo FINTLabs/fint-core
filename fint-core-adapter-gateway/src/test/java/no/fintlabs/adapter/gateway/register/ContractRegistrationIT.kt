@@ -205,7 +205,7 @@ class ContractRegistrationIT {
     fun `a contract that breaks a rule is refused before anything is stored, naming the field`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         objectMapper.writeValueAsBytes(
@@ -233,7 +233,7 @@ class ContractRegistrationIT {
     ) {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract))
                     .with(authentication(authenticatedAs)),

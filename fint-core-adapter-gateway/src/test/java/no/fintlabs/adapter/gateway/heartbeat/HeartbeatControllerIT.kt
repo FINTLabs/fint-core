@@ -22,7 +22,7 @@ class HeartbeatControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/heartbeat")
+                post("/provider/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(heartbeat))
                     .with(authentication(mockPrincipal)),
@@ -42,7 +42,7 @@ class HeartbeatControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/heartbeat")
+                post("/provider/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(heartbeat))
                     .with(authentication(mockPrincipal)),
@@ -62,7 +62,7 @@ class HeartbeatControllerIT : GatewayIntegrationTestBase() {
 
         mockMvc
             .perform(
-                post("/heartbeat")
+                post("/provider/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(heartbeat))
                     .with(authentication(mockPrincipal)),
