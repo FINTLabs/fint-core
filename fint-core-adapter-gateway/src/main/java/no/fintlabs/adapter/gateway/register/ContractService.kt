@@ -1,7 +1,10 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,8 +18,6 @@ class ContractService(
     private val contractJpaRepository: ContractJpaRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-
-    fun getAdapterIds(): Set<String> = contractJpaRepository.getAdapterIds()
 
     @Transactional
     fun saveContract(adapterContract: AdapterContract) {
@@ -42,13 +43,27 @@ class ContractService(
         val id = contractId(username, orgId)
         val contract = contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId) ?: return ContractLookup.Absent
 
-        return ContractLookup.Found(contract.toCapabilityKeys())
+        return ContractLookup.Found(contract.toRegisteredContract())
     }
 
-    private fun ContractEntity.toCapabilityKeys(): Set<CapabilityKey> =
-        capabilityEntityset
-            .map { CapabilityKey.of(it.domainName, it.pkgName, it.resourceName) }
-            .toSet()
+    /**
+     * Every contract registered for [orgId], one per adapter.
+     */
+    fun contractsFor(orgId: OrgId): List<RegisteredContract> =
+        contractJpaRepository.findAllByOrgId(orgId.value).map { it.toRegisteredContract() }
+
+    fun registeredOrgs(): List<OrgId> = contractJpaRepository.findDistinctOrgIds().map(OrgId::from)
+
+    private fun ContractEntity.toRegisteredContract(): RegisteredContract =
+        RegisteredContract(
+            orgId = OrgId.from(orgId),
+            syncResources = capabilityEntityset.mapTo(HashSet()) { resourceRefOf(it.domainName, it.pkgName, it.resourceName) },
+            eventCapabilities = EventCapabilities(eventCapabilityEntityset.toOperationsByResource()),
+        )
+
+    private fun Collection<EventCapabilityEntity>.toOperationsByResource(): Map<FintResourceRef, Set<OperationType>> =
+        groupBy({ resourceRefOf(it.domainName, it.pkgName, it.resourceName) }, { it.operation })
+            .mapValues { (_, operations) -> operations.toSet() }
 
     private fun contractId(
         username: String,

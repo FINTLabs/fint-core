@@ -5,6 +5,8 @@ import io.mockk.mockk
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.EventCapabilities
+import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.novari.core.shared.event.EventScope
 import no.novari.core.shared.model.OrgId
 import no.novari.resource.server.authentication.CorePrincipal
@@ -61,21 +63,21 @@ class EventAuthorizationTest {
     }
 
     @Nested
-    inner class ReadableOrgs {
+    inner class ReadableContracts {
         @Test
         fun `reads only the orgs the adapter has a contract for`() {
-            every { contractService.lookup(USERNAME, MAIN_ORG) } returns ContractLookup.Found(emptySet())
+            every { contractService.lookup(USERNAME, MAIN_ORG) } returns ContractLookup.Found(contractFor(MAIN_ORG))
             every { contractService.lookup(USERNAME, SUB_ORG) } returns ContractLookup.Absent
 
-            assertThat(authorization.readableOrgs(adapter(assets = "$MAIN_ORG,$SUB_ORG")))
+            assertThat(authorization.readableContracts(adapter(assets = "$MAIN_ORG,$SUB_ORG")).map { it.orgId })
                 .containsExactly(OrgId.from(MAIN_ORG))
         }
 
         @Test
         fun `leaves out an org this gateway does not serve without asking for its contract`() {
-            every { contractService.lookup(USERNAME, MAIN_ORG) } returns ContractLookup.Found(emptySet())
+            every { contractService.lookup(USERNAME, MAIN_ORG) } returns ContractLookup.Found(contractFor(MAIN_ORG))
 
-            assertThat(authorization.readableOrgs(adapter(assets = "$MAIN_ORG,vtfk.no")))
+            assertThat(authorization.readableContracts(adapter(assets = "$MAIN_ORG,vtfk.no")).map { it.orgId })
                 .containsExactly(OrgId.from(MAIN_ORG))
         }
 
@@ -83,18 +85,20 @@ class EventAuthorizationTest {
         fun `refuses an adapter with no contract for any org and says to register one`() {
             every { contractService.lookup(any(), any()) } returns ContractLookup.Absent
 
-            assertThatThrownBy { authorization.readableOrgs(adapter(assets = "$MAIN_ORG,$SUB_ORG")) }
+            assertThatThrownBy { authorization.readableContracts(adapter(assets = "$MAIN_ORG,$SUB_ORG")) }
                 .isInstanceOf(AccessDeniedException::class.java)
                 .hasMessage(DenialReason.NO_REGISTERED_CONTRACT.detail)
         }
 
         @Test
         fun `refuses an adapter whose orgs are all served elsewhere`() {
-            assertThatThrownBy { authorization.readableOrgs(adapter(assets = "vtfk.no")) }
+            assertThatThrownBy { authorization.readableContracts(adapter(assets = "vtfk.no")) }
                 .isInstanceOf(AccessDeniedException::class.java)
                 .hasMessage(DenialReason.ORG_NOT_SERVED.detail)
         }
     }
+
+    private fun contractFor(orgId: String): RegisteredContract = RegisteredContract(OrgId.from(orgId), emptySet(), EventCapabilities.NONE)
 
     private fun adapter(
         assets: String = MAIN_ORG,

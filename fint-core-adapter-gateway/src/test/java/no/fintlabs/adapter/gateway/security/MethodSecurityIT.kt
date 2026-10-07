@@ -8,9 +8,10 @@ import no.fintlabs.adapter.gateway.event.response.ResponseEventService
 import no.fintlabs.adapter.gateway.exception.ExceptionController
 import no.fintlabs.adapter.gateway.heartbeat.HeartbeatController
 import no.fintlabs.adapter.gateway.heartbeat.HeartbeatService
-import no.fintlabs.adapter.gateway.register.CapabilityKey
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.EventCapabilities
+import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.fintlabs.adapter.gateway.register.RegistrationController
 import no.fintlabs.adapter.gateway.register.RegistrationService
 import no.fintlabs.adapter.gateway.sync.SyncController
@@ -26,6 +27,8 @@ import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.novari.core.shared.event.EventScope
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.containsString
@@ -110,13 +113,18 @@ class MethodSecurityIT {
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
 
-        givenContract(CapabilityKey("utdanning", "elev", "elev"))
+        givenContract(resourceRefOf("utdanning", "elev", "elev"))
     }
 
-    private fun givenContract(vararg capabilities: CapabilityKey) {
+    private fun givenContract(vararg syncResources: FintResourceRef) {
         whenever(contractService.lookup(any(), any()))
-            .thenReturn(ContractLookup.Found(capabilities.toSet()))
+            .thenReturn(ContractLookup.Found(contractFor("fintlabs.no", *syncResources)))
     }
+
+    private fun contractFor(
+        orgId: String,
+        vararg syncResources: FintResourceRef,
+    ): RegisteredContract = RegisteredContract(OrgId.from(orgId), syncResources.toSet(), EventCapabilities.NONE)
 
     @Test
     fun `sync denies page for org outside JWT assets with ProblemDetail body`() {
@@ -241,7 +249,7 @@ class MethodSecurityIT {
 
     @Test
     fun `sync denies a resource the contract does not cover`() {
-        givenContract(CapabilityKey("utdanning", "elev", "skoleressurs"))
+        givenContract(resourceRefOf("utdanning", "elev", "skoleressurs"))
 
         mockMvc
             .perform(
@@ -430,14 +438,15 @@ class MethodSecurityIT {
 
     @Test
     fun `event fetch covers only the orgs the adapter has a contract for`() {
-        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(emptySet()))
+        val contract = contractFor("fintlabs.no")
+        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(contract))
         whenever(contractService.lookup(USERNAME, "test.fintlabs.no")).thenReturn(ContractLookup.Absent)
 
         mockMvc
             .perform(get("/event/utdanning/elev").with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))))
             .andExpect(status().isOk)
 
-        verify(requestEventService).getEvents(listOf(OrgId.from("fintlabs.no")), listOf(EventScope("utdanning", "elev")), 0)
+        verify(requestEventService).getEvents(listOf(contract), listOf(EventScope("utdanning", "elev")), 0)
     }
 
     @Test
@@ -452,7 +461,7 @@ class MethodSecurityIT {
             .andExpect(status().isOk)
 
         verify(requestEventService).getEvents(
-            listOf(OrgId.from("fintlabs.no")),
+            listOf(contractFor("fintlabs.no", resourceRefOf("utdanning", "elev", "elev"))),
             listOf(EventScope("utdanning", "elev"), EventScope("utdanning", "vurdering")),
             5,
         )

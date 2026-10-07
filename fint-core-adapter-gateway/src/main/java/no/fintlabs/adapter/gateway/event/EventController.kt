@@ -24,9 +24,10 @@ class EventController(
     private val eventAuthorization: EventAuthorization,
 ) {
     /**
-     * Serves pending events only for the packages the adapter holds a role for and the orgs it
-     * has a contract for, so it never receives an event it would be refused to answer. The role
-     * is checked before the contract, because a missing role is not fixed by registering.
+     * Serves pending events only for the packages the adapter holds a role for, the orgs it
+     * has a contract for, and the operations that contract covers, so it never receives an
+     * event it would be refused to answer. The role is checked before the contract, because a
+     * missing role is not fixed by registering.
      */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
@@ -37,14 +38,14 @@ class EventController(
         @RequestParam(defaultValue = "0") size: Int,
     ): ResponseEntity<List<RequestFintEvent>> {
         val scopes = eventAuthorization.readableScopes(corePrincipal, domainName, packageName, resourceName)
-        val orgs = eventAuthorization.readableOrgs(corePrincipal)
-        return ResponseEntity.ok(requestEventService.getEvents(orgs, scopes, size))
+        val contracts = eventAuthorization.readableContracts(corePrincipal)
+        return ResponseEntity.ok(requestEventService.getEvents(contracts, scopes, size))
     }
 
     /**
-     * The org check runs here because the body carries the orgId. The role check cannot: the
-     * response body does not say which resource it answers, so that is checked against the
-     * stored request inside [ResponseEventService].
+     * The org check runs here because the body carries the orgId. The role and contract checks
+     * cannot: the response body does not say which resource or operation it answers, so those
+     * are checked against the stored request inside [ResponseEventService].
      */
     @PostMapping
     @PreAuthorize("@adapterAuth.canAnswerFor(authentication, #responseFintEvent.orgId)")

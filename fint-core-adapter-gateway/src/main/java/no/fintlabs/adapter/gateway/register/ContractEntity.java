@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import no.fintlabs.adapter.models.AdapterContract;
+import no.fintlabs.adapter.models.EventCapability;
+import no.fintlabs.adapter.operation.OperationType;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -34,6 +36,9 @@ public class ContractEntity {
     @OneToMany(mappedBy = "contractEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private Set<CapabilityEntity> capabilityEntityset = new HashSet<>();
 
+    @OneToMany(mappedBy = "contractEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private Set<EventCapabilityEntity> eventCapabilityEntityset = new HashSet<>();
+
     public ContractEntity(AdapterContract adapterContract) {
         this.userName = adapterContract.getUsername();
         this.orgId = adapterContract.getOrgId();
@@ -47,7 +52,8 @@ public class ContractEntity {
     /**
      * Copies everything except the identity of the contract, which is the username and orgId
      * pair. Re-registering the same pair replaces the capability list rather than adding to
-     * it, so a capability the adapter dropped disappears from the contract.
+     * it, so a capability the adapter dropped disappears from the contract. The event
+     * capabilities are replaced the same way, one row per resource and operation.
      */
     public void applyContract(AdapterContract adapterContract) {
         this.adapterId = adapterContract.getAdapterId();
@@ -61,5 +67,17 @@ public class ContractEntity {
 
         this.capabilityEntityset.clear();
         this.capabilityEntityset.addAll(replacements);
+
+        Set<EventCapabilityEntity> eventReplacements = adapterContract.getEventCapabilities().stream()
+                .flatMap(capability -> capability.getOperations().stream().map(operation -> toEntity(capability, operation)))
+                .collect(Collectors.toSet());
+        this.eventCapabilityEntityset.clear();
+        this.eventCapabilityEntityset.addAll(eventReplacements);
+    }
+
+    private EventCapabilityEntity toEntity(EventCapability capability, OperationType operation) {
+        EventCapabilityEntity entity = new EventCapabilityEntity(capability, operation);
+        entity.setContractEntity(this);
+        return entity;
     }
 }

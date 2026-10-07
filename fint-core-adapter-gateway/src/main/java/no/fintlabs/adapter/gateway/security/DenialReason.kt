@@ -49,6 +49,11 @@ enum class DenialReason(
         "The adapter has not registered a contract for any of its organizations. " +
             "Register a contract with POST /provider/register for each organization before fetching events.",
     ),
+    EVENT_NOT_IN_CONTRACT(
+        "The adapter's contract for the organization does not cover this event: the resource is listed " +
+            "without this operation, or the event is a READ for a resource the contract does not list. " +
+            "Add the operation to the resource in the contract's eventCapabilities and register again.",
+    ),
     ;
 
     val type: URI get() = URI.create(TYPE_PREFIX + name.lowercase().replace('_', '-'))

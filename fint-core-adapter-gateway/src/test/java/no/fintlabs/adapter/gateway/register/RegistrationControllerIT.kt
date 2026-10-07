@@ -11,10 +11,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 class RegistrationControllerIT
     @Autowired
     constructor(
-        contractJpaRepository: ContractJpaRepository,
+        private val contractJpaRepository: ContractJpaRepository,
     ) : GatewayIntegrationTestBase() {
-        private val contractService: ContractService = ContractService(contractJpaRepository)
-
         @Test
         fun `Should successfully register adapter`() {
             mockMvc
@@ -30,8 +28,8 @@ class RegistrationControllerIT
         fun `verify contracts get saved to database when registering adapter`() {
             registerAdapter()
 
-            val adapterIds = contractService.getAdapterIds()
+            val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)
 
-            assert(adapterIds.contains("https://test.com/test.fintlabs.no/utdanning/elev"))
+            assert(stored?.adapterId == "https://test.com/test.fintlabs.no/utdanning/elev")
         }
     }
