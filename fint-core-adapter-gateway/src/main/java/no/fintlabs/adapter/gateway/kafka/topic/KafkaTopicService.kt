@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.kafka.topic
 
 import no.fintlabs.adapter.gateway.config.KafkaProperties
 import org.apache.kafka.clients.admin.AdminClient
+import org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_COMPACT
 import org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_CONFIG
 import org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_DELETE
 import org.apache.kafka.common.config.TopicConfig.RETENTION_MS_CONFIG
@@ -28,6 +29,26 @@ class KafkaTopicService(
                 .replicas(kafkaProperties.replicas)
                 .config(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_DELETE)
                 .config(RETENTION_MS_CONFIG, retentionTime.toMillis().toString())
+                .config(SEGMENT_MS_CONFIG, EVENT_SEGMENT_DURATION.toMillis().toString())
+                .build(),
+        )
+    }
+
+    /**
+     * A topic that keeps the latest record per key for as long as the topic exists. A record
+     * with a null value (a tombstone) removes the key once compaction has run.
+     */
+    fun createOrModifyCompactedTopic(
+        topicName: String,
+        partitions: Int,
+    ) {
+        kafkaAdmin.createOrModifyTopics(
+            TopicBuilder
+                .name(topicName)
+                .partitions(partitions)
+                .replicas(kafkaProperties.replicas)
+                .config(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT)
+                .config(RETENTION_MS_CONFIG, "-1")
                 .config(SEGMENT_MS_CONFIG, EVENT_SEGMENT_DURATION.toMillis().toString())
                 .build(),
         )

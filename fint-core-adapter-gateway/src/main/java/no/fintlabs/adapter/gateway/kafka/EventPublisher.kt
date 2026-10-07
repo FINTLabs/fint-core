@@ -27,7 +27,7 @@ class EventPublisher(
     fun publish(
         eventName: String,
         key: String?,
-        value: Any,
+        value: Any?,
     ): CompletableFuture<SendResult<String, Any>> {
         val topic = KafkaTopicNames.eventTopic(eventName)
         val record = ProducerRecord<String, Any>(topic, key, value)
