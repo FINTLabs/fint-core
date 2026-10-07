@@ -2,7 +2,9 @@ package no.fintlabs.adapter.gateway.admin
 
 import no.fintlabs.adapter.gateway.config.TopicCleanupProperties
 import no.fintlabs.adapter.gateway.kafka.topic.KafkaTopicService
+import no.fintlabs.adapter.gateway.kafka.topic.TopicNamesConstants
 import no.novari.core.shared.kafka.EventTopics
+import no.novari.core.shared.kafka.KafkaTopicNames
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -11,8 +13,10 @@ import org.springframework.stereotype.Service
 /**
  * Deletes Kafka topics whose full name matches a regex. A topic is only ever deleted when its name
  * contains `fint-core` and it is not one the gateway uses today. The topics in use are the event
- * request and response topics and this gateway's own buffer topic, taken from the same code that
- * creates them, plus every name matching one of the configured deny patterns.
+ * request and response topics, the five adapter topics and this gateway's own buffer topic, taken
+ * from the same code that creates them, plus every name matching one of the configured deny
+ * patterns. The event and adapter topics exist once, under `novari-no`, so only that exact name is
+ * protected. Only topics that exist once per org are covered by a pattern.
  *
  * A dry run goes through the same steps and reports the same result, but deletes nothing. Real
  * deletes go in batches, and each batch is logged.
@@ -24,7 +28,17 @@ class TopicCleanup(
     @param:Qualifier("topicBufferName") private val bufferTopic: String,
 ) {
     private val denyPatterns = properties.denyPatterns.map { Regex(it) }
-    private val protectedNames = setOf(EventTopics.requestTopic(), EventTopics.responseTopic(), bufferTopic)
+    private val protectedNames =
+        setOf(
+            EventTopics.requestTopic(),
+            EventTopics.responseTopic(),
+            bufferTopic,
+            KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_HEARTBEAT),
+            KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_CONTRACT),
+            KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_FULL_SYNC),
+            KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_DELTA_SYNC),
+            KafkaTopicNames.eventTopic(TopicNamesConstants.ADAPTER_DELETE_SYNC),
+        )
 
     fun cleanup(
         pattern: Regex,

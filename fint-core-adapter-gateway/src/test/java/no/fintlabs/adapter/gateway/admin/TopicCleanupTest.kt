@@ -83,12 +83,42 @@ class TopicCleanupTest {
     }
 
     @Test
-    fun `the default deny patterns cover every topic name the gateway builds`() {
+    fun `the default deny pattern covers the buffer topic of every org`() {
         val patterns = TopicCleanupProperties().denyPatterns.map { Regex(it) }
 
-        listOf(bufferTopic, EventTopics.requestTopic(), EventTopics.responseTopic()).forEach { name ->
+        listOf(bufferTopic, "afk-no.fint-core.fint-felleskomponent-resource").forEach { name ->
             assertThat(patterns.any { it.matches(name) }).describedAs(name).isTrue()
         }
+    }
+
+    @Test
+    fun `the five adapter topics under novari-no are protected`() {
+        val adapterTopics =
+            listOf("heartbeat", "contract", "full-sync", "delta-sync", "delete-sync")
+                .map { "novari-no.fint-core.fint-felleskomponent-adapter-$it" }
+        every { topics.listTopicNames() } returns adapterTopics.toSet()
+
+        val report = cleanup().cleanup(Regex(".*"), dryRun = false, requestedBy = "tester")
+
+        assertThat(report.deleted).isEmpty()
+        assertThat(report.skipped.map { it.topic }).containsExactlyInAnyOrderElementsOf(adapterTopics)
+    }
+
+    @Test
+    fun `adapter and event topics under another org are left over and can be deleted`() {
+        val leftovers =
+            listOf(
+                "afk-no.fint-core.fint-felleskomponent-adapter-contract",
+                "afk-no.fint-core.fint-felleskomponent-adapter-heartbeat",
+                "afk-no.fint-core.fint-felleskomponent-event-request",
+                "ofk-no.fint-core.fint-felleskomponent-event-response",
+            )
+        every { topics.listTopicNames() } returns leftovers.toSet()
+
+        val report = cleanup().cleanup(Regex(".*"), dryRun = false, requestedBy = "tester")
+
+        assertThat(report.deleted).containsExactlyInAnyOrderElementsOf(leftovers)
+        assertThat(report.skipped).isEmpty()
     }
 
     @Test
