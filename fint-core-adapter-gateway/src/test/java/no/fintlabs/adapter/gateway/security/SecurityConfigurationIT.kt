@@ -283,6 +283,51 @@ class SecurityConfigurationIT {
     }
 
     @Test
+    fun `the topic cleanup answers a FINT adapter from novari`() {
+        mockMvc
+            .perform(post(TOPIC_DELETE).with(authentication(novariAdapter())))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `the topic cleanup denies a FINT adapter from another org`() {
+        mockMvc
+            .perform(post(TOPIC_DELETE).with(authentication(adapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the topic cleanup denies a FINT client from novari`() {
+        mockMvc
+            .perform(post(TOPIC_DELETE).with(authentication(novariClient())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the topic cleanup denies a FINT client from another org`() {
+        mockMvc
+            .perform(
+                post(TOPIC_DELETE).with(
+                    authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client")),
+                ),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `the topic cleanup asks for a token`() {
+        mockMvc
+            .perform(post(TOPIC_DELETE))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `the topic cleanup path is refused for other methods, even to a FINT adapter from novari`() {
+        mockMvc
+            .perform(get(TOPIC_DELETE).with(authentication(novariAdapter())))
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
     fun `another admin path is refused to a FINT adapter`() {
         mockMvc
             .perform(get(OTHER_ADMIN).with(authentication(adapter())))
@@ -364,6 +409,9 @@ class SecurityConfigurationIT {
             @PathVariable id: String,
         ): String = id
 
+        @PostMapping(TOPIC_DELETE)
+        fun deleteTopics(): String = "ok"
+
         @GetMapping(OTHER_ADMIN)
         fun otherAdmin(): String = "ok"
 
@@ -401,6 +449,7 @@ class SecurityConfigurationIT {
         private const val REBUILD = "/provider/admin/relation-edges/rebuild"
         private const val DRIFT = "/provider/admin/relation-edges/drift"
         private const val JOB = "/provider/admin/relation-edges/jobs/5d0c7a3e-8f41-4c55-9a55-2f6b1f0e6c11"
+        private const val TOPIC_DELETE = "/provider/admin/kafka/topics/delete"
         private const val OTHER_ADMIN = "/provider/admin/something-else"
     }
 }
