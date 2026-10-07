@@ -3,19 +3,15 @@ package no.novari.core.shared.event
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.model.resourceRefOf
 import no.novari.fint.core.model.FintResourceRef
-import org.springframework.data.annotation.Id
-import java.time.Instant
 
 /**
- * What the adapters of one org answer events for, as the gateway publishes it after every
- * registration. It is the union over the org's contracts, so a resource is listed with every
- * operation any of its adapters answers. client-api reads it to tell whether a request can be
- * read live.
+ * What the adapters of one org answer events for, as the gateway answers it on `GET [PATH]?orgId=`.
+ * It is the union over the org's contracts, so a resource is listed with every operation any of
+ * its adapters answers. client-api asks for it to tell whether a request can be read live.
  */
 data class OrgEventCapabilities(
-    @Id val orgId: String,
+    val orgId: String,
     val resources: List<ResourceOperations>,
-    val updatedAt: Instant,
 ) {
     fun operationsFor(resource: FintResourceRef): Set<OperationType> =
         resources
@@ -23,6 +19,11 @@ data class OrgEventCapabilities(
             .flatMapTo(HashSet()) { it.operations }
 
     fun canRead(resource: FintResourceRef): Boolean = OperationType.READ in operationsFor(resource)
+
+    companion object {
+        /** Where the gateway answers, inside the cluster only. */
+        const val PATH = "/internal/event-capabilities"
+    }
 }
 
 data class ResourceOperations(

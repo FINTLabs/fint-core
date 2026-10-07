@@ -3,6 +3,7 @@ package no.fintlabs.adapter.gateway.security
 import jakarta.servlet.DispatcherType
 import no.fintlabs.adapter.gateway.ProviderApi
 import no.fintlabs.adapter.gateway.admin.AdminController
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.resource.server.converter.CorePrincipalConverter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -39,6 +40,8 @@ class SecurityConfiguration(
                     .requestMatchers(ADMIN_PATHS)
                     .denyAll()
                     .requestMatchers(*OPEN_PATHS)
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, OrgEventCapabilities.PATH)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, SYNC_PATH)
                     .access(requireAdapterWithComponent())

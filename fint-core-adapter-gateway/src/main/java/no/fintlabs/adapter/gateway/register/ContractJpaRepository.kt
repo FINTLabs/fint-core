@@ -31,7 +31,4 @@ interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
     fun findAllByOrgId(
         @Param("orgId") orgId: String,
     ): List<ContractEntity>
-
-    @Query("select distinct c.orgId from ContractEntity c")
-    fun findDistinctOrgIds(): List<String>
 }

@@ -9,7 +9,6 @@ import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.resource.ListOptions
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageDirection
-import no.novari.core.shared.event.EventCapabilityStore
 import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.core.shared.event.ResourceOperations
 import no.novari.core.shared.model.OrgId
@@ -21,13 +20,13 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 /**
- * Every row of the case table for a resource that is readable live: the header, the caller,
- * the shape of the request and the org's adapters together decide whether a read goes live.
+ * Every row of the case table for a resource that is readable live: the header, the shape of
+ * the request and what the org's adapter gateway answers together decide whether a read goes live.
  */
 class LiveReadServiceTest {
-    private val eventCapabilityStore: EventCapabilityStore = mockk()
+    private val eventCapabilityClient: EventCapabilityClient = mockk()
     private val requestFintEventService: RequestFintEventService = mockk()
-    private val service = LiveReadService(eventCapabilityStore, requestFintEventService)
+    private val service = LiveReadService(eventCapabilityClient, requestFintEventService)
 
     private val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "elevfravar")
     private val filter = "systemId/identifikatorverdi eq '12345'"
@@ -113,8 +112,8 @@ class LiveReadServiceTest {
     }
 
     @Test
-    fun `an org whose adapters never registered event capabilities is answered from the cache`() {
-        every { eventCapabilityStore.find(OrgId.from("fintlabs.no")) } returns null
+    fun `a read is answered from the cache when the adapter gateway does not answer`() {
+        every { eventCapabilityClient.find(OrgId.from("fintlabs.no")) } returns null
 
         assertThat(service.startByFilter(coordinate, filter, ListOptions(), "respond-async")).isNull()
     }
@@ -140,8 +139,8 @@ class LiveReadServiceTest {
     ) = givenCapabilities(ResourceOperations("utdanning", packageName, resourceName, setOf(OperationType.READ)))
 
     private fun givenCapabilities(vararg resources: ResourceOperations) {
-        every { eventCapabilityStore.find(OrgId.from("fintlabs.no")) } returns
-            OrgEventCapabilities("fintlabs.no", resources.toList(), Instant.parse("2026-10-07T08:00:00Z"))
+        every { eventCapabilityClient.find(OrgId.from("fintlabs.no")) } returns
+            OrgEventCapabilities("fintlabs.no", resources.toList())
     }
 
     private fun cursor() = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "B"))

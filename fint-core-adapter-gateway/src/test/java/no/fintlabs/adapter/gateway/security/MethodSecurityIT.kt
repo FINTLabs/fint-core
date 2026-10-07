@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.OrgIdConverter
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.EventController
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
@@ -11,6 +12,7 @@ import no.fintlabs.adapter.gateway.heartbeat.HeartbeatService
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.register.EventCapabilities
+import no.fintlabs.adapter.gateway.register.EventCapabilityController
 import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.fintlabs.adapter.gateway.register.RegistrationController
 import no.fintlabs.adapter.gateway.register.RegistrationService
@@ -25,6 +27,7 @@ import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.novari.core.shared.event.EventScope
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.resourceRefOf
@@ -415,6 +418,24 @@ class MethodSecurityIT {
     }
 
     @Test
+    fun `event capabilities answer without a token`() {
+        whenever(contractService.eventCapabilitiesFor(OrgId.from("fintlabs.no")))
+            .thenReturn(OrgEventCapabilities("fintlabs.no", emptyList()))
+
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", "fintlabs.no"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value("fintlabs.no"))
+    }
+
+    @Test
+    fun `any other path still needs a token`() {
+        mockMvc
+            .perform(get("/internal/anything-else"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
     fun `event fetch denies a package the adapter has no role for`() {
         mockMvc
             .perform(get("/provider/event/utdanning/vurdering").with(authentication(adapter())))
@@ -544,6 +565,8 @@ class MethodSecurityIT {
         HeartbeatController::class,
         RegistrationController::class,
         EventController::class,
+        EventCapabilityController::class,
+        OrgIdConverter::class,
         ExceptionController::class,
     )
     class TestApp

@@ -5,9 +5,7 @@ import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.adapter.models.EventCapability
 import no.fintlabs.adapter.operation.OperationType
-import no.novari.core.shared.event.EventCapabilityStore
-import no.novari.core.shared.model.OrgId
-import no.novari.core.shared.model.resourceRefOf
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -22,6 +20,7 @@ import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -43,9 +42,6 @@ class ContractRegistrationIT {
 
     @Autowired
     private lateinit var contractJpaRepository: ContractJpaRepository
-
-    @Autowired
-    private lateinit var eventCapabilityStore: EventCapabilityStore
 
     private lateinit var mockMvc: MockMvc
     private lateinit var principal: CorePrincipal
@@ -193,12 +189,28 @@ class ContractRegistrationIT {
     }
 
     @Test
-    fun `register publishes what the org's adapters can read live`() {
+    fun `the internal endpoint lists what the org's adapters can read live, without a token`() {
         postRegister(contract(eventCapabilities = setOf(eventCapability("vurdering", "elevfravar", OperationType.READ))))
 
-        val published = eventCapabilityStore.find(OrgId.from(orgId))!!
-        assertThat(published.canRead(resourceRefOf("utdanning", "vurdering", "elevfravar"))).isTrue()
-        assertThat(published.canRead(resourceRefOf("utdanning", "elev", "elev"))).isFalse()
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", orgId))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value(orgId))
+            .andExpect(jsonPath("$.resources.length()").value(1))
+            .andExpect(jsonPath("$.resources[0].domainName").value("utdanning"))
+            .andExpect(jsonPath("$.resources[0].packageName").value("vurdering"))
+            .andExpect(jsonPath("$.resources[0].resourceName").value("elevfravar"))
+            .andExpect(jsonPath("$.resources[0].operations.length()").value(1))
+            .andExpect(jsonPath("$.resources[0].operations[0]").value("READ"))
+    }
+
+    @Test
+    fun `the internal endpoint lists nothing for an org without contracts`() {
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", "unknown.no"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value("unknown.no"))
+            .andExpect(jsonPath("$.resources").isEmpty)
     }
 
     @Test

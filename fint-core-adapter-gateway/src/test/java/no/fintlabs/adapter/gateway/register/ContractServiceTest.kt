@@ -144,6 +144,51 @@ class ContractServiceTest {
         }
     }
 
+    @Nested
+    inner class EventCapabilitiesFor {
+        private val elevfravar = resourceRefOf("utdanning", "vurdering", "elevfravar")
+        private val fravar = resourceRefOf("utdanning", "vurdering", "fravar")
+
+        @Test
+        fun `lists the union of what the org's adapters answer`() {
+            givenStoredContractsForOrg(
+                contract(eventCapabilities = setOf(eventCapability("utdanning", "vurdering", "elevfravar", OperationType.READ))),
+                contract(
+                    eventCapabilities =
+                        setOf(
+                            eventCapability("utdanning", "vurdering", "elevfravar", OperationType.CREATE),
+                            eventCapability("utdanning", "vurdering", "fravar", OperationType.READ),
+                        ),
+                ),
+            )
+
+            val capabilities = contractService.eventCapabilitiesFor(OrgId.from(ORG_ID))
+
+            assertThat(capabilities.orgId).isEqualTo(ORG_ID)
+            assertThat(capabilities.operationsFor(elevfravar)).containsExactlyInAnyOrder(OperationType.READ, OperationType.CREATE)
+            assertThat(capabilities.operationsFor(fravar)).containsExactly(OperationType.READ)
+            assertThat(capabilities.canRead(resourceRefOf("utdanning", "vurdering", "karakter"))).isFalse()
+        }
+
+        @Test
+        fun `lists nothing when the org's adapters answer no events`() {
+            givenStoredContractsForOrg(contract())
+
+            assertThat(contractService.eventCapabilitiesFor(OrgId.from(ORG_ID)).resources).isEmpty()
+        }
+
+        @Test
+        fun `lists nothing for an org without contracts`() {
+            givenStoredContractsForOrg()
+
+            assertThat(contractService.eventCapabilitiesFor(OrgId.from(ORG_ID)).resources).isEmpty()
+        }
+
+        private fun givenStoredContractsForOrg(vararg contracts: AdapterContract) {
+            every { contractJpaRepository.findAllByOrgId(ORG_ID) } returns contracts.map(::ContractEntity)
+        }
+    }
+
     private fun givenStoredContract(vararg capabilities: AdapterCapability) =
         givenStoredContract(contract(capabilities = capabilities.toSet()))
 
