@@ -16,17 +16,21 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import java.net.URI
 import java.util.UUID
+import java.util.regex.PatternSyntaxException
 
 /**
  * Operator actions on this adapter gateway. Every endpoint here has its own access rule in
  * `SecurityConfiguration`, and any other path under `/admin` is refused, so a new endpoint stays
  * closed until it is given a rule of its own.
+ *
+ * The same goes for deleting Kafka topics by pattern.
  *
  * A rebuild or drift check runs in the background, because it can take longer than the gateway in
  * front keeps a request open. Starting one answers 202 with the job and a `Location` to follow
@@ -36,6 +40,7 @@ import java.util.UUID
 @RequestMapping("/admin")
 class AdminController(
     private val jobs: RelationEdgeJobs,
+    private val topicCleanup: TopicCleanup,
 ) {
     /**
      * Starts a rebuild of the relation edges of one org. The scope is one resource, for example
@@ -70,6 +75,21 @@ class AdminController(
     fun job(
         @PathVariable id: UUID,
     ): RelationEdgeJob = jobs.find(id) ?: throw RelationEdgeJobNotFoundException(id)
+
+    /**
+     * Deletes Kafka topics whose full name matches a regex, and answers with what matched, what was
+     * deleted, what was skipped and why, and what failed. A request without `dryRun` is a dry run, so
+     * a real delete has to say `"dryRun": false`. See [TopicCleanup] for which topics are never deleted.
+     */
+    @PostMapping("/kafka/topics/delete")
+    fun deleteTopics(
+        @RequestBody request: TopicDeleteRequest,
+        principal: CorePrincipal,
+    ): TopicCleanupReport = topicCleanup.cleanup(Regex(request.pattern), request.dryRun, principal.username)
+
+    @ExceptionHandler(PatternSyntaxException::class)
+    fun badPattern(exception: PatternSyntaxException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Bad pattern: ${exception.description}")
 
     @ExceptionHandler(RelationEdgeJobRunningException::class)
     fun alreadyRunning(exception: RelationEdgeJobRunningException): ProblemDetail =
@@ -111,6 +131,11 @@ class AdminController(
             "all for every resource the org has stored, a component such as utdanning/elev, or one resource such as utdanning/elev/person"
     }
 }
+
+data class TopicDeleteRequest(
+    val pattern: String,
+    val dryRun: Boolean = true,
+)
 
 class RelationEdgeJobNotFoundException(
     id: UUID,

@@ -29,11 +29,13 @@ class SecurityConfiguration(
                     .dispatcherTypeMatchers(DispatcherType.ERROR)
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, RELATION_EDGE_REBUILD_PATH)
-                    .access(requireAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .access(requireAdapterOf(ADMIN_ORG_ID))
                     .requestMatchers(HttpMethod.POST, RELATION_EDGE_DRIFT_PATH)
-                    .access(requireAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .access(requireAdapterOf(ADMIN_ORG_ID))
                     .requestMatchers(HttpMethod.GET, RELATION_EDGE_JOB_PATH)
-                    .access(requireAdapterOf(RELATION_EDGE_ADMIN_ORG_ID))
+                    .access(requireAdapterOf(ADMIN_ORG_ID))
+                    .requestMatchers(HttpMethod.POST, KAFKA_TOPIC_DELETE_PATH)
+                    .access(requireAdapterOf(ADMIN_ORG_ID))
                     .requestMatchers(ADMIN_PATHS)
                     .denyAll()
                     .requestMatchers(*OPEN_PATHS)
@@ -77,7 +79,8 @@ class SecurityConfiguration(
         private const val RELATION_EDGE_REBUILD_PATH = "/admin/relation-edges/rebuild"
         private const val RELATION_EDGE_DRIFT_PATH = "/admin/relation-edges/drift"
         private const val RELATION_EDGE_JOB_PATH = "/admin/relation-edges/jobs/{id}"
-        private const val RELATION_EDGE_ADMIN_ORG_ID = "novari.no"
+        private const val KAFKA_TOPIC_DELETE_PATH = "/admin/kafka/topics/delete"
+        private const val ADMIN_ORG_ID = "novari.no"
         private const val ADMIN_PATHS = "/admin/**"
         private val OPEN_PATHS =
             arrayOf(
