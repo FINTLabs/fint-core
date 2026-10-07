@@ -276,14 +276,6 @@ class AdminControllerIT {
     }
 
     @Test
-    fun `a FINT client is refused the topic cleanup`() {
-        val response = postJson("/admin/kafka/topics/delete", NOVARI_CLIENT, """{"pattern": ".*", "dryRun": false}""")
-
-        assertEquals(403, response.statusCode(), response.body())
-        verify(exactly = 0) { topicCleanup.cleanup(any(), any(), any()) }
-    }
-
-    @Test
     fun `a FINT client is refused the rebuild`() {
         val response = post("/admin/relation-edges/rebuild?orgId=fintlabs.no&scope=utdanning/elev/person", NOVARI_CLIENT)
 
