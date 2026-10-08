@@ -29,6 +29,12 @@ configurations {
 }
 
 dependencies {
+    constraints {
+        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+            because("Versions before 1.11.4 contain a known vulnerability")
+        }
+    }
+
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
