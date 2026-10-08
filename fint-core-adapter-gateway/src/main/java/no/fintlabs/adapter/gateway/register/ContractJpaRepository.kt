@@ -31,4 +31,14 @@ interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
     fun findAllByOrgId(
         @Param("orgId") orgId: String,
     ): List<ContractEntity>
+
+    @Query(
+        """
+        select distinct c
+        from ContractEntity c
+        left join fetch c.capabilityEntityset
+        left join fetch c.eventCapabilityEntityset
+        """,
+    )
+    fun findAllWithCapabilities(): List<ContractEntity>
 }

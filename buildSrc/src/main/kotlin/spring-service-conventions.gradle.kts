@@ -10,7 +10,8 @@ plugins {
 
 // Remove/check pins below when spring boot is updated from 4.1.1!
 extra["tomcat.version"] = "11.0.25"
-extra["jackson-databind.version"] = "2.21.6"
+extra["jackson-2-bom.version"] = "2.21.7"
+extra["jackson-bom.version"] = "3.1.7"
 
 group = "no.fintlabs"
 version = System.getenv("RELEASE_VERSION") ?: "0.0.1-SNAPSHOT"
@@ -28,6 +29,12 @@ configurations {
 }
 
 dependencies {
+    constraints {
+        implementation("at.yawk.lz4:lz4-java:1.11.4") {
+            because("Versions before 1.11.4 contain a known vulnerability")
+        }
+    }
+
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
