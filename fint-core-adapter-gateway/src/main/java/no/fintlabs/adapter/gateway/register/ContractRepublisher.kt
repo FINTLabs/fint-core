@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.models.EventCapability
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -41,8 +42,14 @@ class ContractRepublisher(
             .username(userName)
             .heartbeatIntervalInMinutes(heartbeatIntervalInMinutes)
             .capabilities(capabilityEntityset.map { it.toAdapterCapability() }.toSet())
+            .eventCapabilities(eventCapabilityEntityset.toEventCapabilities())
             .time(clock.millis())
             .build()
+
+    private fun Collection<EventCapabilityEntity>.toEventCapabilities(): Set<EventCapability> =
+        groupBy({ Triple(it.domainName, it.pkgName, it.resourceName) }, { it.operation })
+            .map { (resource, operations) -> EventCapability(resource.first, resource.second, resource.third, operations.toSet()) }
+            .toSet()
 
     private fun CapabilityEntity.toAdapterCapability(): AdapterCapability =
         AdapterCapability
