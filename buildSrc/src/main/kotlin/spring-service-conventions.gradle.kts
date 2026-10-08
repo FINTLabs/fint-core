@@ -11,6 +11,7 @@ plugins {
 // Remove/check pins below when spring boot is updated from 4.1.1!
 extra["tomcat.version"] = "11.0.25"
 extra["jackson-2-bom.version"] = "2.21.6"
+extra["jackson-bom.version"] = "3.1.7"
 
 group = "no.fintlabs"
 version = System.getenv("RELEASE_VERSION") ?: "0.0.1-SNAPSHOT"
