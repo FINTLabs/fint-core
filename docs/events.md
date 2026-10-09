@@ -47,7 +47,8 @@ sequenceDiagram
     end
 ```
 
-The gateway stores the resource and marks the event answered in one Mongo transaction. A validate never stores anything, and neither does a create that failed.
+The gateway stores the resource and marks the event answered in one Mongo transaction. A validate never stores anything,
+and neither does a create that failed.
 
 ## The life of an event
 
@@ -95,16 +96,3 @@ An adapter registers a contract with `POST /provider/register`. The contract dec
 
 An answer is checked the same way against the stored request, so an adapter cannot answer an event it would not have
 been served.
-
-## Where to look in the code
-
-| Step                           | Code                                                                                             |
-|--------------------------------|--------------------------------------------------------------------------------------------------|
-| Client write endpoints         | `fint-core-client-api/.../resource/ResourceController.kt`                                        |
-| Creating the event             | `fint-core-client-api/.../resource/event/RequestFintEventService.kt`                             |
-| Status endpoint logic          | `fint-core-client-api/.../resource/event/RequestStatusService.kt`                                |
-| The event document and store   | `fint-core-shared/.../event/EventDocument.kt`, `EventStore.kt`                                   |
-| Serving events to adapters     | `fint-core-adapter-gateway/.../event/EventController.kt`, `event/request/RequestEventService.kt` |
-| Taking an answer               | `fint-core-adapter-gateway/.../event/response/ResponseEventService.kt`                           |
-| Expiring overdue events        | `fint-core-adapter-gateway/.../event/EventExpiryService.kt`                                      |
-| Which events a contract covers | `fint-core-adapter-gateway/.../register/EventCapabilities.kt`                                    |
