@@ -1,7 +1,12 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.operation.OperationType
+import no.novari.core.shared.event.OrgEventCapabilities
+import no.novari.core.shared.event.ResourceOperations
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,8 +20,6 @@ class ContractService(
     private val contractJpaRepository: ContractJpaRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-
-    fun getAdapterIds(): Set<String> = contractJpaRepository.getAdapterIds()
 
     @Transactional
     fun saveContract(adapterContract: AdapterContract) {
@@ -40,15 +43,50 @@ class ContractService(
         orgId: String,
     ): ContractLookup {
         val id = contractId(username, orgId)
-        val contract = contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId) ?: return ContractLookup.Absent
+        val contract =
+            contractJpaRepository.findByUserNameAndOrgId(id.username, id.orgId) ?: return ContractLookup.Absent
 
-        return ContractLookup.Found(contract.toCapabilityKeys())
+        return ContractLookup.Found(contract.toRegisteredContract())
     }
 
-    private fun ContractEntity.toCapabilityKeys(): Set<CapabilityKey> =
-        capabilityEntityset
-            .map { CapabilityKey.of(it.domainName, it.pkgName, it.resourceName) }
-            .toSet()
+    /**
+     * What the adapters of [orgId] together answer events for: a resource is listed with every
+     * operation any of them answers. An org without contracts gets an empty list.
+     */
+    fun eventCapabilitiesFor(orgId: OrgId): OrgEventCapabilities {
+        val listed = HashMap<FintResourceRef, MutableSet<OperationType>>()
+        contractsFor(orgId).forEach { contract ->
+            contract.eventCapabilities.listedResources().forEach { (resource, operations) ->
+                listed.getOrPut(resource) { HashSet() }.addAll(operations)
+            }
+        }
+
+        return OrgEventCapabilities(
+            orgId = orgId.value,
+            resources = listed.map { (resource, operations) -> ResourceOperations.of(resource, operations) },
+        )
+    }
+
+    private fun contractsFor(orgId: OrgId): List<RegisteredContract> =
+        contractJpaRepository.findAllByOrgId(orgId.value).map { it.toRegisteredContract() }
+
+    private fun ContractEntity.toRegisteredContract(): RegisteredContract =
+        RegisteredContract(
+            orgId = OrgId.from(orgId),
+            syncResources =
+                capabilityEntityset.mapTo(HashSet()) {
+                    resourceRefOf(
+                        it.domainName,
+                        it.pkgName,
+                        it.resourceName,
+                    )
+                },
+            eventCapabilities = EventCapabilities(eventCapabilityEntityset.toOperationsByResource()),
+        )
+
+    private fun Collection<EventCapabilityEntity>.toOperationsByResource(): Map<FintResourceRef, Set<OperationType>> =
+        groupBy({ resourceRefOf(it.domainName, it.pkgName, it.resourceName) }, { it.operation })
+            .mapValues { (_, operations) -> operations.toSet() }
 
     private fun contractId(
         username: String,

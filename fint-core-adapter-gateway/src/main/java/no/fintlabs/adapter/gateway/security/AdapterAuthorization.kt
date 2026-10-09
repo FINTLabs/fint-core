@@ -2,10 +2,12 @@ package no.fintlabs.adapter.gateway.security
 
 import jakarta.servlet.http.HttpServletRequest
 import no.fintlabs.adapter.gateway.config.ProviderProperties
-import no.fintlabs.adapter.gateway.register.CapabilityKey
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import no.novari.resource.server.enums.FintScope
 import no.novari.resource.server.enums.FintType
@@ -108,15 +110,14 @@ class AdapterAuthorization(
         return contractCovers(
             username = principal.username,
             orgId = orgId!!,
-            capability = CapabilityKey.of(domainName, packageName, resourceName),
+            resource = resourceRefOf(domainName, packageName, resourceName),
         )
     }
 
     /**
-     * Answering an event does not require the resource to be in the contract, because a
-     * contract describes what an adapter delivers on sync, not what it accepts writes for. It
-     * does require a contract for the org, so the registry stays a true picture of who is
-     * serving that org.
+     * The body only says which org the answer is for, so this checks the org and that a contract
+     * exists for it. Whether the contract covers the event's resource and operation is checked
+     * against the stored request in [EventAuthorization.requireAnswerAllowed].
      */
     fun canAnswerFor(
         authentication: Authentication,
@@ -155,21 +156,27 @@ class AdapterAuthorization(
         return principal.assets.mapNotNull(::asOrgId).filter { it.belongsTo(providerProperties.orgId) }
     }
 
-    fun hasContract(
+    /**
+     * The contract the adapter registered for [orgId], or null when it has none.
+     */
+    fun contractFor(
         authentication: Authentication,
         orgId: OrgId,
-    ): Boolean {
-        val principal = adapterOrNull(authentication) ?: return false
-        return contractService.lookup(principal.username, orgId.value) is ContractLookup.Found
+    ): RegisteredContract? {
+        val principal = adapterOrNull(authentication) ?: return null
+        return when (val lookup = contractService.lookup(principal.username, orgId.value)) {
+            is ContractLookup.Found -> lookup.contract
+            ContractLookup.Absent -> null
+        }
     }
 
     private fun contractCovers(
         username: String,
         orgId: String,
-        capability: CapabilityKey,
+        resource: FintResourceRef,
     ): Boolean =
         when (val lookup = contractService.lookup(username, orgId)) {
-            is ContractLookup.Found -> capability in lookup.capabilities || deny(DenialReason.RESOURCE_NOT_IN_CONTRACT)
+            is ContractLookup.Found -> resource in lookup.contract.syncResources || deny(DenialReason.RESOURCE_NOT_IN_CONTRACT)
             ContractLookup.Absent -> deny(DenialReason.NO_CONTRACT)
         }
 

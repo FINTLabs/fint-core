@@ -6,8 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import no.fintlabs.adapter.gateway.event.InvalidOrgIdException;
 import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException;
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException;
+import no.fintlabs.adapter.gateway.event.ReadAnswerTooLargeException;
 import no.fintlabs.adapter.gateway.register.AdapterNotRegisteredException;
-import no.fintlabs.adapter.gateway.register.InvalidAdapterCapabilityException;
 import no.fintlabs.adapter.gateway.security.InvalidJwtException;
 import no.fintlabs.adapter.gateway.sync.InvalidSyncPageEntryException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -16,11 +16,15 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import tools.jackson.core.JacksonException;
 
 import java.net.URI;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @ControllerAdvice
@@ -33,6 +37,11 @@ public class ExceptionController {
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 
+    @ExceptionHandler(ReadAnswerTooLargeException.class)
+    public ResponseEntity<String> handleReadAnswerTooLargeException(Throwable e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(e.getMessage());
+    }
+
     @ExceptionHandler(AdapterNotRegisteredException.class)
     public ResponseEntity<String> handleAdapterNotRegisteredException(Throwable e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -40,11 +49,6 @@ public class ExceptionController {
 
     @ExceptionHandler(InvalidSyncPageEntryException.class)
     public ResponseEntity<String> handleInvalidSyncPageEntryException(Throwable e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidAdapterCapabilityException.class)
-    public ResponseEntity<String> handleInvalidAdapterCapabilityException(Throwable e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }
 
@@ -74,6 +78,24 @@ public class ExceptionController {
                 The adapter has probably not called the '/register' endpoint. \
                 Also, you need to check if the entity endpoint is in the capability list.\
                 """);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ProblemDetail> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception,
+            HttpServletRequest request
+    ) {
+        List<Map<String, String>> errors = exception.getBindingResult().getAllErrors().stream()
+                .map(error -> Map.of(
+                        "field", error instanceof FieldError fieldError ? fieldError.getField() : "",
+                        "message", error.getDefaultMessage() == null ? "is not valid" : error.getDefaultMessage()
+                ))
+                .toList();
+        ProblemDetail problem = badRequestProblem("The request body is not valid", request);
+        problem.setProperty("errors", errors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problem);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

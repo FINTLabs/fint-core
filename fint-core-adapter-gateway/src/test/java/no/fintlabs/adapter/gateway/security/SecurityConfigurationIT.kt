@@ -60,13 +60,13 @@ class SecurityConfigurationIT {
     @ParameterizedTest
     @ValueSource(
         strings = [
-            "/swagger-ui",
-            "/swagger-ui/index.html",
-            "/swagger-ui/swagger-ui.css",
-            "/swagger-ui.html",
-            "/v3/api-docs",
-            "/v3/api-docs/swagger-config",
-            "/actuator/health",
+            "/provider/swagger-ui",
+            "/provider/swagger-ui/index.html",
+            "/provider/swagger-ui/swagger-ui.css",
+            "/provider/swagger-ui.html",
+            "/provider/v3/api-docs",
+            "/provider/v3/api-docs/swagger-config",
+            "/provider/actuator/health",
         ],
     )
     fun `open paths are reachable without authentication even when no handler exists`(path: String) {
@@ -81,7 +81,7 @@ class SecurityConfigurationIT {
     @Test
     fun `unauthenticated request to protected path returns 401`() {
         mockMvc
-            .perform(get("/status"))
+            .perform(get("/provider/status"))
             .andExpect(status().isUnauthorized)
     }
 
@@ -89,7 +89,7 @@ class SecurityConfigurationIT {
     fun `client principal is denied on protected path`() {
         mockMvc
             .perform(
-                get("/status")
+                get("/provider/status")
                     .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
             ).andExpect(status().isForbidden)
     }
@@ -98,7 +98,7 @@ class SecurityConfigurationIT {
     fun `adapter without fint-adapter scope is denied`() {
         mockMvc
             .perform(
-                get("/status").with(authentication(adapter(scope = "fint-client"))),
+                get("/provider/status").with(authentication(adapter(scope = "fint-client"))),
             ).andExpect(status().isForbidden)
     }
 
@@ -106,7 +106,7 @@ class SecurityConfigurationIT {
     fun `adapter with fint-adapter scope passes baseline check`() {
         mockMvc
             .perform(
-                get("/status").with(authentication(adapter())),
+                get("/provider/status").with(authentication(adapter())),
             ).andExpect(status().isOk)
     }
 
@@ -114,7 +114,7 @@ class SecurityConfigurationIT {
     fun `sync endpoint denies adapter without matching component`() {
         mockMvc
             .perform(
-                post("/utdanning/vurdering/elev")
+                post("/provider/utdanning/vurdering/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
                     .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
@@ -125,7 +125,7 @@ class SecurityConfigurationIT {
     fun `sync endpoint allows adapter with matching component`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
                     .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
@@ -136,7 +136,7 @@ class SecurityConfigurationIT {
     fun `event POST is unauthenticated rejected`() {
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}"),
             ).andExpect(status().isUnauthorized)
@@ -146,7 +146,7 @@ class SecurityConfigurationIT {
     fun `event POST denies client scope`() {
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
                     .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
@@ -157,7 +157,7 @@ class SecurityConfigurationIT {
     fun `event POST passes filter chain for any fint-adapter regardless of roles`() {
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
                     .with(authentication(adapter())),
@@ -168,7 +168,7 @@ class SecurityConfigurationIT {
     fun `event GET domain passes filter chain for any fint-adapter regardless of roles`() {
         mockMvc
             .perform(
-                get("/event/utdanning").with(authentication(adapter())),
+                get("/provider/event/utdanning").with(authentication(adapter())),
             ).andExpect(status().isOk)
     }
 
@@ -176,7 +176,7 @@ class SecurityConfigurationIT {
     fun `event GET domain-package passes filter chain even when component does not match roles`() {
         mockMvc
             .perform(
-                get("/event/utdanning/vurdering")
+                get("/provider/event/utdanning/vurdering")
                     .with(authentication(adapter(roles = listOf("FINT_Adapter_utdanning_elev")))),
             ).andExpect(status().isOk)
     }
@@ -185,7 +185,7 @@ class SecurityConfigurationIT {
     fun `event GET domain-package-resource passes filter chain for any fint-adapter`() {
         mockMvc
             .perform(
-                get("/event/utdanning/elev/elev").with(authentication(adapter())),
+                get("/provider/event/utdanning/elev/elev").with(authentication(adapter())),
             ).andExpect(status().isOk)
     }
 
@@ -193,7 +193,7 @@ class SecurityConfigurationIT {
     fun `event GET denies client scope`() {
         mockMvc
             .perform(
-                get("/event/utdanning")
+                get("/provider/event/utdanning")
                     .with(authentication(principal(cn = "client@client.fintlabs.no", scope = "fint-client"))),
             ).andExpect(status().isForbidden)
     }
@@ -344,7 +344,7 @@ class SecurityConfigurationIT {
     @Test
     fun `a FINT client from novari is denied everywhere else`() {
         mockMvc
-            .perform(get("/status").with(authentication(novariClient())))
+            .perform(get("/provider/status").with(authentication(novariClient())))
             .andExpect(status().isForbidden)
     }
 
@@ -395,48 +395,48 @@ class SecurityConfigurationIT {
     @RestController
     @Profile(PROFILE)
     class Endpoints {
-        @GetMapping("/status")
+        @GetMapping("/provider/status")
         fun status(): String = "ok"
 
-        @PostMapping("/admin/relation-edges/rebuild")
+        @PostMapping(REBUILD)
         fun rebuild(): String = "ok"
 
-        @PostMapping("/admin/relation-edges/drift")
+        @PostMapping(DRIFT)
         fun drift(): String = "ok"
 
-        @GetMapping("/admin/relation-edges/jobs/{id}")
+        @GetMapping("/provider/admin/relation-edges/jobs/{id}")
         fun job(
             @PathVariable id: String,
         ): String = id
 
-        @PostMapping("/admin/kafka/topics/delete")
+        @PostMapping(TOPIC_DELETE)
         fun deleteTopics(): String = "ok"
 
-        @GetMapping("/admin/something-else")
+        @GetMapping(OTHER_ADMIN)
         fun otherAdmin(): String = "ok"
 
-        @PostMapping("/{domainName}/{packageName}/{entity}")
+        @PostMapping("/provider/{domainName}/{packageName}/{entity}")
         fun sync(
             @PathVariable domainName: String,
             @PathVariable packageName: String,
             @PathVariable entity: String,
         ): String = "$domainName/$packageName/$entity"
 
-        @PostMapping("/event")
+        @PostMapping("/provider/event")
         fun postEvent(): String = "ok"
 
-        @GetMapping("/event/{domainName}")
+        @GetMapping("/provider/event/{domainName}")
         fun getEventsDomain(
             @PathVariable domainName: String,
         ): String = domainName
 
-        @GetMapping("/event/{domainName}/{packageName}")
+        @GetMapping("/provider/event/{domainName}/{packageName}")
         fun getEventsPackage(
             @PathVariable domainName: String,
             @PathVariable packageName: String,
         ): String = "$domainName/$packageName"
 
-        @GetMapping("/event/{domainName}/{packageName}/{resourceName}")
+        @GetMapping("/provider/event/{domainName}/{packageName}/{resourceName}")
         fun getEventsResource(
             @PathVariable domainName: String,
             @PathVariable packageName: String,
@@ -446,10 +446,10 @@ class SecurityConfigurationIT {
 
     companion object {
         const val PROFILE = "security-config-test"
-        private const val REBUILD = "/admin/relation-edges/rebuild"
-        private const val DRIFT = "/admin/relation-edges/drift"
-        private const val JOB = "/admin/relation-edges/jobs/5d0c7a3e-8f41-4c55-9a55-2f6b1f0e6c11"
-        private const val TOPIC_DELETE = "/admin/kafka/topics/delete"
-        private const val OTHER_ADMIN = "/admin/something-else"
+        private const val REBUILD = "/provider/admin/relation-edges/rebuild"
+        private const val DRIFT = "/provider/admin/relation-edges/drift"
+        private const val JOB = "/provider/admin/relation-edges/jobs/5d0c7a3e-8f41-4c55-9a55-2f6b1f0e6c11"
+        private const val TOPIC_DELETE = "/provider/admin/kafka/topics/delete"
+        private const val OTHER_ADMIN = "/provider/admin/something-else"
     }
 }

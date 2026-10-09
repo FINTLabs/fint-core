@@ -5,14 +5,12 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
-    @Query("select distinct c.adapterId from ContractEntity c")
-    fun getAdapterIds(): Set<String>
-
     @Query(
         """
         select distinct c
         from ContractEntity c
         left join fetch c.capabilityEntityset
+        left join fetch c.eventCapabilityEntityset
         where c.userName = :userName and c.orgId = :orgId
         """,
     )
@@ -26,6 +24,20 @@ interface ContractJpaRepository : JpaRepository<ContractEntity, Long> {
         select distinct c
         from ContractEntity c
         left join fetch c.capabilityEntityset
+        left join fetch c.eventCapabilityEntityset
+        where c.orgId = :orgId
+        """,
+    )
+    fun findAllByOrgId(
+        @Param("orgId") orgId: String,
+    ): List<ContractEntity>
+
+    @Query(
+        """
+        select distinct c
+        from ContractEntity c
+        left join fetch c.capabilityEntityset
+        left join fetch c.eventCapabilityEntityset
         """,
     )
     fun findAllWithCapabilities(): List<ContractEntity>

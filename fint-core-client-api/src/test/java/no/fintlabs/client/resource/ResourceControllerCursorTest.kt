@@ -7,6 +7,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
 import no.fintlabs.client.resource.paging.PageCursor
@@ -41,6 +42,7 @@ class ResourceControllerCursorTest {
                     resourceService,
                     mockk<RequestFintEventService>(),
                     mockk<RequestStatusService>(),
+                    mockk<LiveReadService> { every { startByFilter(any(), any(), any(), any()) } returns null },
                     consumerConfiguration(),
                     mockk<StatsService>(),
                 ),

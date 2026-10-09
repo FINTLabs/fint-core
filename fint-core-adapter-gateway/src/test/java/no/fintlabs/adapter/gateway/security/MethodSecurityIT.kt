@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.OrgIdConverter
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.EventController
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
@@ -8,9 +9,11 @@ import no.fintlabs.adapter.gateway.event.response.ResponseEventService
 import no.fintlabs.adapter.gateway.exception.ExceptionController
 import no.fintlabs.adapter.gateway.heartbeat.HeartbeatController
 import no.fintlabs.adapter.gateway.heartbeat.HeartbeatService
-import no.fintlabs.adapter.gateway.register.CapabilityKey
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.EventCapabilities
+import no.fintlabs.adapter.gateway.register.EventCapabilityController
+import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.fintlabs.adapter.gateway.register.RegistrationController
 import no.fintlabs.adapter.gateway.register.RegistrationService
 import no.fintlabs.adapter.gateway.sync.SyncController
@@ -24,8 +27,11 @@ import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
 import no.novari.core.shared.event.EventScope
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.containsString
@@ -110,19 +116,24 @@ class MethodSecurityIT {
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
 
-        givenContract(CapabilityKey("utdanning", "elev", "elev"))
+        givenContract(resourceRefOf("utdanning", "elev", "elev"))
     }
 
-    private fun givenContract(vararg capabilities: CapabilityKey) {
+    private fun givenContract(vararg syncResources: FintResourceRef) {
         whenever(contractService.lookup(any(), any()))
-            .thenReturn(ContractLookup.Found(capabilities.toSet()))
+            .thenReturn(ContractLookup.Found(contractFor("fintlabs.no", *syncResources)))
     }
+
+    private fun contractFor(
+        orgId: String,
+        vararg syncResources: FintResourceRef,
+    ): RegisteredContract = RegisteredContract(OrgId.from(orgId), syncResources.toSet(), EventCapabilities.NONE)
 
     @Test
     fun `sync denies page for org outside JWT assets with ProblemDetail body`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("other.org.no")))
                     .with(authentication(adapter())),
@@ -138,7 +149,7 @@ class MethodSecurityIT {
     fun `sync returns 400 for unparseable body before payload authorization runs`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{not-json")
                     .with(authentication(adapter())),
@@ -151,7 +162,7 @@ class MethodSecurityIT {
     fun `sync denies adapter without component role with role message`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("fintlabs.no")))
                     .with(authentication(adapter(roles = emptyList()))),
@@ -165,7 +176,7 @@ class MethodSecurityIT {
     fun `sync denies a page with no metadata instead of throwing`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}")
                     .with(authentication(adapter())),
@@ -184,7 +195,7 @@ class MethodSecurityIT {
 
         mockMvc
             .perform(
-                patch("/utdanning/elev/elev")
+                patch("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(adapter())),
@@ -203,7 +214,7 @@ class MethodSecurityIT {
 
         mockMvc
             .perform(
-                delete("/utdanning/elev/elev")
+                delete("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(syncPage))
                     .with(authentication(adapter())),
@@ -216,7 +227,7 @@ class MethodSecurityIT {
     fun `sync allows page for org in JWT assets`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -229,7 +240,7 @@ class MethodSecurityIT {
     fun `sync denies a page for an org this gateway does not serve`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("vtfk.no")))
                     .with(authentication(adapter(assets = "fintlabs.no,vtfk.no"))),
@@ -241,11 +252,11 @@ class MethodSecurityIT {
 
     @Test
     fun `sync denies a resource the contract does not cover`() {
-        givenContract(CapabilityKey("utdanning", "elev", "skoleressurs"))
+        givenContract(resourceRefOf("utdanning", "elev", "skoleressurs"))
 
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -261,7 +272,7 @@ class MethodSecurityIT {
 
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -275,7 +286,7 @@ class MethodSecurityIT {
     fun `sync builds the storage coordinate from the page org, not the JWT's first asset`() {
         mockMvc
             .perform(
-                post("/utdanning/elev/elev")
+                post("/provider/utdanning/elev/elev")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(fullSyncPage("test.fintlabs.no")))
                     .with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))),
@@ -290,7 +301,7 @@ class MethodSecurityIT {
     fun `heartbeat denies org outside JWT assets`() {
         mockMvc
             .perform(
-                post("/heartbeat")
+                post("/provider/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(heartbeat("other.org.no")))
                     .with(authentication(adapter())),
@@ -303,7 +314,7 @@ class MethodSecurityIT {
     fun `heartbeat allows org in JWT assets`() {
         mockMvc
             .perform(
-                post("/heartbeat")
+                post("/provider/heartbeat")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(heartbeat("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -316,7 +327,7 @@ class MethodSecurityIT {
     fun `register denies contract for org outside JWT assets`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract(orgId = "other.org.no")))
                     .with(authentication(adapter())),
@@ -329,7 +340,7 @@ class MethodSecurityIT {
     fun `register denies contract with username not matching JWT`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract(username = "someone@else.no")))
                     .with(authentication(adapter())),
@@ -342,7 +353,7 @@ class MethodSecurityIT {
     fun `register allows contract matching JWT org and username`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract()))
                     .with(authentication(adapter())),
@@ -355,7 +366,7 @@ class MethodSecurityIT {
     fun `register allows a second org for the same adapter when both are JWT assets`() {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract(orgId = "test.fintlabs.no")))
                     .with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))),
@@ -368,7 +379,7 @@ class MethodSecurityIT {
     fun `event response denies org outside JWT assets`() {
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseEvent("other.org.no")))
                     .with(authentication(adapter())),
@@ -381,7 +392,7 @@ class MethodSecurityIT {
     fun `event response allows org in JWT assets`() {
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseEvent("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -396,7 +407,7 @@ class MethodSecurityIT {
 
         mockMvc
             .perform(
-                post("/event")
+                post("/provider/event")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseEvent("fintlabs.no")))
                     .with(authentication(adapter())),
@@ -407,9 +418,27 @@ class MethodSecurityIT {
     }
 
     @Test
+    fun `event capabilities answer without a token`() {
+        whenever(contractService.eventCapabilitiesFor(OrgId.from("fintlabs.no")))
+            .thenReturn(OrgEventCapabilities("fintlabs.no", emptyList()))
+
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", "fintlabs.no"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value("fintlabs.no"))
+    }
+
+    @Test
+    fun `any other path still needs a token`() {
+        mockMvc
+            .perform(get("/internal/anything-else"))
+            .andExpect(status().isUnauthorized)
+    }
+
+    @Test
     fun `event fetch denies a package the adapter has no role for`() {
         mockMvc
-            .perform(get("/event/utdanning/vurdering").with(authentication(adapter())))
+            .perform(get("/provider/event/utdanning/vurdering").with(authentication(adapter())))
             .andExpect(status().isForbidden)
             .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
 
@@ -421,7 +450,7 @@ class MethodSecurityIT {
         whenever(contractService.lookup(any(), any())).thenReturn(ContractLookup.Absent)
 
         mockMvc
-            .perform(get("/event/utdanning/elev").with(authentication(adapter())))
+            .perform(get("/provider/event/utdanning/elev").with(authentication(adapter())))
             .andExpect(status().isForbidden)
             .andExpect(jsonPath("$.detail").value(DenialReason.NO_REGISTERED_CONTRACT.detail))
 
@@ -430,14 +459,15 @@ class MethodSecurityIT {
 
     @Test
     fun `event fetch covers only the orgs the adapter has a contract for`() {
-        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(emptySet()))
+        val contract = contractFor("fintlabs.no")
+        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(contract))
         whenever(contractService.lookup(USERNAME, "test.fintlabs.no")).thenReturn(ContractLookup.Absent)
 
         mockMvc
-            .perform(get("/event/utdanning/elev").with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))))
+            .perform(get("/provider/event/utdanning/elev").with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))))
             .andExpect(status().isOk)
 
-        verify(requestEventService).getEvents(listOf(OrgId.from("fintlabs.no")), listOf(EventScope("utdanning", "elev")), 0)
+        verify(requestEventService).getEvents(listOf(contract), listOf(EventScope("utdanning", "elev")), 0)
     }
 
     @Test
@@ -448,11 +478,11 @@ class MethodSecurityIT {
             )
 
         mockMvc
-            .perform(get("/event/utdanning").param("size", "5").with(authentication(adapter)))
+            .perform(get("/provider/event/utdanning").param("size", "5").with(authentication(adapter)))
             .andExpect(status().isOk)
 
         verify(requestEventService).getEvents(
-            listOf(OrgId.from("fintlabs.no")),
+            listOf(contractFor("fintlabs.no", resourceRefOf("utdanning", "elev", "elev"))),
             listOf(EventScope("utdanning", "elev"), EventScope("utdanning", "vurdering")),
             5,
         )
@@ -535,6 +565,8 @@ class MethodSecurityIT {
         HeartbeatController::class,
         RegistrationController::class,
         EventController::class,
+        EventCapabilityController::class,
+        OrgIdConverter::class,
         ExceptionController::class,
     )
     class TestApp

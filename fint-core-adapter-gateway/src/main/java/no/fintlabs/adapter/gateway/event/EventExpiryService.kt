@@ -4,6 +4,7 @@ import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.response.ResponseFintEventProducer
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
+import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
 import no.novari.core.shared.model.OrgId
@@ -27,7 +28,8 @@ import java.time.Instant
  * PENDING event past its deadline, so when an adapter answers at the same instant, or another
  * replica sweeps the same event, exactly one writer wins. The expired ResponseFintEvent below
  * exists only as a Kafka feed record for external consumers, and only the replica whose flip
- * won publishes it.
+ * won publishes it. A READ is flipped like any other event but never published, because live
+ * reads are not on the feed.
  */
 @Service
 class EventExpiryService(
@@ -55,7 +57,10 @@ class EventExpiryService(
         now: Instant,
     ) {
         eventStore.findExpired(collectionName, now).forEach { request ->
-            if (eventStore.markExpired(request.corrId, collectionName, now)) {
+            if (!eventStore.markExpired(request.corrId, collectionName, now)) return@forEach
+            if (request.operationType == OperationType.READ) {
+                logger.info("Read event {} expired.", request.corrId)
+            } else {
                 logger.info("Event {} expired. Publishing expired response to the feed.", request.corrId)
                 responseFintEventProducer.publish(request.toExpiredResponse())
             }

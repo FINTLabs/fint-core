@@ -1,7 +1,5 @@
 server:
   port: 0 # 0 tells Spring to pick a random available port to avoid port conflicts during CI/CD
-  servlet:
-    context-path: /provider
 
 fint:
   provider:
@@ -43,3 +41,16 @@ logging:
   level:
     root: INFO
     no.fintlabs: DEBUG # Helpful to see your datasync logs during testing
+
+management:
+  endpoints:
+    web:
+      base-path: /provider/actuator
+      exposure:
+        include: health,info,prometheus
+
+springdoc:
+  api-docs:
+    path: /provider/v3/api-docs
+  swagger-ui:
+    path: /provider/swagger-ui.html

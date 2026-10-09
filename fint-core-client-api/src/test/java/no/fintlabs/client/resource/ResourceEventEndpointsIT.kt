@@ -6,6 +6,8 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestAccepted
 import no.fintlabs.client.resource.event.RequestFailed
 import no.fintlabs.client.resource.event.RequestFintEventService
@@ -14,7 +16,12 @@ import no.fintlabs.client.resource.event.RequestStatusService
 import no.fintlabs.client.resource.event.RequestValidated
 import no.fintlabs.client.resource.event.ResourceCreated
 import no.fintlabs.client.resource.event.ResourceDeleted
+import no.fintlabs.client.resource.event.ResourceNotRead
+import no.fintlabs.client.resource.event.ResourceRead
+import no.fintlabs.client.resource.event.ResourcesRead
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
+import no.novari.fint.core.model.utdanning.elev.Elev
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
 import org.springframework.boot.SpringBootConfiguration
@@ -70,6 +77,9 @@ class ResourceEventEndpointsIT {
 
     @MockitoBean
     private lateinit var statsService: StatsService
+
+    @MockitoBean
+    private lateinit var liveReadService: LiveReadService
 
     @LocalServerPort
     private var port = 0
@@ -173,6 +183,91 @@ class ResourceEventEndpointsIT {
     }
 
     @Test
+    fun `a filtered read with the header is accepted with a status location and the applied preference`() {
+        given(liveReadService.startByFilter(coordinate, "navn eq 'Testesen'", ListOptions(), "respond-async"))
+            .willReturn(eventWith("corr-read"))
+
+        val response = get("/utdanning/elev/elev?\$filter=navn%20eq%20'Testesen'", prefer = "respond-async")
+
+        assertEquals(202, response.statusCode())
+        assertEquals("$statusUrlBase/corr-read", locationOf(response))
+        assertEquals("respond-async", response.headers().firstValue("Preference-Applied").orElse(""))
+    }
+
+    @Test
+    fun `a read by id with the header is accepted with a status location`() {
+        given(liveReadService.startById(coordinate, "systemid", "42", "respond-async"))
+            .willReturn(eventWith("corr-read-id"))
+
+        val response = get("/utdanning/elev/elev/systemid/42", prefer = "respond-async")
+
+        assertEquals(202, response.statusCode())
+        assertEquals("$statusUrlBase/corr-read-id", locationOf(response))
+        assertEquals("respond-async", response.headers().firstValue("Preference-Applied").orElse(""))
+    }
+
+    @Test
+    fun `a read that cannot go live is answered from the cache without the applied preference`() {
+        given(resourceService.getResources(coordinate, 0, 0, 0, "navn eq 'Testesen'", null))
+            .willReturn(
+                createFintResourcesResponse(
+                    "https://api.felleskomponent.no",
+                    "utdanning/elev/elev",
+                    emptyList(),
+                    0,
+                    0,
+                    0,
+                ),
+            )
+
+        val response = get("/utdanning/elev/elev?\$filter=navn%20eq%20'Testesen'", prefer = "respond-async")
+
+        assertEquals(200, response.statusCode())
+        assertTrue(response.headers().firstValue("Preference-Applied").isEmpty)
+    }
+
+    @Test
+    fun `status of a finished read by filter is 200 with the list`() {
+        given(requestStatusService.getStatusResponse(coordinate, "corr-read"))
+            .willReturn(
+                ResourcesRead(
+                    createFintResourcesResponse(
+                        "https://api.felleskomponent.no",
+                        "utdanning/elev/elev",
+                        listOf(Elev(elevnummer = Identifikator(identifikatorverdi = "E-1"))),
+                        0,
+                        0,
+                        1,
+                    ),
+                ),
+            )
+
+        val response = statusOf("corr-read")
+
+        assertEquals(200, response.statusCode())
+        assertTrue(response.body().contains("\"total_items\":1"))
+        assertTrue(response.body().contains("E-1"))
+    }
+
+    @Test
+    fun `status of a finished read by id is 200 with the resource`() {
+        given(requestStatusService.getStatusResponse(coordinate, "corr-read-id"))
+            .willReturn(ResourceRead(Elev(elevnummer = Identifikator(identifikatorverdi = "E-1"))))
+
+        val response = statusOf("corr-read-id")
+
+        assertEquals(200, response.statusCode())
+        assertTrue(response.body().contains("E-1"))
+    }
+
+    @Test
+    fun `status of a read by id that found nothing is 404`() {
+        given(requestStatusService.getStatusResponse(coordinate, "corr-read-none")).willReturn(ResourceNotRead)
+
+        assertEquals(404, statusOf("corr-read-none").statusCode())
+    }
+
+    @Test
     fun `each failure type maps to its own http status`() {
         given(requestStatusService.getStatusResponse(coordinate, "rejected"))
             .willReturn(RequestFailed(mapOf("errorMessage" to "no"), RequestFailed.FailureType.REJECTED))
@@ -219,6 +314,11 @@ class ResourceEventEndpointsIT {
 
     private fun statusOf(corrId: String): HttpResponse<String> =
         send(HttpRequest.newBuilder(uri("/utdanning/elev/elev/status/$corrId")).GET())
+
+    private fun get(
+        path: String,
+        prefer: String,
+    ): HttpResponse<String> = send(HttpRequest.newBuilder(uri(path)).header("Prefer", prefer).GET())
 
     private fun send(request: HttpRequest.Builder): HttpResponse<String> =
         client.send(

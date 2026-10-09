@@ -6,6 +6,11 @@ import io.mockk.slot
 import io.mockk.verify
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.models.EventCapability
+import no.fintlabs.adapter.operation.OperationType
+import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
@@ -29,7 +34,31 @@ class ContractServiceTest {
             val lookup = contractService.lookup(USERNAME, ORG_ID)
 
             assertThat(lookup)
-                .isEqualTo(ContractLookup.Found(setOf(CapabilityKey("utdanning", "elev", "elev"))))
+                .isEqualTo(found(syncResources = setOf(resourceRefOf("utdanning", "elev", "elev"))))
+        }
+
+        @Test
+        fun `reports the event capabilities of a stored contract`() {
+            givenStoredContract(
+                contract(
+                    eventCapabilities =
+                        setOf(
+                            eventCapability("utdanning", "vurdering", "elevfravar", OperationType.READ),
+                            eventCapability("utdanning", "vurdering", "fravar", OperationType.CREATE, OperationType.UPDATE),
+                        ),
+                ),
+            )
+
+            val lookup = contractService.lookup(USERNAME, ORG_ID) as ContractLookup.Found
+
+            assertThat(lookup.contract.eventCapabilities).isEqualTo(
+                EventCapabilities(
+                    mapOf(
+                        resourceRefOf("utdanning", "vurdering", "elevfravar") to setOf(OperationType.READ),
+                        resourceRefOf("utdanning", "vurdering", "fravar") to setOf(OperationType.CREATE, OperationType.UPDATE),
+                    ),
+                ),
+            )
         }
 
         @Test
@@ -55,7 +84,7 @@ class ContractServiceTest {
             val lookup = contractService.lookup(USERNAME, ORG_ID)
 
             assertThat(lookup)
-                .isEqualTo(ContractLookup.Found(setOf(CapabilityKey("utdanning", "elev", "elev"))))
+                .isEqualTo(found(syncResources = setOf(resourceRefOf("utdanning", "elev", "elev"))))
         }
     }
 
@@ -115,23 +144,69 @@ class ContractServiceTest {
         }
     }
 
-    @Test
-    fun `returns the distinct adapter ids the store knows about`() {
-        val ids = setOf("adapter-1", "adapter-2")
-        every { contractJpaRepository.getAdapterIds() } returns ids
+    @Nested
+    inner class EventCapabilitiesFor {
+        private val elevfravar = resourceRefOf("utdanning", "vurdering", "elevfravar")
+        private val fravar = resourceRefOf("utdanning", "vurdering", "fravar")
 
-        assertThat(contractService.getAdapterIds()).isEqualTo(ids)
+        @Test
+        fun `lists the union of what the org's adapters answer`() {
+            givenStoredContractsForOrg(
+                contract(eventCapabilities = setOf(eventCapability("utdanning", "vurdering", "elevfravar", OperationType.READ))),
+                contract(
+                    eventCapabilities =
+                        setOf(
+                            eventCapability("utdanning", "vurdering", "elevfravar", OperationType.CREATE),
+                            eventCapability("utdanning", "vurdering", "fravar", OperationType.READ),
+                        ),
+                ),
+            )
+
+            val capabilities = contractService.eventCapabilitiesFor(OrgId.from(ORG_ID))
+
+            assertThat(capabilities.orgId).isEqualTo(ORG_ID)
+            assertThat(capabilities.operationsFor(elevfravar)).containsExactlyInAnyOrder(OperationType.READ, OperationType.CREATE)
+            assertThat(capabilities.operationsFor(fravar)).containsExactly(OperationType.READ)
+            assertThat(capabilities.canRead(resourceRefOf("utdanning", "vurdering", "karakter"))).isFalse()
+        }
+
+        @Test
+        fun `lists nothing when the org's adapters answer no events`() {
+            givenStoredContractsForOrg(contract())
+
+            assertThat(contractService.eventCapabilitiesFor(OrgId.from(ORG_ID)).resources).isEmpty()
+        }
+
+        @Test
+        fun `lists nothing for an org without contracts`() {
+            givenStoredContractsForOrg()
+
+            assertThat(contractService.eventCapabilitiesFor(OrgId.from(ORG_ID)).resources).isEmpty()
+        }
+
+        private fun givenStoredContractsForOrg(vararg contracts: AdapterContract) {
+            every { contractJpaRepository.findAllByOrgId(ORG_ID) } returns contracts.map(::ContractEntity)
+        }
     }
 
-    private fun givenStoredContract(vararg capabilities: AdapterCapability) {
+    private fun givenStoredContract(vararg capabilities: AdapterCapability) =
+        givenStoredContract(contract(capabilities = capabilities.toSet()))
+
+    private fun givenStoredContract(contract: AdapterContract) {
         every {
             contractJpaRepository.findByUserNameAndOrgId(any(), any())
-        } returns ContractEntity(contract(capabilities = capabilities.toSet()))
+        } returns ContractEntity(contract)
     }
+
+    private fun found(
+        syncResources: Set<FintResourceRef>,
+        eventCapabilities: EventCapabilities = EventCapabilities.NONE,
+    ): ContractLookup.Found = ContractLookup.Found(RegisteredContract(OrgId.from(ORG_ID), syncResources, eventCapabilities))
 
     private fun contract(
         orgId: String = ORG_ID,
         capabilities: Set<AdapterCapability> = setOf(capability("utdanning", "elev", "elev")),
+        eventCapabilities: Set<EventCapability> = emptySet(),
     ): AdapterContract =
         AdapterContract().apply {
             this.adapterId = "adapter-1"
@@ -139,6 +214,20 @@ class ContractServiceTest {
             this.username = USERNAME
             this.heartbeatIntervalInMinutes = 5
             this.capabilities = capabilities
+            this.eventCapabilities = eventCapabilities
+        }
+
+    private fun eventCapability(
+        domain: String,
+        pkg: String,
+        resource: String,
+        vararg operations: OperationType,
+    ): EventCapability =
+        EventCapability().apply {
+            this.domainName = domain
+            this.packageName = pkg
+            this.resourceName = resource
+            this.operations = operations.toSet()
         }
 
     private fun capability(

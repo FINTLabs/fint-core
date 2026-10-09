@@ -2,6 +2,7 @@ package no.novari.core.shared.relation
 
 import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceEntry
+import no.novari.core.shared.store.toIdentifierRefs
 import no.novari.fint.core.model.FintResource
 import no.novari.fint.core.model.Link
 
@@ -13,13 +14,23 @@ import no.novari.fint.core.model.Link
  * skipped: some adapters deliver both directions of a relation themselves, and a link the
  * adapter stored on the target must not be rendered a second time by our edge.
  */
-fun List<RelationEdge>.mergeInto(page: List<Pair<ResourceEntry, FintResource>>) {
+fun List<RelationEdge>.mergeInto(page: List<Pair<ResourceEntry, FintResource>>) =
+    mergeIntoIdentified(page.map { (entry, resource) -> entry.identifiers to resource })
+
+/**
+ * The same merge for resources that were never stored, such as the result of a live read. The
+ * identifiers are read off the resources themselves.
+ */
+fun List<RelationEdge>.mergeIntoResources(resources: List<FintResource>) =
+    mergeIntoIdentified(resources.map { it.toIdentifierRefs() to it })
+
+private fun List<RelationEdge>.mergeIntoIdentified(page: List<Pair<List<IdentifierRef>, FintResource>>) {
     if (isEmpty()) return
 
     val byIdentifier = HashMap<IdentifierRef, BackLinkTarget>()
-    page.forEach { (entry, resource) ->
+    page.forEach { (identifiers, resource) ->
         val target = BackLinkTarget(resource)
-        entry.identifiers.forEach { byIdentifier.putIfAbsent(it, target) }
+        identifiers.forEach { byIdentifier.putIfAbsent(it, target) }
     }
 
     forEach { edge ->

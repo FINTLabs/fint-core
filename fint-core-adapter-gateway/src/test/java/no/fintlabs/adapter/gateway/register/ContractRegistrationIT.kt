@@ -3,6 +3,9 @@ package no.fintlabs.adapter.gateway.register
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.models.EventCapability
+import no.fintlabs.adapter.operation.OperationType
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -17,7 +20,9 @@ import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -113,11 +118,11 @@ class ContractRegistrationIT {
     @Test
     fun `re-registering updates scalar contract fields`() {
         postRegister(contract(heartbeat = 5))
-        postRegister(contract(heartbeat = 15))
+        postRegister(contract(heartbeat = 2))
 
         val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
 
-        assertThat(stored.heartbeatIntervalInMinutes).isEqualTo(15)
+        assertThat(stored.heartbeatIntervalInMinutes).isEqualTo(2)
         assertThat(contractJpaRepository.count()).isEqualTo(1)
     }
 
@@ -157,13 +162,90 @@ class ContractRegistrationIT {
         ).containsExactly("elevfravar")
     }
 
+    @Test
+    fun `register persists the event capabilities as one row per resource and operation`() {
+        postRegister(
+            contract(
+                eventCapabilities =
+                    setOf(
+                        eventCapability("vurdering", "elevfravar", OperationType.READ),
+                        eventCapability("vurdering", "aktivitetsfravar", OperationType.CREATE, OperationType.UPDATE),
+                    ),
+            ),
+        )
+
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
+        assertThat(stored.eventCapabilityEntityset.map { "${it.resourceName}:${it.operation}" })
+            .containsExactlyInAnyOrder("elevfravar:READ", "aktivitetsfravar:CREATE", "aktivitetsfravar:UPDATE")
+    }
+
+    @Test
+    fun `re-registering replaces the event capabilities`() {
+        postRegister(contract(eventCapabilities = setOf(eventCapability("vurdering", "elevfravar", OperationType.READ))))
+        postRegister(contract(eventCapabilities = setOf(eventCapability("vurdering", "aktivitetsfravar", OperationType.READ))))
+
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
+        assertThat(stored.eventCapabilityEntityset.map { it.resourceName }).containsExactly("aktivitetsfravar")
+    }
+
+    @Test
+    fun `the internal endpoint lists what the org's adapters can read live, without a token`() {
+        postRegister(contract(eventCapabilities = setOf(eventCapability("vurdering", "elevfravar", OperationType.READ))))
+
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", orgId))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value(orgId))
+            .andExpect(jsonPath("$.resources.length()").value(1))
+            .andExpect(jsonPath("$.resources[0].domainName").value("utdanning"))
+            .andExpect(jsonPath("$.resources[0].packageName").value("vurdering"))
+            .andExpect(jsonPath("$.resources[0].resourceName").value("elevfravar"))
+            .andExpect(jsonPath("$.resources[0].operations.length()").value(1))
+            .andExpect(jsonPath("$.resources[0].operations[0]").value("READ"))
+    }
+
+    @Test
+    fun `the internal endpoint lists nothing for an org without contracts`() {
+        mockMvc
+            .perform(get(OrgEventCapabilities.PATH).param("orgId", "unknown.no"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.orgId").value("unknown.no"))
+            .andExpect(jsonPath("$.resources").isEmpty)
+    }
+
+    @Test
+    fun `a contract that breaks a rule is refused before anything is stored, naming the field`() {
+        mockMvc
+            .perform(
+                post("/provider/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        objectMapper.writeValueAsBytes(
+                            contract(
+                                heartbeat = 10,
+                                eventCapabilities = setOf(eventCapability("vurdering", "finnesikke", OperationType.READ)),
+                            ),
+                        ),
+                    ).with(authentication(principal)),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("The request body is not valid"))
+            .andExpect(jsonPath("$.errors[?(@.field == 'heartbeatIntervalInMinutes')]").exists())
+            .andExpect(
+                jsonPath(
+                    "$.errors[?(@.field == 'eventCapabilities[]')].message",
+                ).value("/utdanning/vurdering/finnesikke is not a resource in the FINT model"),
+            )
+
+        assertThat(contractJpaRepository.count()).isEqualTo(0)
+    }
+
     private fun postRegister(
         contract: AdapterContract,
         authenticatedAs: CorePrincipal = principal,
     ) {
         mockMvc
             .perform(
-                post("/register")
+                post("/provider/register")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(contract))
                     .with(authentication(authenticatedAs)),
@@ -189,6 +271,7 @@ class ContractRegistrationIT {
         orgId: String = this.orgId,
         heartbeat: Int = 5,
         capabilities: Set<AdapterCapability> = setOf(capability(resource = "elev")),
+        eventCapabilities: Set<EventCapability> = emptySet(),
     ): AdapterContract =
         AdapterContract().apply {
             this.adapterId = this@ContractRegistrationIT.adapterId
@@ -196,6 +279,19 @@ class ContractRegistrationIT {
             this.username = this@ContractRegistrationIT.username
             this.heartbeatIntervalInMinutes = heartbeat
             this.capabilities = capabilities
+            this.eventCapabilities = eventCapabilities
+        }
+
+    private fun eventCapability(
+        pkg: String,
+        resource: String,
+        vararg operations: OperationType,
+    ): EventCapability =
+        EventCapability().apply {
+            this.domainName = this@ContractRegistrationIT.domainName
+            this.packageName = pkg
+            this.resourceName = resource
+            this.operations = operations.toSet()
         }
 
     private fun capability(

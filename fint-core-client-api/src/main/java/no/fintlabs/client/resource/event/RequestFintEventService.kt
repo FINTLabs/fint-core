@@ -1,5 +1,6 @@
 package no.fintlabs.client.resource.event
 
+import no.fintlabs.adapter.models.event.EventIdentifikator
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.EventProperties
@@ -25,6 +26,8 @@ import java.util.UUID
  * here, while the client's POST is being served: the response mapper resolves the component for
  * common resources from the current request, so this serialization must stay on the request
  * thread. From here on, the value is just a string; the provider never looks inside it.
+ *
+ * A read event carries no value and is never published to Kafka, since the feed is for writes.
  */
 @Service
 class RequestFintEventService(
@@ -54,15 +57,29 @@ class RequestFintEventService(
     ): RequestFintEvent {
         val event = coordinate.toRequestFintEvent(resourceData, operationType)
 
-        eventStore.save(
-            event,
-            Instant.ofEpochMilli(event.created).plus(eventProperties.retention),
-            coordinate.toEventCollectionName(),
-        )
+        eventStore.save(event, event.expiresAt(), coordinate.toEventCollectionName())
         requestFintEventProducer.publish(event)
 
         return event
     }
+
+    fun createRead(
+        coordinate: ResourceCoordinate,
+        read: ReadRequest,
+    ): RequestFintEvent {
+        val event = coordinate.toRequestFintEvent(null, OperationType.READ)
+
+        when (read) {
+            is ReadRequest.ByFilter -> event.filter = read.filter
+            is ReadRequest.ById -> event.id = EventIdentifikator(read.idField, read.idValue)
+        }
+
+        eventStore.save(event, event.expiresAt(), coordinate.toEventCollectionName())
+
+        return event
+    }
+
+    private fun RequestFintEvent.expiresAt(): Instant = Instant.ofEpochMilli(created).plus(eventProperties.retention)
 
     private fun ResourceCoordinate.toRequestFintEvent(
         resourceData: Any?,

@@ -2,6 +2,7 @@ package no.fintlabs.client.resource.event
 
 import io.mockk.mockk
 import io.mockk.verify
+import no.fintlabs.adapter.models.event.EventIdentifikator
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.EventProperties
 import no.fintlabs.client.kafka.event.RequestFintEventProducer
@@ -73,5 +74,42 @@ class RequestFintEventServiceTest {
         val event = service.createAndPublish(coordinate, null, OperationType.UPDATE)
 
         assertThat(event.value).isNull()
+    }
+
+    @Test
+    fun `a read by filter asks for every match`() {
+        val event = service.createRead(coordinate, ReadRequest.ByFilter("systemId/identifikatorverdi eq '42'"))
+
+        assertThat(event.operationType).isEqualTo(OperationType.READ)
+        assertThat(event.filter).isEqualTo("systemId/identifikatorverdi eq '42'")
+        assertThat(event.id).isNull()
+        assertThat(event.value).isNull()
+        assertThat(event.timeToLive).isEqualTo(now.plus(Duration.ofMinutes(15)).toEpochMilli())
+
+        verify {
+            eventStore.save(event, now.plus(Duration.ofMinutes(30)), "fintlabs_no_events")
+        }
+    }
+
+    @Test
+    fun `a read by id asks for that one resource`() {
+        val event = service.createRead(coordinate, ReadRequest.ById("systemid", "42"))
+
+        assertThat(event.operationType).isEqualTo(OperationType.READ)
+        assertThat(event.id).isEqualTo(EventIdentifikator("systemid", "42"))
+        assertThat(event.filter).isNull()
+        assertThat(event.value).isNull()
+
+        verify {
+            eventStore.save(event, now.plus(Duration.ofMinutes(30)), "fintlabs_no_events")
+        }
+    }
+
+    @Test
+    fun `a read is never put on the feed`() {
+        service.createRead(coordinate, ReadRequest.ByFilter("kommentar eq 'x'"))
+        service.createRead(coordinate, ReadRequest.ById("systemid", "42"))
+
+        verify(exactly = 0) { producer.publish(any()) }
     }
 }

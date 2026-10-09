@@ -8,6 +8,7 @@ import io.mockk.slot
 import io.mockk.verify
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.operation.OperationType
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -48,6 +49,36 @@ class ContractRepublisherTest {
     }
 
     @Test
+    fun `a stored contract is published with its event capabilities, one entry per resource`() {
+        val stored = contract("IMMEDIATE")
+        stored.eventCapabilityEntityset.add(eventCapability(stored, "elevfravar", OperationType.READ))
+        stored.eventCapabilityEntityset.add(eventCapability(stored, "elevfravar", OperationType.CREATE))
+        stored.eventCapabilityEntityset.add(eventCapability(stored, "fravar", OperationType.READ))
+        every { repository.findAllWithCapabilities() } returns listOf(stored)
+        val published = slot<AdapterContract>()
+        every { producer.send(capture(published)) } just runs
+
+        republisher.republishContracts()
+
+        val byResource = published.captured.eventCapabilities.associateBy { it.entityUri }
+        assertThat(byResource.keys).containsExactlyInAnyOrder("/utdanning/vurdering/elevfravar", "/utdanning/vurdering/fravar")
+        assertThat(byResource.getValue("/utdanning/vurdering/elevfravar").operations)
+            .containsExactlyInAnyOrder(OperationType.READ, OperationType.CREATE)
+        assertThat(byResource.getValue("/utdanning/vurdering/fravar").operations).containsExactly(OperationType.READ)
+    }
+
+    @Test
+    fun `a stored contract without event capabilities is published with an empty set`() {
+        every { repository.findAllWithCapabilities() } returns listOf(contract("IMMEDIATE"))
+        val published = slot<AdapterContract>()
+        every { producer.send(capture(published)) } just runs
+
+        republisher.republishContracts()
+
+        assertThat(published.captured.eventCapabilities).isEmpty()
+    }
+
+    @Test
     fun `nothing is published when there are no contracts`() {
         every { repository.findAllWithCapabilities() } returns emptyList()
 
@@ -76,4 +107,17 @@ class ContractRepublisherTest {
         )
         return contract
     }
+
+    private fun eventCapability(
+        contract: ContractEntity,
+        resource: String,
+        operation: OperationType,
+    ): EventCapabilityEntity =
+        EventCapabilityEntity().apply {
+            domainName = "utdanning"
+            pkgName = "vurdering"
+            resourceName = resource
+            this.operation = operation
+            contractEntity = contract
+        }
 }

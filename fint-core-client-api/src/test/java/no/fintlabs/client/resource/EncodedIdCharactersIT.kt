@@ -4,6 +4,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
 import no.novari.core.shared.model.ResourceCoordinate
@@ -64,6 +65,9 @@ class EncodedIdCharactersIT {
 
     @MockitoBean
     private lateinit var statsService: StatsService
+
+    @MockitoBean
+    private lateinit var liveReadService: LiveReadService
 
     @LocalServerPort
     private var port = 0

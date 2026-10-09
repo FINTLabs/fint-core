@@ -3,9 +3,13 @@ package no.fintlabs.adapter.gateway.security
 import io.mockk.every
 import io.mockk.mockk
 import no.fintlabs.adapter.gateway.config.ProviderProperties
-import no.fintlabs.adapter.gateway.register.CapabilityKey
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.EventCapabilities
+import no.fintlabs.adapter.gateway.register.RegisteredContract
+import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.resourceRefOf
+import no.novari.fint.core.model.FintResourceRef
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Nested
@@ -82,14 +86,14 @@ class AdapterAuthorizationTest {
     inner class CanSync {
         @Test
         fun `accepts a resource the contract covers`() {
-            givenContract(CapabilityKey("utdanning", "elev", "elev"))
+            givenContract(resourceRefOf("utdanning", "elev", "elev"))
 
             assertThat(authorization.canSync(adapter(), MAIN_ORG, "utdanning", "elev", "elev")).isTrue()
         }
 
         @Test
         fun `rejects a resource the contract does not cover`() {
-            givenContract(CapabilityKey("utdanning", "elev", "elev"))
+            givenContract(resourceRefOf("utdanning", "elev", "elev"))
 
             assertThat(authorization.canSync(adapter(), MAIN_ORG, "utdanning", "elev", "skoleressurs")).isFalse()
         }
@@ -124,8 +128,9 @@ class AdapterAuthorizationTest {
         }
     }
 
-    private fun givenContract(vararg capabilities: CapabilityKey) {
-        every { contractService.lookup(any(), any()) } returns ContractLookup.Found(capabilities.toSet())
+    private fun givenContract(vararg syncResources: FintResourceRef) {
+        every { contractService.lookup(any(), any()) } returns
+            ContractLookup.Found(RegisteredContract(OrgId.from(MAIN_ORG), syncResources.toSet(), EventCapabilities.NONE))
     }
 
     private fun adapter(

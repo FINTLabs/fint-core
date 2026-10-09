@@ -7,6 +7,9 @@ fint:
     event:
       answer-deadline: 15m
       retention: 30m
+    adapter-gateway:
+      url: http://fint-core-adapter-gateway:8080
+      timeout: 2s
 
 spring:
   application:

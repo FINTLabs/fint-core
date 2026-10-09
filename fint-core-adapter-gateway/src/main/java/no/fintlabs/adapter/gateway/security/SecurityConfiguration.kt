@@ -1,6 +1,9 @@
 package no.fintlabs.adapter.gateway.security
 
 import jakarta.servlet.DispatcherType
+import no.fintlabs.adapter.gateway.ProviderApi
+import no.fintlabs.adapter.gateway.admin.AdminController
+import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.resource.server.converter.CorePrincipalConverter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -40,6 +43,8 @@ class SecurityConfiguration(
                     .denyAll()
                     .requestMatchers(*OPEN_PATHS)
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, OrgEventCapabilities.PATH)
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, SYNC_PATH)
                     .access(requireAdapterWithComponent())
                     .requestMatchers(HttpMethod.PATCH, SYNC_PATH)
@@ -75,19 +80,19 @@ class SecurityConfiguration(
         }
 
     companion object {
-        private const val SYNC_PATH = "/{domainName}/{packageName}/{entity}"
-        private const val RELATION_EDGE_REBUILD_PATH = "/admin/relation-edges/rebuild"
-        private const val RELATION_EDGE_DRIFT_PATH = "/admin/relation-edges/drift"
-        private const val RELATION_EDGE_JOB_PATH = "/admin/relation-edges/jobs/{id}"
-        private const val KAFKA_TOPIC_DELETE_PATH = "/admin/kafka/topics/delete"
+        private const val SYNC_PATH = "${ProviderApi.PREFIX}/{domainName}/{packageName}/{entity}"
+        private const val RELATION_EDGE_REBUILD_PATH = "${AdminController.PATH}/relation-edges/rebuild"
+        private const val RELATION_EDGE_DRIFT_PATH = "${AdminController.PATH}/relation-edges/drift"
+        private const val RELATION_EDGE_JOB_PATH = "${AdminController.PATH}/relation-edges/jobs/{id}"
+        private const val KAFKA_TOPIC_DELETE_PATH = "${AdminController.PATH}/kafka/topics/delete"
         private const val ADMIN_ORG_ID = "novari.no"
-        private const val ADMIN_PATHS = "/admin/**"
+        private const val ADMIN_PATHS = "${AdminController.PATH}/**"
         private val OPEN_PATHS =
             arrayOf(
-                "/swagger-ui/**",
-                "/swagger-ui.html",
-                "/v3/api-docs/**",
-                "/actuator/health",
+                "${ProviderApi.PREFIX}/swagger-ui/**",
+                "${ProviderApi.PREFIX}/swagger-ui.html",
+                "${ProviderApi.PREFIX}/v3/api-docs/**",
+                "${ProviderApi.PREFIX}/actuator/health",
             )
     }
 }

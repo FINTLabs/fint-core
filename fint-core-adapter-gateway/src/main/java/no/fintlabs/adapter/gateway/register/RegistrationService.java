@@ -13,14 +13,11 @@ public class RegistrationService {
 
     private final AdapterContractProducer adapterContractProducer;
     private final ContractService contractService;
-    private final AdapterRegistrationValidator adapterRegistrationValidator;
     private final OrgStore orgStore;
 
     public void register(AdapterContract adapterContract) {
-        adapterRegistrationValidator.validateCapabilities(adapterContract.getCapabilities());
         adapterContractProducer.send(adapterContract);
         contractService.saveContract(adapterContract);
         orgStore.upsert(adapterContract.getOrgId());
     }
-
 }

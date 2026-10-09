@@ -59,13 +59,18 @@ class ContractSchemaMigrationIT {
     }
 
     @Test
-    fun `the existing tables are taken over at version 1 and only the contract per org change runs`() {
+    fun `the existing tables are taken over at version 1 and the later changes run on top`() {
         val history =
             jdbc.query("select version, type from flyway_schema_history where success order by installed_rank") { row, _ ->
                 row.getString("version") to row.getString("type")
             }
 
-        assertThat(history).containsExactly("1" to "BASELINE", "2" to "SQL")
+        assertThat(history).containsExactly("1" to "BASELINE", "2" to "SQL", "3" to "SQL")
+    }
+
+    @Test
+    fun `the event capabilities table is created empty`() {
+        assertThat(jdbc.queryForObject("select count(*) from event_capabilities", Long::class.java)).isEqualTo(0L)
     }
 
     @Test
