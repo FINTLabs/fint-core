@@ -29,7 +29,7 @@ data class PagingProperties(
 
 /**
  * How a list read without `size` is served. [batchSize] is how many entries are read from the
- * cursor, enriched and written at a time; it bounds the memory one dump holds.
+ * cursor, enriched and written at a time; it bounds the memory one full read holds.
  */
 data class ListReadProperties(
     val batchSize: Int = 500,

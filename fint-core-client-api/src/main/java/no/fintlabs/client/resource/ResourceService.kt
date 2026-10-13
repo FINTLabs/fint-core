@@ -7,7 +7,7 @@ import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
-import no.fintlabs.client.resource.dto.dumpSelfLink
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -36,20 +36,20 @@ class ResourceService(
     private val filterService: FintFilterService = ODataFilterService()
 
     /**
-     * Opens a dump: every resource of the collection, or every one modified at or after a
-     * positive [sinceTimeStamp]. Nothing is read yet. The dump's batches read the store a batch
+     * Opens a full read: every resource of the collection, or every one modified at or after a
+     * positive [sinceTimeStamp]. Nothing is read yet. Its batches read the store a batch
      * at a time, through a cursor, and each batch gets its back-links and the [filter] before it
-     * is handed on. The caller closes the dump to release the cursor.
+     * is handed on. The caller closes the stream to release the cursor.
      *
      * The filter's syntax and the resource type are checked here, so a bad request fails before
-     * any of the dump is written.
+     * any of it is written.
      */
-    fun openDump(
+    fun streamResources(
         resourceCoordinate: ResourceCoordinate,
         offset: Long,
         sinceTimeStamp: Long?,
         filter: String?,
-    ): ResourceDump {
+    ): ResourceStream {
         validateFilter(filter)
         val resourceClass = resourceCoordinate.toResourceClass()
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
@@ -62,13 +62,13 @@ class ResourceService(
                 .asSequence()
                 .chunked(batchSize)
                 .map { batch ->
-                    DumpBatch(batch.size, batch.toResponseResources(resourceCoordinate, resourceClass, filter))
+                    ResourceBatch(batch.size, batch.toResponseResources(resourceCoordinate, resourceClass, filter))
                 }
 
-        return ResourceDump(
+        return ResourceStream(
             offset = offset,
             selfLink =
-                dumpSelfLink(
+                fullReadSelfLink(
                     consumerConfiguration.baseUrl,
                     resourceCoordinate.toResourceUri(),
                     since.toTimeStamp(),
@@ -81,7 +81,7 @@ class ResourceService(
     /**
      * Serves one page of [size] entries. A positive [sinceTimeStamp] keeps only resources
      * modified at or after it. A page with a [cursor] starts where the cursor points; without
-     * one it skips [offset] entries. A read without a size is a dump, see [openDump].
+     * one it skips [offset] entries. A read without a size is a full read, see [streamResources].
      */
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
@@ -91,7 +91,7 @@ class ResourceService(
         filter: String?,
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
-        require(size > 0) { "A page needs a positive size, a read without one is a dump" }
+        require(size > 0) { "A page needs a positive size, a read without one is a full read" }
         validateFilter(filter)
 
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)

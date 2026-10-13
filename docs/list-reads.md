@@ -7,7 +7,7 @@ decides which one it gets.
 | Kind    | Request                      | What the client gets                                                       |
 |---------|------------------------------|----------------------------------------------------------------------------|
 | A page  | `size` above zero            | `size` entries, with `self`, `prev` and `next` links to move through them. |
-| A dump  | no `size`, or `size=0`       | Every entry of the collection, in one response.                            |
+| A full read | no `size`, or `size=0`       | Every entry of the collection, in one response.                            |
 
 Both accept `sinceTimeStamp`, which keeps only the entries modified at or after it, and `$filter`, an OData
 expression evaluated on each entry. Both come in the same shape:
@@ -23,7 +23,7 @@ expression evaluated on each entry. Both come in the same shape:
 ```
 
 `total_items` is how many entries matched before `$filter`, `size` is how many entries the response holds. In a
-dump the two counts come after `_embedded` instead, see below.
+full read the two counts come after `_embedded` instead, see below.
 
 ## A page
 
@@ -33,11 +33,11 @@ instead of skipping `offset` entries. The page's back-links come from one lookup
 at the page's identifiers. Which relations get a back-link is listed in [RELATION_RULES.md](../RELATION_RULES.md). The page is built
 in memory and returned as a body, which is fine: it is never bigger than `size`.
 
-## A dump
+## A full read
 
-A dump can be the whole collection, hundreds of thousands of entries. It is not built in memory. The client-api reads
+A full read can be the whole collection, hundreds of thousands of entries. It is not built in memory. The client-api reads
 it through a Mongo cursor in batches of 500 and writes each batch to the response as soon as it is ready. One batch
-is in memory at a time, so a dump costs the same few megabytes whether the collection has 500 entries or 5 million.
+is in memory at a time, so a full read costs the same few megabytes whether the collection has 500 entries or 5 million.
 
 ```mermaid
 sequenceDiagram
@@ -84,15 +84,15 @@ halfway, the status cannot change. The writer stops where it is. The `_entries` 
 `total_items` and `size` never come, and nothing is appended, so the body does not parse as JSON. A client cannot
 take it for a complete answer. Tomcat finishes the chunked encoding, so the client's read succeeds; the body is what
 gives the failure away. The writer logs it at error level and counts it in `fint.client.list.stream.aborted`. The gauge
-`fint.client.list.stream.active` shows how many dumps are in flight.
+`fint.client.list.stream.active` shows how many full reads are in flight.
 
-A client that disconnects mid-dump is not a failure. It is logged at debug and nothing is counted.
+A client that disconnects mid-read is not a failure. It is logged at debug and nothing is counted.
 
 ### Why it is built this way
 
-Until October 2026 a dump loaded the whole collection, converted every entry, fetched every relation edge of the
-type and, with OPA on, copied the whole response into a tree before Jackson wrote the first byte. A dump of
+Until October 2026 a full read loaded the whole collection, converted every entry, fetched every relation edge of the
+type and, with OPA on, copied the whole response into a tree before Jackson wrote the first byte. A full read of
 200,000 entries held one to two gigabytes of heap for its duration. The pod has one replica, a 4 Gi limit and exits
-on OutOfMemoryError, so one oversized dump, or two at once, took the org's API down. Forcing clients to page would
-have fixed it, but FINT clients pull full dumps by default and that contract could not change. Streaming keeps the
+on OutOfMemoryError, so one oversized full read, or two at once, took the org's API down. Forcing clients to page would
+have fixed it, but FINT clients pull the whole collection by default and that contract could not change. Streaming keeps the
 contract and the response shape and makes memory per request a function of the batch, not the collection.

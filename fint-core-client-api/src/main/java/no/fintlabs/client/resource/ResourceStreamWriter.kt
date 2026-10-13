@@ -20,7 +20,7 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Writes a [ResourceDump] straight to the response while it is read, so the body leaves the pod
+ * Writes a [ResourceStream] straight to the response while it is read, so the body leaves the pod
  * batch by batch and the collection is never held in memory. The JSON holds the same fields as a
  * [no.fintlabs.client.resource.dto.FintResourcesResponse]: `offset`, then the entries, the self
  * link, `total_items` and `size`. `total_items` is how many entries the cursor yielded before
@@ -34,9 +34,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * stops the body where it is: the entries array is never closed and `total_items` and `size`
  * never come, so the body does not parse and no client can take it for a complete answer. Such a
  * failure is logged, counted in `fint.client.list.stream.aborted` and rethrown as
- * [ResourceDumpAbortedException], which the exception handler lets pass without writing.
+ * [ResourceStreamAbortedException], which the exception handler lets pass without writing.
  *
- * A client that goes away mid-dump is not a failure. The write fails with an I/O error, which
+ * A client that goes away mid-read is not a failure. The write fails with an I/O error, which
  * is logged at debug and swallowed.
  *
  * Each resource renders through the response mapper, exactly as a returned body does. When OPA
@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * request thread so the mapper can read the request's component.
  */
 @Component
-class ResourceDumpWriter(
+class ResourceStreamWriter(
     private val jsonMapper: JsonMapper,
     private val pruner: OpaFieldPruner,
     meterRegistry: MeterRegistry,
@@ -58,13 +58,13 @@ class ResourceDumpWriter(
     }
 
     fun write(
-        dump: ResourceDump,
+        stream: ResourceStream,
         request: HttpServletRequest,
         response: HttpServletResponse,
     ) {
         val allowed = if (pruner.enabled) pruner.allowedFor(request) else null
-        val batches = dump.batches()
-        val first = if (batches.hasNext()) batches.next() else DumpBatch(0, emptyList())
+        val batches = stream.batches()
+        val first = if (batches.hasNext()) batches.next() else ResourceBatch(0, emptyList())
 
         active.incrementAndGet()
         var read = 0L
@@ -75,7 +75,7 @@ class ResourceDumpWriter(
             val generator = jsonMapper.createGenerator(response.outputStream)
 
             generator.writeStartObject()
-            generator.writeNumberProperty("offset", dump.offset)
+            generator.writeNumberProperty("offset", stream.offset)
             generator.writeName("_embedded")
             generator.writeStartObject()
             generator.writeName("_entries")
@@ -90,19 +90,29 @@ class ResourceDumpWriter(
             generator.writeEndArray()
             generator.writeEndObject()
             generator.writeName("_links")
-            generator.writePOJO(mapOf("self" to listOf(dump.selfLink)))
+            generator.writePOJO(mapOf("self" to listOf(stream.selfLink)))
             generator.writeNumberProperty("total_items", read)
             generator.writeNumberProperty("size", written)
             generator.writeEndObject()
             generator.close()
         } catch (e: IOException) {
-            logger.debug("Client left during a dump of {} after {} entries: {}", request.requestURI, written, e.message)
+            logger.debug(
+                "Client left during a full read of {} after {} entries: {}",
+                request.requestURI,
+                written,
+                e.message,
+            )
         } catch (e: JacksonIOException) {
-            logger.debug("Client left during a dump of {} after {} entries: {}", request.requestURI, written, e.message)
+            logger.debug(
+                "Client left during a full read of {} after {} entries: {}",
+                request.requestURI,
+                written,
+                e.message,
+            )
         } catch (e: Exception) {
             aborted.increment()
-            logger.error("Dump of {} aborted after {} entries", request.requestURI, written, e)
-            throw ResourceDumpAbortedException(written, e)
+            logger.error("Full read of {} aborted after {} entries", request.requestURI, written, e)
+            throw ResourceStreamAbortedException(written, e)
         } finally {
             active.decrementAndGet()
         }
@@ -125,6 +135,6 @@ class ResourceDumpWriter(
     companion object {
         const val ACTIVE_METRIC = "fint.client.list.stream.active"
         const val ABORTED_METRIC = "fint.client.list.stream.aborted"
-        private val logger = LoggerFactory.getLogger(ResourceDumpWriter::class.java)
+        private val logger = LoggerFactory.getLogger(ResourceStreamWriter::class.java)
     }
 }

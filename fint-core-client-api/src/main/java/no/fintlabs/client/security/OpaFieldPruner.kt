@@ -16,7 +16,7 @@ import tools.jackson.databind.node.ObjectNode
  * nothing, not everything.
  *
  * [OpaFieldAdvice] applies this to a response body after the controller has returned it, and
- * [no.fintlabs.client.resource.ResourceDumpWriter] applies it to each resource as it is written,
+ * [no.fintlabs.client.resource.ResourceStreamWriter] applies it to each resource as it is written,
  * since a streamed body never passes through the advice.
  *
  * Names are compared ignoring case. The allowed names are lowercased when the decision is made,

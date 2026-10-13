@@ -46,15 +46,15 @@ import java.net.URI
  * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
  * the result once the adapter has answered.
  *
- * A list read with a `size` is one page, returned as a body. A list read without one is a dump
- * of the whole collection, which [ResourceDumpWriter] streams to the response while it is read,
+ * A list read with a `size` is one page, returned as a body. A list read without one is a full read
+ * of the whole collection, which [ResourceStreamWriter] streams to the response while it is read,
  * so the handler returns nothing for it.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
-    private val dumpWriter: ResourceDumpWriter,
+    private val streamWriter: ResourceStreamWriter,
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
     private val liveReadService: LiveReadService,
@@ -84,8 +84,8 @@ class ResourceController(
 
         if (size <= 0) {
             resourceService
-                .openDump(coordinate, offset, sinceTimeStamp, filter)
-                .use { dumpWriter.write(it, request, response) }
+                .streamResources(coordinate, offset, sinceTimeStamp, filter)
+                .use { streamWriter.write(it, request, response) }
             return null
         }
 

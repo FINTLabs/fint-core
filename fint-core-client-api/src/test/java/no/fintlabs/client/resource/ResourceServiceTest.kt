@@ -506,13 +506,13 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `getResources without a positive size is refused, a dump is opened instead`() {
+    fun `getResources without a positive size is refused, a full read is streamed instead`() {
         assertThrows<IllegalArgumentException> { resourceService.getResources(resourceCoordinate, 0, 0, null, null) }
         assertThrows<IllegalArgumentException> { resourceService.getResources(resourceCoordinate, -1, 0, null, null) }
     }
 
     @Test
-    fun `openDump counts the collection, opens a cursor and hands the entries on in batches`() {
+    fun `streamResources counts the collection, opens a cursor and hands the entries on in batches`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries =
             (1..5).map {
@@ -524,11 +524,11 @@ class ResourceServiceTest {
             }
         every { resourceStore.streamAll(null, 2, collectionName) } returns entries.stream()
 
-        val dump = batchedService(batchSize = 2).openDump(resourceCoordinate, 0, null, null)
-        val batches = dump.batches().asSequence().toList()
+        val stream = batchedService(batchSize = 2).streamResources(resourceCoordinate, 0, null, null)
+        val batches = stream.batches().asSequence().toList()
 
-        assertEquals(0, dump.offset)
-        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", dump.selfLink.href)
+        assertEquals(0, stream.offset)
+        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", stream.selfLink.href)
         assertEquals(listOf(2, 2, 1), batches.map { it.read })
         assertEquals(listOf(2, 2, 1), batches.map { it.resources.size })
         assertEquals("EF-5", (batches.last().resources.single() as Elevfravar).systemId?.identifikatorverdi)
@@ -544,20 +544,20 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `openDump reads nothing from the batches until they are asked for`() {
+    fun `streamResources reads nothing from the batches until they are asked for`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         every { resourceStore.streamAll(null, 500, collectionName) } returns
             listOf(resourceEntry("A", identifiers = listOf(IdentifierRef("systemid", "A")))).stream()
 
-        val dump = resourceService.openDump(resourceCoordinate, 0, null, null)
+        val stream = resourceService.streamResources(resourceCoordinate, 0, null, null)
 
         verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
-        dump.batches().next()
+        stream.batches().next()
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
     }
 
     @Test
-    fun `closing the dump closes the store cursor`() {
+    fun `closing the stream closes the store cursor`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         var closed = false
         every { resourceStore.streamAll(null, 500, collectionName) } returns
@@ -565,40 +565,40 @@ class ResourceServiceTest {
                 .empty<ResourceEntry>()
                 .onClose { closed = true }
 
-        resourceService.openDump(resourceCoordinate, 0, null, null).close()
+        resourceService.streamResources(resourceCoordinate, 0, null, null).close()
 
         assertEquals(true, closed)
     }
 
     @Test
-    fun `openDump with sinceTimeStamp reads and self-links from the timestamp`() {
+    fun `streamResources with sinceTimeStamp reads and self-links from the timestamp`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val since = Instant.ofEpochMilli(30)
         every { resourceStore.streamAll(since, 500, collectionName) } returns
             listOf("C", "D", "E").map { resourceEntry(it) }.stream()
 
-        val dump = resourceService.openDump(resourceCoordinate, 0, 30, null)
+        val stream = resourceService.streamResources(resourceCoordinate, 0, 30, null)
 
         assertEquals(
             "https://api.felleskomponent.no/utdanning/vurdering/elevfravar?sinceTimeStamp=30",
-            dump.selfLink.href,
+            stream.selfLink.href,
         )
-        assertEquals(3, dump.batches().next().read)
+        assertEquals(3, stream.batches().next().read)
     }
 
     @Test
-    fun `openDump treats sinceTimeStamp 0 as no timestamp and echoes the offset`() {
+    fun `streamResources treats sinceTimeStamp 0 as no timestamp and echoes the offset`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         every { resourceStore.streamAll(null, 500, collectionName) } returns listOf(resourceEntry("A")).stream()
 
-        val dump = resourceService.openDump(resourceCoordinate, 5, 0, null)
+        val stream = resourceService.streamResources(resourceCoordinate, 5, 0, null)
 
-        assertEquals(5, dump.offset)
-        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", dump.selfLink.href)
+        assertEquals(5, stream.offset)
+        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", stream.selfLink.href)
     }
 
     @Test
-    fun `openDump applies the filter to each batch and keeps the unfiltered count on it`() {
+    fun `streamResources applies the filter to each batch and keeps the unfiltered count on it`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries =
             listOf(
@@ -608,11 +608,11 @@ class ResourceServiceTest {
             ).map { resourceEntry(it, data = Document("systemId", Document("identifikatorverdi", it))) }
         every { resourceStore.streamAll(null, 2, collectionName) } returns entries.stream()
 
-        val dump =
+        val stream =
             batchedService(
                 batchSize = 2,
-            ).openDump(resourceCoordinate, 0, null, "systemId/identifikatorverdi eq 'C'")
-        val batches = dump.batches().asSequence().toList()
+            ).streamResources(resourceCoordinate, 0, null, "systemId/identifikatorverdi eq 'C'")
+        val batches = stream.batches().asSequence().toList()
 
         assertEquals(listOf(2, 1), batches.map { it.read })
         assertEquals(listOf(0, 1), batches.map { it.resources.size })
@@ -620,19 +620,19 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `openDump with invalid filter syntax fails before touching the store`() {
+    fun `streamResources with invalid filter syntax fails before touching the store`() {
         assertThrows<FilterException> {
-            resourceService.openDump(resourceCoordinate, 0, null, "systemId/identifikatorverdi = 'A'")
+            resourceService.streamResources(resourceCoordinate, 0, null, "systemId/identifikatorverdi = 'A'")
         }
 
         verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }
 
     @Test
-    fun `openDump rejects an unknown resource type before touching the store`() {
+    fun `streamResources rejects an unknown resource type before touching the store`() {
         val unknown = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "finnesikke")
 
-        assertThrows<IllegalArgumentException> { resourceService.openDump(unknown, 0, null, null) }
+        assertThrows<IllegalArgumentException> { resourceService.streamResources(unknown, 0, null, null) }
 
         verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }

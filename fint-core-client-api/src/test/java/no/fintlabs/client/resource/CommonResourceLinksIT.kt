@@ -5,7 +5,7 @@ import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
-import no.fintlabs.client.resource.dto.dumpSelfLink
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
@@ -59,7 +59,7 @@ class CommonResourceLinksIT {
     @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
-        ResourceDumpWriter::class,
+        ResourceStreamWriter::class,
         OpaFieldPruner::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,
@@ -150,13 +150,13 @@ class CommonResourceLinksIT {
     @Test
     fun `every entry of a common resource collection self-links under the requested component`() {
         given(
-            resourceService.openDump(
+            resourceService.streamResources(
                 ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person"),
                 0,
                 0,
                 null,
             ),
-        ).willReturn(ResourceDump.of(0, dumpSelfLink(baseUrl, "utdanning/elev/person"), listOf(person)))
+        ).willReturn(ResourceStream.of(0, fullReadSelfLink(baseUrl, "utdanning/elev/person"), listOf(person)))
 
         val entry =
             get("/utdanning/elev/person")

@@ -15,7 +15,7 @@ import tools.jackson.databind.node.ObjectNode
 
 /**
  * Applies [OpaFieldPruner] to a response body a controller returned as a value: a single
- * resource or a [FintResourcesResponse] page. A streamed dump never comes through here, its
+ * resource or a [FintResourcesResponse] page. A streamed full read never comes through here, its
  * writer prunes each resource itself.
  *
  * The body is inspected at runtime rather than by the controller's declared return type, because

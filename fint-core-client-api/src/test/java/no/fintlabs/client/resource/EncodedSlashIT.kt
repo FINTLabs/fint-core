@@ -55,7 +55,7 @@ class EncodedSlashIT {
     @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
-        ResourceDumpWriter::class,
+        ResourceStreamWriter::class,
         OpaFieldPruner::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,

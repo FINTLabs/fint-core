@@ -4,7 +4,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
-import no.fintlabs.client.resource.dto.dumpSelfLink
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
@@ -39,20 +39,20 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * A dump through a real Tomcat. The service is mocked so the batches can be shaped and made to
+ * A full read through a real Tomcat. The service is mocked so the batches can be shaped and made to
  * fail at a chosen point; the controller, the writer and the exception handler are real. Each
  * batch is bigger than Tomcat's 8 KB output buffer, so the status is on the wire before the
  * second batch is read.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    classes = [ResourceDumpIT.SliceApplication::class],
+    classes = [ResourceStreamIT.SliceApplication::class],
     properties = [
         "fint.consumer.base-url=https://api.felleskomponent.no",
         "fint.consumer.org-id=fintlabs.no",
     ],
 )
-class ResourceDumpIT {
+class ResourceStreamIT {
     @SpringBootConfiguration
     @EnableAutoConfiguration(
         exclude = [
@@ -66,7 +66,7 @@ class ResourceDumpIT {
     @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
-        ResourceDumpWriter::class,
+        ResourceStreamWriter::class,
         OpaFieldPruner::class,
         ResourceExceptionHandler::class,
         JacksonConfiguration::class,
@@ -99,8 +99,8 @@ class ResourceDumpIT {
     private val path = "/utdanning/vurdering/elevfravar"
 
     @Test
-    fun `a dump of several batches arrives complete and chunked`() {
-        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches(3)))
+    fun `a full read of several batches arrives complete and chunked`() {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches(3)))
 
         val response = get(path)
 
@@ -116,9 +116,9 @@ class ResourceDumpIT {
     }
 
     @Test
-    fun `a dump through dollar-query streams the same way`() {
-        given(resourceService.openDump(coordinate, 0, 0, "systemId/identifikatorverdi ne 'x'"))
-            .willReturn(dumpOf(batches(2)))
+    fun `a full read through dollar-query streams the same way`() {
+        given(resourceService.streamResources(coordinate, 0, 0, "systemId/identifikatorverdi ne 'x'"))
+            .willReturn(streamOf(batches(2)))
 
         val response =
             client.send(
@@ -137,8 +137,8 @@ class ResourceDumpIT {
 
     @Test
     fun `a failure on the first batch is a 500`() {
-        given(resourceService.openDump(coordinate, 0, 0, null))
-            .willReturn(dumpOf(sequence { error("mongo gone") }))
+        given(resourceService.streamResources(coordinate, 0, 0, null))
+            .willReturn(streamOf(sequence { error("mongo gone") }))
 
         val response = get(path)
 
@@ -160,7 +160,7 @@ class ResourceDumpIT {
                 yield(batch(0))
                 error("mongo gone")
             }
-        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches))
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches))
 
         val response = get(path)
 
@@ -168,10 +168,10 @@ class ResourceDumpIT {
         val body = response.body()
         assertTrue(
             body.startsWith("""{"offset":0,"_embedded":{"_entries":["""),
-            "the body starts as a dump",
+            "the body starts as a full read",
         )
         assertFalse(body.contains("total_items") || body.contains("\"size\""), "the counts are never written")
-        assertFalse(body.contains("detail") || body.contains("Dump aborted"), "no error document is appended")
+        assertFalse(body.contains("detail") || body.contains("Stream aborted"), "no error document is appended")
         assertThrows<JacksonException>("the body must not parse as a complete value") {
             mapper.readValue(body, Map::class.java)
         }
@@ -187,11 +187,11 @@ class ResourceDumpIT {
             HttpResponse.BodyHandlers.ofString(),
         )
 
-    private fun dumpOf(batches: Sequence<List<Elevfravar>>) =
-        ResourceDump(
+    private fun streamOf(batches: Sequence<List<Elevfravar>>) =
+        ResourceStream(
             offset = 0,
-            selfLink = dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"),
-            batches = batches.map { DumpBatch(it.size, it) },
+            selfLink = fullReadSelfLink(baseUrl, "utdanning/vurdering/elevfravar"),
+            batches = batches.map { ResourceBatch(it.size, it) },
         )
 
     private fun batches(count: Int): Sequence<List<Elevfravar>> = (0 until count).asSequence().map(::batch)

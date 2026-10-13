@@ -91,7 +91,7 @@ fun createFintResourcesResponse(
             if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size), prevCursor))
             if (hasNext) addLink("next", pageLink(builder, size, offset + size, nextCursor))
         } else {
-            addLink("self", dumpSelfLink(baseUrl, resourceUri, sinceTimeStamp))
+            addLink("self", fullReadSelfLink(baseUrl, resourceUri, sinceTimeStamp))
         }
     }
 }
@@ -100,7 +100,7 @@ fun createFintResourcesResponse(
  * The `self` link of a read without paging: the plain resource URL, with `sinceTimeStamp` added
  * when the request had one.
  */
-fun dumpSelfLink(
+fun fullReadSelfLink(
     baseUrl: String,
     resourceUri: String,
     sinceTimeStamp: Long = 0,
