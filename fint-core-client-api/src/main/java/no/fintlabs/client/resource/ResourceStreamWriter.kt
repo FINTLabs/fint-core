@@ -111,12 +111,12 @@ class ResourceStreamWriter(
         writeNumberProperty("offset", stream.offset)
         writeObjectPropertyStart("_embedded")
         writeArrayPropertyStart("_entries")
-        for (batch in batches) {
-            batch.resources.forEach { resource ->
+        for ((read, resources) in batches) {
+            resources.forEach { resource ->
                 writeEntry(resource, allowed)
                 tally.written++
             }
-            tally.read += batch.read
+            tally.read += read
         }
         writeEndArray()
         writeEndObject()
