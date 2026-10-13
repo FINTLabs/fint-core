@@ -64,72 +64,88 @@ class ResourceStreamWriter(
     ) {
         val allowed = if (pruner.enabled) pruner.allowedFor(request) else null
         val batches = stream.batches()
+        // Pulled before the status is committed, so a store or filter failure still gets an error status.
         val first = if (batches.hasNext()) batches.next() else ResourceBatch(0, emptyList())
 
         active.incrementAndGet()
-        var read = 0L
-        var written = 0
+        val tally = Tally()
         try {
             response.status = HttpStatus.OK.value()
             response.contentType = MediaType.APPLICATION_JSON_VALUE
-            val generator = jsonMapper.createGenerator(response.outputStream)
-
-            generator.writeStartObject()
-            generator.writeNumberProperty("offset", stream.offset)
-            generator.writeName("_embedded")
-            generator.writeStartObject()
-            generator.writeName("_entries")
-            generator.writeStartArray()
-            var batch = first
-            while (true) {
-                read += batch.read
-                written += generator.writeEntries(batch.resources, allowed)
-                if (!batches.hasNext()) break
-                batch = batches.next()
-            }
-            generator.writeEndArray()
-            generator.writeEndObject()
-            generator.writeName("_links")
-            generator.writePOJO(mapOf("self" to listOf(stream.selfLink)))
-            generator.writeNumberProperty("total_items", read)
-            generator.writeNumberProperty("size", written)
-            generator.writeEndObject()
-            generator.close()
+            jsonMapper
+                .createGenerator(response.outputStream)
+                .writeBody(stream, sequenceOf(first) + batches.asSequence(), allowed, tally)
         } catch (e: IOException) {
-            logger.debug(
-                "Client left during a full read of {} after {} entries: {}",
-                request.requestURI,
-                written,
-                e.message,
-            )
+            clientLeft(request, tally, e)
         } catch (e: JacksonIOException) {
-            logger.debug(
-                "Client left during a full read of {} after {} entries: {}",
-                request.requestURI,
-                written,
-                e.message,
-            )
+            clientLeft(request, tally, e)
         } catch (e: Exception) {
             aborted.increment()
-            logger.error("Full read of {} aborted after {} entries", request.requestURI, written, e)
-            throw ResourceStreamAbortedException(written, e)
+            logger.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, e)
+            throw ResourceStreamAbortedException(tally.written, e)
         } finally {
             active.decrementAndGet()
         }
     }
 
-    private fun JsonGenerator.writeEntries(
-        resources: List<FintResource>,
+    /**
+     * The whole body, start to end. The generator is closed only once everything is written: closing
+     * it after a failure would close the open array and object too, and leave a body that parses.
+     */
+    private fun JsonGenerator.writeBody(
+        stream: ResourceStream,
+        batches: Sequence<ResourceBatch>,
         allowed: OpaDecision.Allowed?,
-    ): Int {
-        resources.forEach { resource ->
-            if (allowed == null) {
-                writePOJO(resource)
-            } else {
-                writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
+        tally: Tally,
+    ) {
+        writeStartObject()
+        writeNumberProperty("offset", stream.offset)
+        writeObjectPropertyStart("_embedded")
+        writeArrayPropertyStart("_entries")
+        for (batch in batches) {
+            batch.resources.forEach { resource ->
+                writeEntry(resource, allowed)
+                tally.written++
             }
+            tally.read += batch.read
         }
-        return resources.size
+        writeEndArray()
+        writeEndObject()
+        writePOJOProperty("_links", mapOf("self" to listOf(stream.selfLink)))
+        writeNumberProperty("total_items", tally.read)
+        writeNumberProperty("size", tally.written)
+        writeEndObject()
+        close()
+    }
+
+    private fun JsonGenerator.writeEntry(
+        resource: FintResource,
+        allowed: OpaDecision.Allowed?,
+    ) {
+        if (allowed == null) {
+            writePOJO(resource)
+        } else {
+            writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
+        }
+    }
+
+    private fun clientLeft(
+        request: HttpServletRequest,
+        tally: Tally,
+        e: Exception,
+    ) {
+        logger.debug(
+            "Client left during a full read of {} after {} entries: {}",
+            request.requestURI,
+            tally.written,
+            e.message,
+        )
+    }
+
+    /** How far the body got: entries read off the cursor before `$filter`, and entries written. */
+    private class Tally {
+        var read = 0L
+        var written = 0
     }
 
     companion object {
