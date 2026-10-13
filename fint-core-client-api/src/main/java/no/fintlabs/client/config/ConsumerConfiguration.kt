@@ -13,6 +13,7 @@ data class ConsumerConfiguration(
     val autorelation: AutorelationConfig = AutorelationConfig(),
     val paging: PagingProperties = PagingProperties(),
     val adapterGateway: AdapterGatewayProperties = AdapterGatewayProperties(),
+    val listRead: ListReadProperties = ListReadProperties(),
 ) {
     init {
         require(baseUrl == baseUrl.lowercase()) { "baseUrl must be lowercase: $baseUrl" }
@@ -25,6 +26,18 @@ data class ConsumerConfiguration(
 data class PagingProperties(
     val cursorKey: String? = null,
 )
+
+/**
+ * How a list read without `size` is served. [batchSize] is how many entries are read from the
+ * cursor, enriched and written at a time; it bounds the memory one dump holds.
+ */
+data class ListReadProperties(
+    val batchSize: Int = 500,
+) {
+    init {
+        require(batchSize > 0) { "batchSize must be positive: $batchSize" }
+    }
+}
 
 data class AutorelationConfig(
     val enabled: Boolean = true,

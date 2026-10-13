@@ -1,5 +1,6 @@
 package no.fintlabs.client.resource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import no.fint.antlr.exception.FilterException;
 import no.fintlabs.client.exception.resource.IdentificatorNotFoundException;
@@ -35,6 +36,16 @@ public class ResourceExceptionHandler {
     @ExceptionHandler(IdentificatorNotFoundException.class)
     public ResponseEntity<?> identificatorNotFound(IdentificatorNotFoundException ex) {
         return ResponseEntity.notFound().build();
+    }
+
+    /**
+     * The dump's status and first bytes were already sent when it failed, so there is nothing to
+     * answer. Writing a body here would append it to the truncated one. Taking the response as a
+     * parameter and returning nothing tells Spring the response is handled, so nothing is rendered.
+     * The writer has logged and counted the failure.
+     */
+    @ExceptionHandler(ResourceDumpAbortedException.class)
+    public void dumpAborted(ResourceDumpAbortedException ex, HttpServletResponse response) {
     }
 
 }

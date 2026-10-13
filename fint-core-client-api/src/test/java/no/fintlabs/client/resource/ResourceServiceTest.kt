@@ -7,6 +7,7 @@ import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidArgumentException
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.config.ListReadProperties
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -58,24 +59,6 @@ class ResourceServiceTest {
             "elevfravar",
         )
 
-    @Test
-    fun `getResources calls findAll when size is 0`() {
-        every {
-            resourceStore.findAll(null, "fintlabs_no_utdanning_vurdering_elevfravar")
-        } returns emptyList()
-
-        val result = resourceService.getResources(resourceCoordinate, 0, 0, null, null)
-
-        verify(exactly = 1) {
-            resourceStore.findAll(null, "fintlabs_no_utdanning_vurdering_elevfravar")
-        }
-        assertNotNull(result)
-    }
-
-    /**
-     * Mocks 5 entries in the database
-     * Should only return 2 when size is 2
-     */
     @Test
     fun `getResources with size returns expected amount`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
@@ -144,7 +127,7 @@ class ResourceServiceTest {
         }
 
         verify(exactly = 0) { resourceStore.findPage(any(), any(), any(), any()) }
-        verify(exactly = 0) { resourceStore.findAll(any(), any()) }
+        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }
 
     @Test
@@ -308,39 +291,6 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `without size, total_items is the number of entries returned and no count query is made`() {
-        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findAll(Instant.ofEpochMilli(30), collectionName) } returns
-            listOf("C", "D", "E").map { resourceEntry(it) }
-
-        val result = resourceService.getResources(resourceCoordinate, 0, 0, 30, null)
-
-        assertEquals(3, result.totalItems)
-        assertEquals(3, result.size)
-        assertEquals(
-            "https://api.felleskomponent.no/utdanning/vurdering/elevfravar?sinceTimeStamp=30",
-            result.links["self"]?.single()?.href,
-        )
-        verify(exactly = 0) { resourceStore.count(any(), any()) }
-    }
-
-    @Test
-    fun `a negative size is unpaged and ignores offset`() {
-        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findAll(null, collectionName) } returns listOf(resourceEntry("A"))
-
-        val result = resourceService.getResources(resourceCoordinate, -1, 5, null, null)
-
-        assertEquals(1, result.totalItems)
-        assertEquals(
-            "https://api.felleskomponent.no/utdanning/vurdering/elevfravar",
-            result.links["self"]?.single()?.href,
-        )
-        verify(exactly = 0) { resourceStore.findPage(any(), any(), any(), any()) }
-        verify(exactly = 0) { resourceStore.count(any(), any()) }
-    }
-
-    @Test
     fun `getResourceById gives correct entity by id`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val systemId = "resource-2"
@@ -439,30 +389,6 @@ class ResourceServiceTest {
         disabledService.getResourceById(resourceCoordinate, "systemid", "EF-2")
 
         verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
-        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
-    }
-
-    @Test
-    fun `a full dump fetches all edges for the type`() {
-        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findAll(null, collectionName) } returns
-            listOf(resourceEntry("r-1", identifiers = listOf(IdentifierRef("systemid", "r-1"))))
-
-        resourceService.getResources(resourceCoordinate, 0, 0, null, null)
-
-        verify(exactly = 1) { relationEdgeStore.findAllByTargetType(any(), any()) }
-        verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
-    }
-
-    @Test
-    fun `a delta poll with size 0 queries edges by identifier`() {
-        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        every { resourceStore.findAll(any(), collectionName) } returns
-            listOf(resourceEntry("r-1", identifiers = listOf(IdentifierRef("systemid", "r-1"))))
-
-        resourceService.getResources(resourceCoordinate, 0, 0, 1723456789L, null)
-
-        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
         verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
     }
 
@@ -580,22 +506,161 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `an unknown resource coordinate is rejected by the model`() {
-        val unknown = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "finnesikke")
+    fun `getResources without a positive size is refused, a dump is opened instead`() {
+        assertThrows<IllegalArgumentException> { resourceService.getResources(resourceCoordinate, 0, 0, null, null) }
+        assertThrows<IllegalArgumentException> { resourceService.getResources(resourceCoordinate, -1, 0, null, null) }
+    }
 
-        every { resourceStore.findAll(null, any()) } returns listOf(resourceEntry("resource-1"))
+    @Test
+    fun `openDump counts the collection, opens a cursor and hands the entries on in batches`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            (1..5).map {
+                resourceEntry(
+                    "EF-$it",
+                    data = Document("systemId", Document("identifikatorverdi", "EF-$it")),
+                    identifiers = listOf(IdentifierRef("systemid", "EF-$it")),
+                )
+            }
+        every { resourceStore.count(null, collectionName) } returns 5
+        every { resourceStore.streamAll(null, 2, collectionName) } returns entries.stream()
 
-        assertThrows<IllegalArgumentException> {
-            resourceService.getResources(unknown, 0, 0, null, null)
+        val dump = batchedService(batchSize = 2).openDump(resourceCoordinate, 0, null, null)
+        val batches = dump.batches().asSequence().toList()
+
+        assertEquals(5, dump.totalItems)
+        assertEquals(0, dump.offset)
+        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", dump.selfLink.href)
+        assertEquals(listOf(2, 2, 1), batches.map { it.size })
+        assertEquals("EF-5", (batches.last().single() as Elevfravar).systemId?.identifikatorverdi)
+        verify(exactly = 3) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        verify(exactly = 1) {
+            relationEdgeStore.findByTargets(
+                any(),
+                any(),
+                listOf(IdentifierRef("systemid", "EF-1"), IdentifierRef("systemid", "EF-2")),
+            )
         }
     }
 
-    private fun consumerConfiguration(autorelationEnabled: Boolean = true) =
-        ConsumerConfiguration(
-            baseUrl = "https://api.felleskomponent.no",
-            orgIdValue = "fintlabs.no",
-            autorelation = AutorelationConfig(enabled = autorelationEnabled),
+    @Test
+    fun `openDump reads nothing from the batches until they are asked for`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.count(null, collectionName) } returns 1
+        every { resourceStore.streamAll(null, 500, collectionName) } returns
+            listOf(resourceEntry("A", identifiers = listOf(IdentifierRef("systemid", "A")))).stream()
+
+        val dump = resourceService.openDump(resourceCoordinate, 0, null, null)
+
+        verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        dump.batches().next()
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+    }
+
+    @Test
+    fun `closing the dump closes the store cursor`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        var closed = false
+        every { resourceStore.count(null, collectionName) } returns 0
+        every { resourceStore.streamAll(null, 500, collectionName) } returns
+            java.util.stream.Stream
+                .empty<ResourceEntry>()
+                .onClose { closed = true }
+
+        resourceService.openDump(resourceCoordinate, 0, null, null).close()
+
+        assertEquals(true, closed)
+    }
+
+    @Test
+    fun `openDump with sinceTimeStamp counts, reads and self-links from the timestamp`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val since = Instant.ofEpochMilli(30)
+        every { resourceStore.count(since, collectionName) } returns 3
+        every { resourceStore.streamAll(since, 500, collectionName) } returns
+            listOf("C", "D", "E").map { resourceEntry(it) }.stream()
+
+        val dump = resourceService.openDump(resourceCoordinate, 0, 30, null)
+
+        assertEquals(3, dump.totalItems)
+        assertEquals(
+            "https://api.felleskomponent.no/utdanning/vurdering/elevfravar?sinceTimeStamp=30",
+            dump.selfLink.href,
         )
+        assertEquals(3, dump.batches().next().size)
+    }
+
+    @Test
+    fun `openDump treats sinceTimeStamp 0 as no timestamp and echoes the offset`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.count(null, collectionName) } returns 1
+        every { resourceStore.streamAll(null, 500, collectionName) } returns listOf(resourceEntry("A")).stream()
+
+        val dump = resourceService.openDump(resourceCoordinate, 5, 0, null)
+
+        assertEquals(5, dump.offset)
+        assertEquals("https://api.felleskomponent.no/utdanning/vurdering/elevfravar", dump.selfLink.href)
+    }
+
+    @Test
+    fun `openDump applies the filter to each batch and keeps total_items unfiltered`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf(
+                "A",
+                "B",
+                "C",
+            ).map { resourceEntry(it, data = Document("systemId", Document("identifikatorverdi", it))) }
+        every { resourceStore.count(null, collectionName) } returns 3
+        every { resourceStore.streamAll(null, 2, collectionName) } returns entries.stream()
+
+        val dump =
+            batchedService(
+                batchSize = 2,
+            ).openDump(resourceCoordinate, 0, null, "systemId/identifikatorverdi eq 'C'")
+        val batches = dump.batches().asSequence().toList()
+
+        assertEquals(3, dump.totalItems)
+        assertEquals(listOf(0, 1), batches.map { it.size })
+        assertEquals("C", (batches.last().single() as Elevfravar).systemId?.identifikatorverdi)
+    }
+
+    @Test
+    fun `openDump with invalid filter syntax fails before touching the store`() {
+        assertThrows<FilterException> {
+            resourceService.openDump(resourceCoordinate, 0, null, "systemId/identifikatorverdi = 'A'")
+        }
+
+        verify(exactly = 0) { resourceStore.count(any(), any()) }
+        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
+    }
+
+    @Test
+    fun `openDump rejects an unknown resource type before touching the store`() {
+        val unknown = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "finnesikke")
+
+        assertThrows<IllegalArgumentException> { resourceService.openDump(unknown, 0, null, null) }
+
+        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
+    }
+
+    private fun batchedService(batchSize: Int) =
+        ResourceService(
+            consumerConfiguration = consumerConfiguration(batchSize = batchSize),
+            resourceStore = resourceStore,
+            relationEdgeStore = relationEdgeStore,
+            cursorCodec = cursorCodec,
+        )
+
+    private fun consumerConfiguration(
+        autorelationEnabled: Boolean = true,
+        batchSize: Int = 500,
+    ) = ConsumerConfiguration(
+        baseUrl = "https://api.felleskomponent.no",
+        orgIdValue = "fintlabs.no",
+        autorelation = AutorelationConfig(enabled = autorelationEnabled),
+        listRead = ListReadProperties(batchSize = batchSize),
+    )
 
     private fun cursorOf(href: String?) = cursorCodec.decode(href!!.substringAfter("cursor="))
 
