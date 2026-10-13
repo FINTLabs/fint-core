@@ -37,9 +37,9 @@ class ResourceService(
 
     /**
      * Opens a dump: every resource of the collection, or every one modified at or after a
-     * positive [sinceTimeStamp]. Nothing is read yet beyond the count. The dump's batches read
-     * the store a batch at a time, through a cursor, and each batch gets its back-links and the
-     * [filter] before it is handed on. The caller closes the dump to release the cursor.
+     * positive [sinceTimeStamp]. Nothing is read yet. The dump's batches read the store a batch
+     * at a time, through a cursor, and each batch gets its back-links and the [filter] before it
+     * is handed on. The caller closes the dump to release the cursor.
      *
      * The filter's syntax and the resource type are checked here, so a bad request fails before
      * any of the dump is written.
@@ -56,16 +56,16 @@ class ResourceService(
         val collectionName = resourceCoordinate.toCollectionName()
         val batchSize = consumerConfiguration.listRead.batchSize
 
-        val totalItems = resourceStore.count(since, collectionName)
         val entries = resourceStore.streamAll(since, batchSize, collectionName)
         val batches =
             entries
                 .asSequence()
                 .chunked(batchSize)
-                .map { batch -> batch.toResponseResources(resourceCoordinate, resourceClass, filter) }
+                .map { batch ->
+                    DumpBatch(batch.size, batch.toResponseResources(resourceCoordinate, resourceClass, filter))
+                }
 
         return ResourceDump(
-            totalItems = totalItems,
             offset = offset,
             selfLink =
                 dumpSelfLink(

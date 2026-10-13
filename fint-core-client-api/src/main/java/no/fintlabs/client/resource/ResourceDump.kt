@@ -10,30 +10,39 @@ import no.novari.fint.core.model.FintResource
  * asks for it, so a dump of any size holds one batch in memory. The store cursor behind it stays
  * open until [close] is called.
  *
- * [totalItems] is the collection count before `$filter`, which is what the paged read reports
- * too. [offset] is echoed from the request, as it always was.
+ * There is no count up front. Each [DumpBatch] says how many entries it read before `$filter`,
+ * and the writer adds them up into `total_items` as it goes, so the number is exactly what the
+ * cursor yielded. [offset] is echoed from the request, as it always was.
  */
 class ResourceDump(
-    val totalItems: Long,
     val offset: Long,
     val selfLink: LinkResponse,
-    private val batches: Sequence<List<FintResource>>,
+    private val batches: Sequence<DumpBatch>,
     private val onClose: () -> Unit = {},
 ) : AutoCloseable {
-    fun batches(): Iterator<List<FintResource>> = batches.iterator()
+    fun batches(): Iterator<DumpBatch> = batches.iterator()
 
     override fun close() = onClose()
 
     companion object {
         /** A dump of resources already in memory, for tests and callers that have the whole list. */
         fun of(
-            totalItems: Long,
             offset: Long,
             selfLink: LinkResponse,
             resources: List<FintResource>,
-        ): ResourceDump = ResourceDump(totalItems, offset, selfLink, sequenceOf(resources))
+        ): ResourceDump = ResourceDump(offset, selfLink, sequenceOf(DumpBatch(resources.size, resources)))
     }
 }
+
+/**
+ * One batch of a dump. [read] is how many entries came off the cursor, [resources] are the ones
+ * left after `$filter`, converted and with their back-links. The two differ only when there is
+ * a filter.
+ */
+data class DumpBatch(
+    val read: Int,
+    val resources: List<FintResource>,
+)
 
 /**
  * A dump failed after its first bytes were sent. The status is already on the wire, so nothing

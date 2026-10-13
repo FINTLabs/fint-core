@@ -22,7 +22,8 @@ expression evaluated on each entry. Both come in the same shape:
 }
 ```
 
-`total_items` is the collection count before `$filter`, `size` is how many entries the response holds.
+`total_items` is how many entries matched before `$filter`, `size` is how many entries the response holds. In a
+dump the two counts come after `_embedded` instead, see below.
 
 ## A page
 
@@ -44,15 +45,13 @@ sequenceDiagram
     participant A as client-api
     participant M as MongoDB
     C ->> A: GET /utdanning/vurdering/elevfravar
-    A ->> M: count
-    M -->> A: total_items
     A ->> M: open cursor, ordered by createdAt
     A ->> M: first batch of 500
     M -->> A: entries
     A ->> M: relation edges for the batch
     M -->> A: edges
     Note over A: convert, add back-links, apply $filter
-    A -->> C: 200, offset, total_items, first entries
+    A -->> C: 200, offset, first entries
     loop until the cursor is empty
         A ->> M: next batch
         M -->> A: entries
@@ -60,12 +59,13 @@ sequenceDiagram
         M -->> A: edges
         A -->> C: more entries
     end
-    A -->> C: self link, size, end of body
+    A -->> C: self link, total_items, size, end of body
 ```
 
-The body goes out as `Transfer-Encoding: chunked`, since its length is not known when it starts. `offset` and
-`total_items` lead because they are known when the dump opens. `size` closes the body because it is only known at
-the end.
+The body goes out as `Transfer-Encoding: chunked`, since its length is not known when it starts. `total_items` is
+counted as the entries come off the cursor and `size` as they are written, so both are exact and both close the
+body, after `_links`. A page has them before `_embedded`; the order of fields in a JSON object carries no meaning,
+and an exact count is worth more than the same order.
 
 ### When something goes wrong
 
@@ -80,10 +80,10 @@ failures still get a proper status:
 | Mongo unreachable, cursor cannot open, first batch fails  | 500                |
 
 Once the first batch is written the status is `200` and on the wire. If a later batch fails, say Mongo goes away
-halfway, the status cannot change. The writer stops where it is. The `_entries` array is never closed, `_links` and
-`size` never come, and nothing is appended, so the body does not parse as JSON. A client cannot take it for a
-complete answer. Tomcat finishes the chunked encoding, so the client's read succeeds; the body is what gives the
-failure away. The writer logs it at error level and counts it in `fint.client.list.stream.aborted`. The gauge
+halfway, the status cannot change. The writer stops where it is. The `_entries` array is never closed, `_links`,
+`total_items` and `size` never come, and nothing is appended, so the body does not parse as JSON. A client cannot
+take it for a complete answer. Tomcat finishes the chunked encoding, so the client's read succeeds; the body is what
+gives the failure away. The writer logs it at error level and counts it in `fint.client.list.stream.aborted`. The gauge
 `fint.client.list.stream.active` shows how many dumps are in flight.
 
 A client that disconnects mid-dump is not a failure. It is logged at debug and nothing is counted.

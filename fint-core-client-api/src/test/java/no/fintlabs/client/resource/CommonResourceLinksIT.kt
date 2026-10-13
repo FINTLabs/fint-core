@@ -156,7 +156,7 @@ class CommonResourceLinksIT {
                 0,
                 null,
             ),
-        ).willReturn(ResourceDump.of(1, 0, dumpSelfLink(baseUrl, "utdanning/elev/person"), listOf(person)))
+        ).willReturn(ResourceDump.of(0, dumpSelfLink(baseUrl, "utdanning/elev/person"), listOf(person)))
 
         val entry =
             get("/utdanning/elev/person")

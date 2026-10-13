@@ -221,7 +221,6 @@ class ResourceEventEndpointsIT {
             .willReturn(
                 ResourceDump.of(
                     0,
-                    0,
                     dumpSelfLink("https://api.felleskomponent.no", "utdanning/elev/elev"),
                     emptyList(),
                 ),

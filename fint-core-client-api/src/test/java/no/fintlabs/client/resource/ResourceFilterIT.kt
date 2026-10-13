@@ -118,7 +118,7 @@ class ResourceFilterIT {
     fun `GET with dollar-filter forwards the decoded expression to the service`() {
         given(resourceService.openDump(resourceCoordinate, 0, 0, "systemId/identifikatorverdi eq 'B'"))
             .willReturn(
-                ResourceDump.of(1, 0, dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
+                ResourceDump.of(0, dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
             )
 
         val response = get("/utdanning/vurdering/elevfravar?\$filter=systemId%2Fidentifikatorverdi%20eq%20%27B%27")
@@ -137,7 +137,7 @@ class ResourceFilterIT {
     fun `POST dollar-query forwards the raw body as the filter expression`() {
         given(resourceService.openDump(resourceCoordinate, 0, 0, "systemId/identifikatorverdi eq 'B'"))
             .willReturn(
-                ResourceDump.of(1, 0, dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
+                ResourceDump.of(0, dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
             )
 
         val response = postQuery("/utdanning/vurdering/elevfravar/\$query", "systemId/identifikatorverdi eq 'B'")

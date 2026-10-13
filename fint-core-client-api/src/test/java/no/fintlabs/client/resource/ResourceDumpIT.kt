@@ -100,7 +100,7 @@ class ResourceDumpIT {
 
     @Test
     fun `a dump of several batches arrives complete and chunked`() {
-        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches(3), totalItems = 3 * BATCH))
+        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches(3)))
 
         val response = get(path)
 
@@ -118,7 +118,7 @@ class ResourceDumpIT {
     @Test
     fun `a dump through dollar-query streams the same way`() {
         given(resourceService.openDump(coordinate, 0, 0, "systemId/identifikatorverdi ne 'x'"))
-            .willReturn(dumpOf(batches(2), totalItems = 2 * BATCH))
+            .willReturn(dumpOf(batches(2)))
 
         val response =
             client.send(
@@ -138,7 +138,7 @@ class ResourceDumpIT {
     @Test
     fun `a failure on the first batch is a 500`() {
         given(resourceService.openDump(coordinate, 0, 0, null))
-            .willReturn(dumpOf(sequence { error("mongo gone") }, totalItems = BATCH))
+            .willReturn(dumpOf(sequence { error("mongo gone") }))
 
         val response = get(path)
 
@@ -148,7 +148,7 @@ class ResourceDumpIT {
     /**
      * The status is already sent when a later batch fails, so the client sees 200. What it must
      * never see is a body that parses as a complete answer: the entries array is never closed,
-     * `size` never comes, and no error document is appended. On the wire Tomcat finishes the
+     * `total_items` and `size` never come, and no error document is appended. On the wire Tomcat finishes the
      * chunked encoding after the exception, so the client's read succeeds and the body is what
      * gives the failure away. This test pins that down; if Tomcat ever drops the connection
      * instead, the read throws and this test will say so.
@@ -160,17 +160,17 @@ class ResourceDumpIT {
                 yield(batch(0))
                 error("mongo gone")
             }
-        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches, totalItems = 2 * BATCH))
+        given(resourceService.openDump(coordinate, 0, 0, null)).willReturn(dumpOf(batches))
 
         val response = get(path)
 
         assertEquals(200, response.statusCode())
         val body = response.body()
         assertTrue(
-            body.startsWith("""{"offset":0,"total_items":${2 * BATCH},"_embedded":{"_entries":["""),
+            body.startsWith("""{"offset":0,"_embedded":{"_entries":["""),
             "the body starts as a dump",
         )
-        assertFalse(body.contains("\"size\""), "the trailing field is never written")
+        assertFalse(body.contains("total_items") || body.contains("\"size\""), "the counts are never written")
         assertFalse(body.contains("detail") || body.contains("Dump aborted"), "no error document is appended")
         assertThrows<JacksonException>("the body must not parse as a complete value") {
             mapper.readValue(body, Map::class.java)
@@ -187,15 +187,12 @@ class ResourceDumpIT {
             HttpResponse.BodyHandlers.ofString(),
         )
 
-    private fun dumpOf(
-        batches: Sequence<List<Elevfravar>>,
-        totalItems: Int,
-    ) = ResourceDump(
-        totalItems = totalItems.toLong(),
-        offset = 0,
-        selfLink = dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"),
-        batches = batches,
-    )
+    private fun dumpOf(batches: Sequence<List<Elevfravar>>) =
+        ResourceDump(
+            offset = 0,
+            selfLink = dumpSelfLink(baseUrl, "utdanning/vurdering/elevfravar"),
+            batches = batches.map { DumpBatch(it.size, it) },
+        )
 
     private fun batches(count: Int): Sequence<List<Elevfravar>> = (0 until count).asSequence().map(::batch)
 

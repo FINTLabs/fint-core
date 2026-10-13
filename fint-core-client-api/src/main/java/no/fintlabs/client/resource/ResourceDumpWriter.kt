@@ -18,21 +18,21 @@ import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.ObjectNode
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.max
 
 /**
  * Writes a [ResourceDump] straight to the response while it is read, so the body leaves the pod
- * batch by batch and the collection is never held in memory. The JSON is the same as a
- * [no.fintlabs.client.resource.dto.FintResourcesResponse] would give, fields in the same order:
- * `offset` and `total_items`, then the entries, the self link and `size`. `total_items` comes
- * from the count the dump was opened with, so it can be written before the entries; `size`
- * is how many were written, so it comes after.
+ * batch by batch and the collection is never held in memory. The JSON holds the same fields as a
+ * [no.fintlabs.client.resource.dto.FintResourcesResponse]: `offset`, then the entries, the self
+ * link, `total_items` and `size`. `total_items` is how many entries the cursor yielded before
+ * `$filter` and `size` how many were written, so both are only known at the end and close the
+ * body. That puts `total_items` later in the JSON than the page response has it, which no
+ * parser cares about, and makes it exact, which clients do care about.
  *
  * The first batch is read, enriched and filtered before anything is written. So a filter that
  * fails to evaluate, a store that cannot be reached or a cursor that cannot open still answers
  * with an error status. Once the first bytes are out the status is fixed. A failure after that
- * stops the body where it is: the entries array is never closed and `size` never comes, so
- * the body does not parse and no client can take it for a complete answer. Such a
+ * stops the body where it is: the entries array is never closed and `total_items` and `size`
+ * never come, so the body does not parse and no client can take it for a complete answer. Such a
  * failure is logged, counted in `fint.client.list.stream.aborted` and rethrown as
  * [ResourceDumpAbortedException], which the exception handler lets pass without writing.
  *
@@ -64,9 +64,10 @@ class ResourceDumpWriter(
     ) {
         val allowed = if (pruner.enabled) pruner.allowedFor(request) else null
         val batches = dump.batches()
-        val first = if (batches.hasNext()) batches.next() else emptyList()
+        val first = if (batches.hasNext()) batches.next() else DumpBatch(0, emptyList())
 
         active.incrementAndGet()
+        var read = 0L
         var written = 0
         try {
             response.status = HttpStatus.OK.value()
@@ -75,17 +76,22 @@ class ResourceDumpWriter(
 
             generator.writeStartObject()
             generator.writeNumberProperty("offset", dump.offset)
-            generator.writeNumberProperty("total_items", max(first.size.toLong(), dump.totalItems))
             generator.writeName("_embedded")
             generator.writeStartObject()
             generator.writeName("_entries")
             generator.writeStartArray()
-            written += generator.writeEntries(first, allowed)
-            while (batches.hasNext()) written += generator.writeEntries(batches.next(), allowed)
+            var batch = first
+            while (true) {
+                read += batch.read
+                written += generator.writeEntries(batch.resources, allowed)
+                if (!batches.hasNext()) break
+                batch = batches.next()
+            }
             generator.writeEndArray()
             generator.writeEndObject()
             generator.writeName("_links")
             generator.writePOJO(mapOf("self" to listOf(dump.selfLink)))
+            generator.writeNumberProperty("total_items", read)
             generator.writeNumberProperty("size", written)
             generator.writeEndObject()
             generator.close()

@@ -45,25 +45,24 @@ class ResourceDumpWriterTest {
         val resources = (1..5).map { elevfravar("EF-$it") }
         val response = MockHttpServletResponse()
 
-        writer.write(dump(resources.chunked(2), totalItems = 5), request, response)
+        writer.write(dump(resources.chunked(2)), request, response)
 
         val expected = createFintResourcesResponse(baseUrl, resourceUri, resources, 0, 0, 5)
         assertEquals(200, response.status)
         assertEquals("application/json", response.contentType)
         assertEquals(mapper.readTree(mapper.writeValueAsString(expected)), mapper.readTree(response.contentAsString))
         assertEquals(
-            mapper.readTree(mapper.writeValueAsString(expected)).propertyNames().toList(),
+            listOf("offset", "_embedded", "_links", "total_items", "size"),
             mapper.readTree(response.contentAsString).propertyNames().toList(),
-            "the fields come in the same order as the page response form",
+            "the counts close the body, since they are only known once every entry is written",
         )
     }
 
     @Test
-    fun `the self link and offset are the dump's, and total_items is the count`() {
+    fun `the self link and offset are the dump's`() {
         val response = MockHttpServletResponse()
         val dump =
             ResourceDump.of(
-                totalItems = 42,
                 offset = 3,
                 selfLink = dumpSelfLink(baseUrl, resourceUri, sinceTimeStamp = 1000),
                 resources = listOf(elevfravar("EF-1")),
@@ -73,25 +72,32 @@ class ResourceDumpWriterTest {
 
         val body = mapper.readTree(response.contentAsString)
         assertEquals("$baseUrl/$resourceUri?sinceTimeStamp=1000", body.at("/_links/self/0/href").asString())
-        assertEquals(42, body.get("total_items").asInt())
         assertEquals(3, body.get("offset").asInt())
         assertEquals(1, body.get("size").asInt())
     }
 
     @Test
-    fun `total_items is never below the number of entries written`() {
+    fun `total_items counts what the cursor yielded before the filter, size what was written`() {
         val response = MockHttpServletResponse()
+        val batches =
+            sequenceOf(
+                DumpBatch(read = 500, resources = listOf(elevfravar("EF-1"), elevfravar("EF-2"))),
+                DumpBatch(read = 500, resources = emptyList()),
+                DumpBatch(read = 17, resources = listOf(elevfravar("EF-3"))),
+            )
 
-        writer.write(dump(listOf(listOf(elevfravar("EF-1"), elevfravar("EF-2"))), totalItems = 1), request, response)
+        writer.write(ResourceDump(0, dumpSelfLink(baseUrl, resourceUri), batches), request, response)
 
-        assertEquals(2, mapper.readTree(response.contentAsString).get("total_items").asInt())
+        val body = mapper.readTree(response.contentAsString)
+        assertEquals(1017, body.get("total_items").asInt())
+        assertEquals(3, body.get("size").asInt())
     }
 
     @Test
     fun `an empty dump is an empty list`() {
         val response = MockHttpServletResponse()
 
-        writer.write(dump(emptyList(), totalItems = 0), request, response)
+        writer.write(dump(emptyList()), request, response)
 
         val expected = createFintResourcesResponse(baseUrl, resourceUri, emptyList(), 0, 0, 0)
         assertEquals(mapper.readTree(mapper.writeValueAsString(expected)), mapper.readTree(response.contentAsString))
@@ -100,7 +106,7 @@ class ResourceDumpWriterTest {
     @Test
     fun `a failure reading the first batch leaves the response untouched`() {
         val response = MockHttpServletResponse()
-        val dump = ResourceDump(1, 0, dumpSelfLink(baseUrl, resourceUri), sequence { error("mongo gone") })
+        val dump = ResourceDump(0, dumpSelfLink(baseUrl, resourceUri), sequence { error("mongo gone") })
 
         assertThrows<IllegalStateException> { writer.write(dump, request, response) }
 
@@ -114,16 +120,16 @@ class ResourceDumpWriterTest {
         val response = MockHttpServletResponse()
         val batches =
             sequence {
-                yield(listOf(elevfravar("EF-1"), elevfravar("EF-2")))
+                yield(batch(elevfravar("EF-1"), elevfravar("EF-2")))
                 error("mongo gone")
             }
-        val dump = ResourceDump(2, 0, dumpSelfLink(baseUrl, resourceUri), batches)
+        val dump = ResourceDump(0, dumpSelfLink(baseUrl, resourceUri), batches)
 
         val aborted = assertThrows<ResourceDumpAbortedException> { writer.write(dump, request, response) }
 
         assertEquals(2, aborted.entriesWritten)
         val body = response.contentAsString
-        assertFalse(body.contains("\"size\""), "the trailing field is never written")
+        assertFalse(body.contains("total_items") || body.contains("\"size\""), "the counts are never written")
         assertThrows<JacksonException>("the body must not parse as a complete value") {
             mapper.readValue(body, Map::class.java)
         }
@@ -145,22 +151,21 @@ class ResourceDumpWriterTest {
                     }
             }
 
-        writer.write(dump(listOf(listOf(elevfravar("EF-1"))), totalItems = 1), request, gone)
+        writer.write(dump(listOf(listOf(elevfravar("EF-1")))), request, gone)
 
         assertEquals(0.0, registry.counter(ResourceDumpWriter.ABORTED_METRIC).count())
     }
 
     @Test
     fun `the in-flight gauge is back to zero after a dump, finished or aborted`() {
-        writer.write(dump(listOf(listOf(elevfravar("EF-1"))), totalItems = 1), request, MockHttpServletResponse())
+        writer.write(dump(listOf(listOf(elevfravar("EF-1")))), request, MockHttpServletResponse())
         runCatching {
             writer.write(
                 ResourceDump(
-                    1,
                     0,
                     dumpSelfLink(baseUrl, resourceUri),
                     sequence {
-                        yield(listOf(elevfravar("EF-1")))
+                        yield(batch(elevfravar("EF-1")))
                         error("x")
                     },
                 ),
@@ -181,11 +186,7 @@ class ResourceDumpWriterTest {
         )
         val response = MockHttpServletResponse()
 
-        writer.write(
-            dump(listOf(listOf(elevfravar("EF-1")), listOf(elevfravar("EF-2"))), totalItems = 2),
-            request,
-            response,
-        )
+        writer.write(dump(listOf(listOf(elevfravar("EF-1")), listOf(elevfravar("EF-2")))), request, response)
 
         val entries = mapper.readTree(response.contentAsString).at("/_embedded/_entries")
         assertEquals(2, entries.size())
@@ -201,17 +202,17 @@ class ResourceDumpWriterTest {
         opaProperties.enabled = true
         val response = MockHttpServletResponse()
 
-        writer.write(dump(listOf(listOf(elevfravar("EF-1"))), totalItems = 1), request, response)
+        writer.write(dump(listOf(listOf(elevfravar("EF-1")))), request, response)
 
         val entry = mapper.readTree(response.contentAsString).at("/_embedded/_entries/0")
         assertEquals(setOf("_links"), entry.propertyNames().toSet())
         assertEquals(0, entry.get("_links").size())
     }
 
-    private fun dump(
-        batches: List<List<FintResource>>,
-        totalItems: Long,
-    ) = ResourceDump(totalItems, 0, dumpSelfLink(baseUrl, resourceUri), batches.asSequence())
+    private fun dump(batches: List<List<FintResource>>) =
+        ResourceDump(0, dumpSelfLink(baseUrl, resourceUri), batches.asSequence().map { DumpBatch(it.size, it) })
+
+    private fun batch(vararg resources: FintResource) = DumpBatch(resources.size, resources.toList())
 
     private fun elevfravar(id: String) =
         Elevfravar(systemId = Identifikator(identifikatorverdi = id)).apply {
