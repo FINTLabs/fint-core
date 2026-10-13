@@ -75,14 +75,23 @@ class ResourceStreamWriter(
             jsonMapper
                 .createGenerator(response.outputStream)
                 .writeBody(stream, sequenceOf(first) + batches.asSequence(), allowed, tally)
-        } catch (e: IOException) {
-            clientLeft(request, tally, e)
-        } catch (e: JacksonIOException) {
-            clientLeft(request, tally, e)
         } catch (e: Exception) {
-            aborted.increment()
-            logger.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, e)
-            throw ResourceStreamAbortedException(tally.written, e)
+            when(e) {
+                is IOException, is JacksonIOException -> {
+                    logger.debug(
+                        "Client left during a full read of {} after {} entries: {}",
+                        request.requestURI,
+                        tally.written,
+                        e.message,
+                    )
+                }
+
+                else -> {
+                    aborted.increment()
+                    logger.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, e)
+                    throw ResourceStreamAbortedException(tally.written, e)
+                }
+            }
         } finally {
             active.decrementAndGet()
         }
@@ -127,19 +136,6 @@ class ResourceStreamWriter(
         } else {
             writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
         }
-    }
-
-    private fun clientLeft(
-        request: HttpServletRequest,
-        tally: Tally,
-        e: Exception,
-    ) {
-        logger.debug(
-            "Client left during a full read of {} after {} entries: {}",
-            request.requestURI,
-            tally.written,
-            e.message,
-        )
     }
 
     /** How far the body got: entries read off the cursor before `$filter`, and entries written. */
