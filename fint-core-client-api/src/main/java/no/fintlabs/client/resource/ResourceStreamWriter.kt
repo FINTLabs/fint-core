@@ -76,7 +76,7 @@ class ResourceStreamWriter(
                 .createGenerator(response.outputStream)
                 .writeBody(stream, sequenceOf(first) + batches.asSequence(), allowed, tally)
         } catch (e: Exception) {
-            when(e) {
+            when (e) {
                 is IOException, is JacksonIOException -> {
                     logger.debug(
                         "Client left during a full read of {} after {} entries: {}",
@@ -130,12 +130,10 @@ class ResourceStreamWriter(
     private fun JsonGenerator.writeEntry(
         resource: FintResource,
         allowed: OpaDecision.Allowed?,
-    ) {
-        if (allowed == null) {
-            writePOJO(resource)
-        } else {
-            writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
-        }
+    ) = if (allowed == null) {
+        writePOJO(resource)
+    } else {
+        writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
     }
 
     /** How far the body got: entries read off the cursor before `$filter`, and entries written. */
