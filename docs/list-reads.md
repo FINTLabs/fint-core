@@ -67,22 +67,6 @@ The body goes out as `Transfer-Encoding: chunked`, since its length is not known
 `total_items` lead because they are known when the dump opens. `size` closes the body because it is only known at
 the end.
 
-### Where the code is
-
-| Step                                                   | Where                                                              |
-|--------------------------------------------------------|--------------------------------------------------------------------|
-| Decide page or dump                                    | `ResourceController.getResource` in client-api                     |
-| Validate the filter, count, open the cursor            | `ResourceService.openDump`                                         |
-| Read the cursor in batches                             | `ResourceStore.streamAll` in fint-core-shared                      |
-| Convert a batch, merge its back-links, apply the filter | `ResourceService`, the same code a page uses                      |
-| Write the batches to the response                      | `ResourceDumpWriter`                                               |
-| Prune fields OPA did not allow, per entry              | `OpaFieldPruner`, shared with the advice that prunes returned bodies |
-| Batch size                                             | `fint.consumer.list-read.batch-size`, default 500                  |
-
-`ResourceService.openDump` returns a `ResourceDump`: the count, the offset, the self link and a lazy sequence of
-batches. Nothing beyond the count is read until the writer pulls a batch. Closing the dump closes the cursor; the
-controller does that in a `use` block.
-
 ### When something goes wrong
 
 The writer reads the first batch, adds its back-links and runs the filter before it writes a byte. So the usual
