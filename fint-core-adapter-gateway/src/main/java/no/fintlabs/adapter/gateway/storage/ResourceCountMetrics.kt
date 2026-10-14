@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Publishes the number of stored resources for each resource collection as a Prometheus gauge.
- * The metric can be found in prometheus as `core-resource-count`
+ * The metric can be found in prometheus as `core_resource_count`
  *
  * Counts are read at startup and refreshed periodically so they recover after a restart and reflect
  * removals through deletes, eviction, and collection wipes.
