@@ -12,6 +12,15 @@ import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * Publishes the number of stored resources for each resource collection as a Prometheus gauge.
+ * The metric can be found in prometheus as `core-resource-count`
+ *
+ * Counts are read at startup and refreshed periodically so they recover after a restart and reflect
+ * removals through deletes, eviction, and collection wipes.
+ *
+ * The refresh interval defaults to five minutes and can be changed with `fint.provider.resource-count-metrics.interval`.
+ */
 @Component
 class ResourceCountMetrics(
     private val resourceStore: ResourceStore,
@@ -25,16 +34,23 @@ class ResourceCountMetrics(
 
     private val values = ConcurrentHashMap<Key, AtomicLong>()
 
+    /**
+     * Refreshes every existing resource collection for the orgs recorded in this gateway's store.
+     * The startup event provides an initial value; the scheduled invocation reconciles the gauges
+     * with MongoDB after subsequent resource changes.
+     */
     @EventListener(ApplicationReadyEvent::class)
     @Scheduled(
         fixedDelayString = $$"${fint.provider.resource-count-metrics.interval:PT5M}",
     )
+    @Synchronized
     fun refresh() {
         val seen = mutableSetOf<Key>()
 
         orgStore.findAll().forEach { org ->
-            resourceStore.storedCoordinates(OrgId.from(org.id)).forEach { coordinate ->
-                val key = Key(org.id, coordinate.toResourceUri())
+            val orgId = OrgId.from(org.id)
+            resourceStore.storedCoordinates(orgId).forEach { coordinate ->
+                val key = Key(orgId.value, coordinate.toResourceUri())
                 seen += key
 
                 val value =
@@ -43,9 +59,10 @@ class ResourceCountMetrics(
                             Gauge
                                 .builder("core.resource.count", backing) {
                                     it.get().toDouble()
-                                }.tags(
+                                }.description("Number of documents stored for this FINT resource type")
+                                .tags(
                                     "org",
-                                    org.id,
+                                    orgId.value,
                                     "domain",
                                     coordinate.domainName,
                                     "package",
@@ -60,7 +77,8 @@ class ResourceCountMetrics(
             }
         }
 
-        // A wipe can drop a collection. Keep its previously registered gauge at zero.
+        // A resource wipe drops its collection, so it no longer appears in storedCoordinates.
+        // Keep its already-registered time series and publish zero instead of leaving a stale count.
         values.forEach { (key, value) ->
             if (key !in seen) value.set(0)
         }
