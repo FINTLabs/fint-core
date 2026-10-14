@@ -59,7 +59,7 @@ class ResourceCountMetrics(
                             Gauge
                                 .builder("core.resource.count", backing) {
                                     it.get().toDouble()
-                                }.description("Number of documents stored for this FINT resource type")
+                                }.description("Number of resources stored for this FINT resource type")
                                 .tags(
                                     "org",
                                     orgId.value,
