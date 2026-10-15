@@ -91,9 +91,23 @@ fun createFintResourcesResponse(
             if (offset > 0) addLink("prev", pageLink(builder, size, max(0, offset - size), prevCursor))
             if (hasNext) addLink("next", pageLink(builder, size, offset + size, nextCursor))
         } else {
-            addLink("self", LinkResponse(builder.toUriString()))
+            addLink("self", fullReadSelfLink(baseUrl, resourceUri, sinceTimeStamp))
         }
     }
+}
+
+/**
+ * The `self` link of a read without paging: the plain resource URL, with `sinceTimeStamp` added
+ * when the request had one.
+ */
+fun fullReadSelfLink(
+    baseUrl: String,
+    resourceUri: String,
+    sinceTimeStamp: Long = 0,
+): LinkResponse {
+    val builder = UriComponentsBuilder.fromUriString("$baseUrl/$resourceUri")
+    if (sinceTimeStamp > 0) builder.queryParam("sinceTimeStamp", sinceTimeStamp)
+    return LinkResponse(builder.toUriString())
 }
 
 private fun pageLink(

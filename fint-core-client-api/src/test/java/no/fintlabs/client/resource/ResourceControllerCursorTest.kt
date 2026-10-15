@@ -40,6 +40,7 @@ class ResourceControllerCursorTest {
             .standaloneSetup(
                 ResourceController(
                     resourceService,
+                    mockk<ResourceStreamWriter>(),
                     mockk<RequestFintEventService>(),
                     mockk<RequestStatusService>(),
                     mockk<LiveReadService> { every { startByFilter(any(), any(), any(), any()) } returns null },
