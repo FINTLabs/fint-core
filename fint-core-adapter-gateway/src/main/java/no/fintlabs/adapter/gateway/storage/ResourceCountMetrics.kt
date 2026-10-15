@@ -32,7 +32,7 @@ class ResourceCountMetrics(
         val resource: String,
     )
 
-    private val values = ConcurrentHashMap<Key, AtomicLong>()
+    private val gaugeBackingCounts = ConcurrentHashMap<Key, AtomicLong>()
 
     /**
      * Refreshes every existing resource collection for the orgs recorded in this gateway's store.
@@ -53,34 +53,38 @@ class ResourceCountMetrics(
                 val key = Key(orgId.value, coordinate.toResourceUri())
                 seen += key
 
-                val value =
-                    values.computeIfAbsent(key) {
-                        AtomicLong().also { backing ->
-                            Gauge
-                                .builder("core.resource.count", backing) {
-                                    it.get().toDouble()
-                                }.description("Number of resources stored for this FINT resource type")
-                                .tags(
-                                    "org",
-                                    orgId.value,
-                                    "domain",
-                                    coordinate.domainName,
-                                    "package",
-                                    coordinate.packageName,
-                                    "resource",
-                                    coordinate.resourceName,
-                                ).register(meterRegistry)
-                        }
-                    }
+                val currentCount = resourceStore.getCacheSize(coordinate)
+                val backingCount = gaugeBackingCounts[key]
 
-                value.set(resourceStore.getCacheSize(coordinate))
+                if (backingCount == null) {
+                    // Register a new gauge and initialize its backing count
+                    val newBackingCount = AtomicLong(currentCount)
+                    Gauge
+                        .builder("core.resource.count", newBackingCount) {
+                            it.get().toDouble()
+                        }.description("Number of resources stored for this FINT resource type")
+                        .tags(
+                            "org",
+                            orgId.value,
+                            "domain",
+                            coordinate.domainName,
+                            "package",
+                            coordinate.packageName,
+                            "resource",
+                            coordinate.resourceName,
+                        ).register(meterRegistry)
+                    gaugeBackingCounts[key] = newBackingCount
+                } else if (backingCount.get() != currentCount) {
+                    // Update the gauge's backing count only when MongoDB reports a changed count.
+                    backingCount.set(currentCount)
+                }
             }
         }
 
         // A resource wipe drops its collection, so it no longer appears in storedCoordinates.
         // Keep its already-registered time series and publish zero instead of leaving a stale count.
-        values.forEach { (key, value) ->
-            if (key !in seen) value.set(0)
+        gaugeBackingCounts.forEach { (key, backingCount) ->
+            if (key !in seen) backingCount.set(0)
         }
     }
 }
