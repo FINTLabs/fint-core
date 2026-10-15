@@ -12,6 +12,8 @@ fint:
       max-age: P21D
       sweep-interval: PT1H
   base-url: https://api.felleskomponent.no
+  security:
+    exposed-endpoints: /provider/actuator
 
 spring:
   application:
