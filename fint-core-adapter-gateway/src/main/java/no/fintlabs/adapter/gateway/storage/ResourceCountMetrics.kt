@@ -54,30 +54,27 @@ class ResourceCountMetrics(
                 seen += key
 
                 val currentCount = resourceStore.getCacheSize(coordinate)
-                val previousCount = publishedCounts[key]
-
-                if (previousCount == null) {
-                    // Register a new gauge with its initial published count
-                    val publishedCount = AtomicLong(currentCount)
-                    Gauge
-                        .builder("core.resource.count", publishedCount) {
-                            it.get().toDouble()
-                        }.description("Number of resources stored for this FINT resource type")
-                        .tags(
-                            "org",
-                            orgId.value,
-                            "domain",
-                            coordinate.domainName,
-                            "package",
-                            coordinate.packageName,
-                            "resource",
-                            coordinate.resourceName,
-                        ).register(meterRegistry)
-                    publishedCounts[key] = publishedCount
-                } else {
-                    // Setting the gauge count is cheap compared with reading the count from MongoDB.
-                    previousCount.set(currentCount)
-                }
+                val publishedCount =
+                    publishedCounts.computeIfAbsent(key) {
+                        // Initialize before registration so an immediate scrape sees the real count.
+                        AtomicLong(currentCount).also { gaugeCount ->
+                            Gauge
+                                .builder("core.resource.count", gaugeCount) {
+                                    it.get().toDouble()
+                                }.description("Number of resources stored for this FINT resource type")
+                                .tags(
+                                    "org",
+                                    orgId.value,
+                                    "domain",
+                                    coordinate.domainName,
+                                    "package",
+                                    coordinate.packageName,
+                                    "resource",
+                                    coordinate.resourceName,
+                                ).register(meterRegistry)
+                        }
+                    }
+                publishedCount.set(currentCount)
             }
         }
 
