@@ -75,7 +75,7 @@ class ResourceCountMetrics(
                         ).register(meterRegistry)
                     gaugeBackingCounts[key] = newBackingCount
                 } else if (backingCount.get() != currentCount) {
-                    // Update the gauge's backing count only when MongoDB reports a changed count.
+                    // Update the gauge if the count has changed
                     backingCount.set(currentCount)
                 }
             }
