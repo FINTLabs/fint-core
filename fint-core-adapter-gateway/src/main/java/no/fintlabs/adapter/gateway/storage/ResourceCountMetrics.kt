@@ -3,6 +3,7 @@ package no.fintlabs.adapter.gateway.storage
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import no.novari.core.shared.model.OrgId
+import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -13,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Publishes the number of stored resources for each resource collection as a Prometheus gauge.
+ * Publishes the count for each resource as a Prometheus gauge.
  * The metric can be found in prometheus as `core_resource_count`
  *
  * Counts are read at startup and refreshed periodically so they recover after a restart and reflect
@@ -35,13 +36,13 @@ class ResourceCountMetrics(
     private val publishedCounts = ConcurrentHashMap<Key, AtomicLong>()
 
     /**
-     * Refreshes every existing resource collection for the orgs recorded in this gateway's store.
-     * The startup event provides an initial value; the scheduled invocation reconciles the gauges
-     * with MongoDB after subsequent resource changes.
+     * Refreshes every resource count for all orgs recorded in this gateway's store.
+     * Initial value on startup, followed by updates at the configured interval.
      */
     @EventListener(ApplicationReadyEvent::class)
     @Scheduled(
         fixedDelayString = $$"${fint.provider.resource-count-metrics.interval:PT5M}",
+        initialDelayString = $$"${fint.provider.resource-count-metrics.interval:PT5M}",
     )
     @Synchronized
     fun refresh() {
@@ -54,26 +55,14 @@ class ResourceCountMetrics(
                 seen += key
 
                 val currentCount = resourceStore.getCacheSize(coordinate)
+
+                // If the gauge doesn't exist, register it.
                 val publishedCount =
                     publishedCounts.computeIfAbsent(key) {
-                        // Initialize before registration so an immediate scrape sees the real count.
-                        AtomicLong(currentCount).also { gaugeCount ->
-                            Gauge
-                                .builder("core.resource.count", gaugeCount) {
-                                    it.get().toDouble()
-                                }.description("Number of resources stored for this FINT resource type")
-                                .tags(
-                                    "org",
-                                    orgId.value,
-                                    "domain",
-                                    coordinate.domainName,
-                                    "package",
-                                    coordinate.packageName,
-                                    "resource",
-                                    coordinate.resourceName,
-                                ).register(meterRegistry)
-                        }
+                        registerGauge(key, coordinate, currentCount)
                     }
+
+                // Update the gauge value.
                 publishedCount.set(currentCount)
             }
         }
@@ -83,5 +72,30 @@ class ResourceCountMetrics(
         publishedCounts.forEach { (key, publishedCount) ->
             if (key !in seen) publishedCount.set(0)
         }
+    }
+
+    /** Registers a gauge initialized with its first database count and returns the `AtomicLong`. */
+    private fun registerGauge(
+        key: Key,
+        coordinate: ResourceCoordinate,
+        initialCount: Long,
+    ): AtomicLong {
+        val publishedCount = AtomicLong(initialCount)
+        Gauge
+            .builder("core.resource.count", publishedCount) {
+                it.get().toDouble()
+            }.description("Number of resources stored for this FINT resource type")
+            .tags(
+                "org",
+                key.orgId,
+                "domain",
+                coordinate.domainName,
+                "package",
+                coordinate.packageName,
+                "resource",
+                coordinate.resourceName,
+            ).register(meterRegistry)
+
+        return publishedCount
     }
 }
