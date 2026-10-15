@@ -93,6 +93,7 @@ class SecurityConfiguration(
                 "${ProviderApi.PREFIX}/swagger-ui.html",
                 "${ProviderApi.PREFIX}/v3/api-docs/**",
                 "${ProviderApi.PREFIX}/actuator/health",
+                "${ProviderApi.PREFIX}/actuator/prometheus",
             )
     }
 }
