@@ -32,7 +32,7 @@ class ResourceCountMetrics(
         val resource: String,
     )
 
-    private val gaugeBackingCounts = ConcurrentHashMap<Key, AtomicLong>()
+    private val publishedCounts = ConcurrentHashMap<Key, AtomicLong>()
 
     /**
      * Refreshes every existing resource collection for the orgs recorded in this gateway's store.
@@ -54,13 +54,13 @@ class ResourceCountMetrics(
                 seen += key
 
                 val currentCount = resourceStore.getCacheSize(coordinate)
-                val backingCount = gaugeBackingCounts[key]
+                val previousCount = publishedCounts[key]
 
-                if (backingCount == null) {
-                    // Register a new gauge and initialize its backing count
-                    val newBackingCount = AtomicLong(currentCount)
+                if (previousCount == null) {
+                    // Register a new gauge with its initial published count
+                    val publishedCount = AtomicLong(currentCount)
                     Gauge
-                        .builder("core.resource.count", newBackingCount) {
+                        .builder("core.resource.count", publishedCount) {
                             it.get().toDouble()
                         }.description("Number of resources stored for this FINT resource type")
                         .tags(
@@ -73,18 +73,18 @@ class ResourceCountMetrics(
                             "resource",
                             coordinate.resourceName,
                         ).register(meterRegistry)
-                    gaugeBackingCounts[key] = newBackingCount
-                } else if (backingCount.get() != currentCount) {
-                    // Update the gauge if the count has changed
-                    backingCount.set(currentCount)
+                    publishedCounts[key] = publishedCount
+                } else {
+                    // Setting the gauge count is cheap compared with reading the count from MongoDB.
+                    previousCount.set(currentCount)
                 }
             }
         }
 
         // A resource wipe drops its collection, so it no longer appears in storedCoordinates.
         // Keep its already-registered time series and publish zero instead of leaving a stale count.
-        gaugeBackingCounts.forEach { (key, backingCount) ->
-            if (key !in seen) backingCount.set(0)
+        publishedCounts.forEach { (key, publishedCount) ->
+            if (key !in seen) publishedCount.set(0)
         }
     }
 }
