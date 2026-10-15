@@ -67,6 +67,7 @@ class SecurityConfigurationIT {
             "/provider/v3/api-docs",
             "/provider/v3/api-docs/swagger-config",
             "/actuator/health",
+            "/actuator/prometheus",
         ],
     )
     fun `open paths are reachable without authentication even when no handler exists`(path: String) {
