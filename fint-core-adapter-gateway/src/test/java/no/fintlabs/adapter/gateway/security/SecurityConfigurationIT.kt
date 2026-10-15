@@ -66,7 +66,7 @@ class SecurityConfigurationIT {
             "/provider/swagger-ui.html",
             "/provider/v3/api-docs",
             "/provider/v3/api-docs/swagger-config",
-            "/provider/actuator/health",
+            "/actuator/health",
         ],
     )
     fun `open paths are reachable without authentication even when no handler exists`(path: String) {
