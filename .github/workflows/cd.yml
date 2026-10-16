@@ -42,7 +42,7 @@ jobs:
         id: orgs
         run: |
           dir="kustomize/overlays/${{ steps.env.outputs.environment }}"
-          orgs=$(find "$dir" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          orgs=$(find "$dir" -mindepth 1 -maxdepth 1 -type d ! -name "*.disabled" -exec basename {} \; 2>/dev/null | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
           echo "orgs=$orgs" >> "$GITHUB_OUTPUT"
           echo "targets in $dir: $orgs"
 

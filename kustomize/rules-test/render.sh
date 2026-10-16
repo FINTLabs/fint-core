@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render the client-api IngressRoute of every overlay under kustomize/overlays
-# (alpha excluded: it has no core 1 to fall back to) into a Traefik
+# (alpha excluded: it has no core 1 to fall back to; *.disabled included) into a Traefik
 # file-provider config. A catch-all "core1" router per host, at the lowest
 # priority, stands in for every route that is not the client-api. No priority
 # is set on the client-api routers, so Traefik ranks them by rule length as in
@@ -17,7 +17,7 @@ hosts=""
   echo "  routers:"
   for overlay in ../overlays/*/*/; do
     env=$(basename "$(dirname "$overlay")")
-    org=$(basename "$overlay")
+    org=$(basename "$overlay"); org=${org%.disabled}
     [ "$env" = alpha ] && continue
     host=$(sed -n 's/^ *host: *//p' "$overlay/org-values.yaml")
     id=$(sed -n 's/^ *id-dotted: *//p' "$overlay/org-values.yaml")
