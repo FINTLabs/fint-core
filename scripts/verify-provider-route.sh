@@ -7,7 +7,7 @@
 # request must carry a real adapter token for the org.
 #
 #   export TOKEN=<adapter access token>
-#   FA_USERNAME=test-adapter@adapter.vlfk.no scripts/verify-provider-route.sh
+#   scripts/verify-provider-route.sh
 #
 # Both gateways answer /provider/register and /provider/status the same way,
 # so the response cannot tell them apart. The script instead reads the new
@@ -27,7 +27,7 @@ case $ENV in
   *) echo "ENV must be api or beta" >&2; exit 2 ;;
 esac
 [ -n "${TOKEN:-}" ] || { echo "export TOKEN=<adapter access token>" >&2; exit 2; }
-[ -n "${FA_USERNAME:-}" ] || { echo "set FA_USERNAME to the adapter username, e.g. test-adapter@adapter.vlfk.no" >&2; exit 2; }
+FA_USERNAME=test-adapter@adapter.vlfk.no
 NS=${ORG_ID//./-}
 k() { kubectl --context "$CONTEXT" "$@"; }
 
