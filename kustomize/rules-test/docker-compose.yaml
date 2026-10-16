@@ -1,0 +1,23 @@
+# Local Traefik (same major/minor as the api cluster) with the file provider.
+# Rules come from dynamic.yaml, which render.sh writes. Backends are whoami
+# containers that answer with their own name, so a curl shows who won.
+# Only core 1 and the client-api are modelled; the client-api is core 2.
+services:
+  traefik:
+    image: traefik:v2.11.2
+    command:
+      - --entrypoints.web.address=:8000
+      - --providers.file.filename=/dynamic.yaml
+      - --api.insecure=true
+      - --log.level=INFO
+    ports:
+      - "18080:8000"
+      - "18081:8080"
+    volumes:
+      - ./dynamic.yaml:/dynamic.yaml:ro
+  core1:
+    image: traefik/whoami
+    command: ["--name=core1"]
+  client-api:
+    image: traefik/whoami
+    command: ["--name=client-api"]
