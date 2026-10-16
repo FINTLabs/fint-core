@@ -105,6 +105,13 @@ class ContractConstraintsTest {
     }
 
     @Test
+    fun `a sync capability without a delta sync interval is valid`() {
+        val contract = contract(capabilities = setOf(capability("elev", "elev", deltaSyncInterval = null)))
+
+        assertThat(violations(contract)).isEmpty()
+    }
+
+    @Test
     fun `a heartbeat outside one to five minutes is refused`() {
         assertThat(violations(contract(heartbeat = 0)))
             .extracting<String> { it.first }
@@ -135,13 +142,14 @@ class ContractConstraintsTest {
         pkg: String,
         resource: String,
         fullSyncIntervalInDays: Int = 1,
+        deltaSyncInterval: AdapterCapability.DeltaSyncInterval? = AdapterCapability.DeltaSyncInterval.IMMEDIATE,
     ): AdapterCapability =
         AdapterCapability().apply {
             this.domainName = "utdanning"
             this.packageName = pkg
             this.resourceName = resource
             this.fullSyncIntervalInDays = fullSyncIntervalInDays
-            this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
+            this.deltaSyncInterval = deltaSyncInterval
         }
 
     private fun eventCapability(
