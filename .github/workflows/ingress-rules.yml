@@ -1,0 +1,32 @@
+name: Ingress rules
+
+# Fails the build if any overlay lets a V3 client (no version header, or a v3
+# header) reach the client-api, or keeps a V4 client away from it. Runs the
+# rendered Traefik rules in the real Traefik image, see kustomize/rules-test.
+on:
+  pull_request:
+    paths: [kustomize/**, .github/workflows/ingress-rules.yml]
+  push:
+    branches: [main, develop]
+    paths: [kustomize/**, .github/workflows/ingress-rules.yml]
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kustomize/rules-test
+    steps:
+      - uses: actions/checkout@v7
+      - name: Render every overlay into a Traefik file-provider config
+        run: ./render.sh
+      - name: Start Traefik with whoami backends
+        run: docker compose up -d --quiet-pull
+      - name: Send the header matrix through Traefik
+        run: ./test.sh
+      - name: Traefik logs
+        if: failure()
+        run: docker compose logs traefik
+      - name: Stop
+        if: always()
+        run: docker compose down
