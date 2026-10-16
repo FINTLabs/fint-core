@@ -59,7 +59,6 @@ spring:
 management:
   endpoints:
     web:
-      base-path: /provider/actuator
       exposure:
         include: health,info,prometheus
 
