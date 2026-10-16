@@ -16,12 +16,15 @@ class ApplicationIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `Actuator endpoints report UP without authentication`() {
+    fun `Actuator health endpoint report UP without authentication`() {
         mockMvc
             .perform(get("/actuator/health"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("UP"))
+    }
 
+    @Test
+    fun `Actuator prometheus endpoint returns metrics without authentication`() {
         mockMvc
             .perform(get("/actuator/prometheus"))
             .andExpect(status().isOk)
