@@ -16,7 +16,7 @@ class ApplicationIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `Actuator health endpoint report UP without authentication`() {
+    fun `Actuator health endpoint reports UP without authentication`() {
         mockMvc
             .perform(get("/actuator/health"))
             .andExpect(status().isOk)
