@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration
 
 /**
  * The rules for a contract that infra-models cannot carry itself, because they need the FINT
- * model. They are added to the validator at start, so `@Valid` on the registration body checks
+ * model, and the one infra-models rule the gateway lifts: `deltaSyncInterval` may be null. They are added to the validator at start, so `@Valid` on the registration body checks
  * them together with the annotations the library already has.
  */
 @Configuration
@@ -26,6 +26,10 @@ class ContractConstraints {
             mapping
                 .type(AdapterCapability::class.java)
                 .constraint(GenericConstraintDef(KnownResource::class.java))
+                // infra-models marks it @NotNull, but adapters may leave it out: the gateway
+                // stores a missing value as "Not Present" and the republisher reads it back as null.
+                .field("deltaSyncInterval")
+                .ignoreAnnotations(true)
 
             mapping
                 .type(EventCapability::class.java)
