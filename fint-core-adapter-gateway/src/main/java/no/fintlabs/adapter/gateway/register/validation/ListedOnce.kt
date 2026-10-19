@@ -4,13 +4,12 @@ import jakarta.validation.Constraint
 import jakarta.validation.ConstraintValidator
 import jakarta.validation.ConstraintValidatorContext
 import jakarta.validation.Payload
-import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.EventCapability
 import kotlin.reflect.KClass
 
 /**
- * A resource may appear only once in a capability list, so a contract has exactly one answer to
- * how it syncs a resource and which operations it covers. Names are compared ignoring case.
+ * A resource may appear only once among the event capabilities, so a contract has exactly one
+ * answer to which operations it covers. Names are compared ignoring case.
  */
 @Target(AnnotationTarget.FIELD)
 @Retention(AnnotationRetention.RUNTIME)
@@ -29,7 +28,7 @@ class ListedOnceValidator : ConstraintValidator<ListedOnce, Collection<*>> {
         val listedTwice =
             capabilities
                 .orEmpty()
-                .mapNotNull { it.entityUri() }
+                .mapNotNull { (it as? EventCapability)?.entityUri }
                 .groupingBy { it.lowercase() }
                 .eachCount()
                 .filterValues { it > 1 }
@@ -42,11 +41,4 @@ class ListedOnceValidator : ConstraintValidator<ListedOnce, Collection<*>> {
             .addConstraintViolation()
         return false
     }
-
-    private fun Any?.entityUri(): String? =
-        when (this) {
-            is AdapterCapability -> entityUri
-            is EventCapability -> entityUri
-            else -> null
-        }
 }

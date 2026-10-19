@@ -11,8 +11,9 @@ import org.springframework.context.annotation.Configuration
 
 /**
  * The rules for a contract that infra-models cannot carry itself, because they need the FINT
- * model, and the one infra-models rule the gateway lifts: `deltaSyncInterval` may be null. They are added to the validator at start, so `@Valid` on the registration body checks
- * them together with the annotations the library already has.
+ * model, and the infra-models rules the gateway lifts so it accepts what provider-gateway
+ * accepted. They are added to the validator at start, so `@Valid` on the registration body
+ * checks them together with the annotations the library already has.
  */
 @Configuration
 class ContractConstraints {
@@ -37,8 +38,13 @@ class ContractConstraints {
 
             mapping
                 .type(AdapterContract::class.java)
-                .field("capabilities")
-                .constraint(GenericConstraintDef(ListedOnce::class.java))
+                // provider-gateway took any adapter id and heartbeat interval, and status-service
+                // shows both. RegistrationService puts the username in for a missing adapter id.
+                .field("adapterId")
+                .ignoreAnnotations(true)
+                .field("heartbeatIntervalInMinutes")
+                .ignoreAnnotations(true)
+                // A sync resource listed twice is merged by RegistrationService instead.
                 .field("eventCapabilities")
                 .constraint(GenericConstraintDef(ListedOnce::class.java))
 
