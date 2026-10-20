@@ -5,11 +5,13 @@ import io.mockk.verify
 import no.fintlabs.adapter.models.event.EventIdentifikator
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.EventProperties
+import no.fintlabs.client.exception.resource.InvalidResourceBodyException
 import no.fintlabs.client.kafka.event.RequestFintEventProducer
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
@@ -53,6 +55,17 @@ class RequestFintEventServiceTest {
 
         verify { eventStore.save(event, now.plus(Duration.ofMinutes(30)), "fintlabs_no_events") }
         verify { producer.publish(event) }
+    }
+
+    @Test
+    fun `a body that does not fit the model is refused before anything is stored or published`() {
+        assertThatThrownBy {
+            service.createAndPublish(coordinate, mapOf("systemId" to "not-an-identifikator"), validateOnly = false)
+        }.isInstanceOf(InvalidResourceBodyException::class.java)
+            .hasMessageStartingWith("The body is not a valid aktivitetsfravar: ")
+
+        verify(exactly = 0) { eventStore.save(any(), any(), any()) }
+        verify(exactly = 0) { producer.publish(any()) }
     }
 
     @Test
