@@ -115,10 +115,8 @@ class AdapterAuthorization(
     }
 
     /**
-     * What the adapter is served and may answer for [orgId]: the event capabilities of its
-     * contract, or [EventCapabilities.NONE] without one, which stands for every operation except
-     * READ. Events need no contract, as on provider-gateway; a contract only narrows a listed
-     * resource and opens READ.
+     * The event capabilities of the adapter's contract for [orgId], or [EventCapabilities.NONE]
+     * without one: every operation except READ.
      */
     fun eventCapabilitiesFor(
         authentication: Authentication,

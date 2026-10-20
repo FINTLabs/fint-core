@@ -450,7 +450,7 @@ class MethodSecurityIT {
     }
 
     @Test
-    fun `event fetch serves a package the adapter has no role for, as provider-gateway did`() {
+    fun `event fetch serves a package the adapter has no role for`() {
         mockMvc
             .perform(get("/provider/event/utdanning/vurdering").with(authentication(adapter())))
             .andExpect(status().isOk)

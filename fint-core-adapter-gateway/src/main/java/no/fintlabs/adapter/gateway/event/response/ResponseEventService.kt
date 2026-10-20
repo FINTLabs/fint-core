@@ -25,16 +25,8 @@ import java.time.Clock
 import java.time.Instant
 
 /**
- * Takes an adapter's answer to a stored request. The stored request decides what kind of event
- * it is, never the answer: an answer that names another operation is accepted and corrected, as
- * provider-gateway accepted it. A READ is handed to [ReadAnswerService]. For a write, the answer
- * claim and the resource write happen in one Mongo transaction.
- *
- * The answer's [ResponseFintEvent.value] matters only where it is used: a successful CREATE or
- * UPDATE stores it, and a conflicted answer hands it to the client as the resource the source
- * system holds. There it must be a resource the model can read. Everywhere else, on a failed or
- * rejected answer and on a VALIDATE that passed, it is dropped: adapters send an empty entry
- * there, which provider-gateway passed on as it was.
+ * Takes an adapter's answer to a pending event: claims the event, stores the resource when the
+ * answer carries one, and publishes the answer.
  */
 @Service
 class ResponseEventService(
@@ -69,9 +61,8 @@ class ResponseEventService(
     }
 
     /**
-     * Events are kept per org, so the request is looked up under the org the answer names. When
-     * it is not there but is under another of the adapter's orgs, the answer named the wrong org
-     * and is refused, rather than reported as an unknown event.
+     * Events are kept per org, so the request is looked up under the org the answer names. An
+     * answer that names another of the adapter's orgs is refused rather than reported unknown.
      */
     private fun findRequest(
         response: ResponseFintEvent,
@@ -90,15 +81,11 @@ class ResponseEventService(
         throw NoRequestFoundException(response.corrId)
     }
 
-    /**
-     * The request's operation. An answer that says another is accepted, as on provider-gateway:
-     * adapter-common copies the request's, so a difference is an adapter bug, and it is logged
-     * because nothing else shows it.
-     */
     private fun operationOf(
         request: RequestFintEvent,
         response: ResponseFintEvent,
     ): OperationType {
+        // The request decides. A different operation in the answer is an adapter bug, so log it.
         if (response.operationType != request.operationType) {
             logger.warn(
                 "Answer to event {} from adapter {} says {} but the request is a {}; the request decides",
@@ -117,6 +104,7 @@ class ResponseEventService(
         collectionName: String,
     ) {
         val resource = if (response.carriesResource(request)) readResource(request, response, collectionName) else null
+        // Nothing reads the value here, so drop it rather than store and publish whatever the adapter sent.
         if (resource == null) response.value = null
 
         val toStore = resource?.takeIf { response.isStored(request) }
@@ -149,12 +137,6 @@ class ResponseEventService(
         )
     }
 
-    /**
-     * The resource in the answer, bound to the model. An answer without one, or with one the
-     * model cannot read, is refused with a 400, and the event is closed as failed with the same
-     * reason, so the client gets the error now instead of at the deadline. provider-gateway
-     * passed such answers on as they were, which nothing can depend on.
-     */
     private fun readResource(
         request: RequestFintEvent,
         response: ResponseFintEvent,
@@ -185,8 +167,8 @@ class ResponseEventService(
     }
 
     /**
-     * Answers the adapter with 400 and [reason], and closes the event as failed with [stored],
-     * which the client gets and the feed carries.
+     * Answers the adapter with 400 and [reason], and closes the event as failed with [stored], so
+     * the client gets the error now instead of at the deadline.
      */
     private fun refuse(
         response: ResponseFintEvent,
@@ -201,17 +183,11 @@ class ResponseEventService(
         throw InvalidResponseFintEventException(reason)
     }
 
-    /**
-     * Where the resource is used: the result of a successful CREATE or UPDATE, which is stored,
-     * and the resource the source system holds on a conflict, which the client gets.
-     */
+    /** A conflicted answer carries the resource the source system holds, which the client gets. */
     private fun ResponseFintEvent.carriesResource(request: RequestFintEvent): Boolean =
         isConflicted || (succeeded() && request.operationType in STORED_OPERATIONS)
 
-    /**
-     * Stored: a successful CREATE or UPDATE, and a conflicted UPDATE, whose resource is what the
-     * source system holds. A conflicted CREATE stores nothing, as before.
-     */
+    /** A conflicted UPDATE is stored too, since its resource is what the source system holds. */
     private fun ResponseFintEvent.isStored(request: RequestFintEvent): Boolean =
         when (request.operationType) {
             OperationType.CREATE -> succeeded()

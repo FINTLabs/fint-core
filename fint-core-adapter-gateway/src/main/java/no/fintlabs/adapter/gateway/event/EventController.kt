@@ -27,9 +27,8 @@ class EventController(
     private val eventAuthorization: EventAuthorization,
 ) {
     /**
-     * Serves pending events for every org in the token that this gateway serves. The path only
-     * filters, as on provider-gateway: no role or contract is needed. A contract narrows what a
-     * listed resource gets and is the only way to be served a READ.
+     * Pending events for every org in the token, filtered by the path. No role or contract is
+     * needed; a contract narrows a listed resource and opens READ.
      */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
@@ -45,10 +44,9 @@ class EventController(
     }
 
     /**
-     * The org check runs here because the body carries the orgId. Whether the adapter may answer
-     * the event's resource and operation cannot: the response body does not say which resource
-     * it answers, so that is checked against the stored request inside [ResponseEventService].
-     * The body is validated before the org check, so a missing field is a 400, not a 403.
+     * The org check runs here, on the body's orgId. Which resource and operation the answer is for
+     * is only known from the stored request, so that is checked in [ResponseEventService].
+     * Validation runs before the org check, so a missing field is a 400, not a 403.
      */
     @PostMapping
     @PreAuthorize("@adapterAuth.hasOrg(authentication, #responseFintEvent.orgId)")

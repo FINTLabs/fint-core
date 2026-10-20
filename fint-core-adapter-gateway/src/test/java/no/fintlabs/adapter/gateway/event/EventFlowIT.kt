@@ -82,7 +82,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `serves a domain the adapter has no role in, as provider-gateway did`() {
+    fun `serves a domain the adapter has no role in`() {
         val request = seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
 
         mockMvc

@@ -11,10 +11,8 @@ import org.springframework.stereotype.Service
 import java.time.Clock
 
 /**
- * Serves pending events to an adapter, org by org. Each org's events are read within the scope
- * the adapter asked for and then kept only when what the org is served covers the event's
- * resource and operation, so a READ never reaches an adapter that did not list it. The cut to
- * [getEvents]'s size happens after that filter, on the oldest events first.
+ * Serves pending events to an adapter: each org's events within the scope, filtered by what the
+ * org is served, oldest first, then cut to size.
  */
 @Service
 class RequestEventService(
