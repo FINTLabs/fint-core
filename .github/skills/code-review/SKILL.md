@@ -16,7 +16,7 @@ Before evaluating the change:
 2. Read the focused references that match the diff:
    - Read `references/sync-storage-events.md` for adapter gateway, Kafka,
      persistence, sync, expiry, or request-event changes.
-   - Read `references/client-api-security.md` for client API, authentication,
+   - Read `references/client-api.md` for client API, authentication,
      OPA, organization isolation, filtering, or pagination changes.
    - Read `references/links-and-relations.md` for forward-link, back-link, JSON
      serialization, relation-edge, common-resource, or URI codec changes.
