@@ -25,7 +25,10 @@ Use the repository Gradle wrapper.
 - `./gradlew :fint-core-client-api:bootRun` starts the client-api locally.
 
 ## Coding Style & Naming Conventions
-Java 25 is configured through the Gradle toolchain. Kotlin and Java coexist in the services; follow existing package names such as `no.fintlabs...` and `no.novari.core.shared...`. Use 4-space indentation and keep classes focused by feature package. Kotlin formatting is enforced by ktlint via `check`.
+Java 25 is configured through the Gradle toolchain. Kotlin and Java coexist in the services; new code is written in Kotlin, also in packages that still hold Java. Follow existing package names such as `no.fintlabs...` and `no.novari.core.shared...`. Use 4-space indentation and keep classes focused by feature package. Kotlin formatting is enforced by ktlint via `check`.
+
+## Documentation
+A class doc says what the class is for, and only when the name does not already say it. Public API docs are short and say what, not how. Document a private function only when it needs context from outside the class or the code is hard to follow. Put the why next to the code it explains, as a comment on that line, not in the class doc. Describe current behaviour; do not compare with earlier systems such as provider-gateway.
 
 ## Testing Guidelines
 Tests use JUnit Jupiter, Spring Boot Test, MockK/Mockito, Awaitility, and Testcontainers. Name unit tests `*Test` and integration tests `*IT`, matching examples such as `RequestCacheTest.kt` and `adapter-gatewayControllerIT.kt`. Run the affected module's `check` task before opening a PR.

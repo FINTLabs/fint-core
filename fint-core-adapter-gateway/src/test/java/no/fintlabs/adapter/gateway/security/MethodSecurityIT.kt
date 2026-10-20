@@ -26,6 +26,7 @@ import no.fintlabs.adapter.models.sync.DeltaSyncPage
 import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.fintlabs.adapter.models.sync.SyncPageMetadata
+import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.EventScope
 import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.core.shared.model.OrgId
@@ -402,7 +403,7 @@ class MethodSecurityIT {
     }
 
     @Test
-    fun `event response denies an adapter with no contract for the org`() {
+    fun `event response allows an adapter with no contract for the org`() {
         whenever(contractService.lookup(any(), any())).thenReturn(ContractLookup.Absent)
 
         mockMvc
@@ -411,8 +412,21 @@ class MethodSecurityIT {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsBytes(responseEvent("fintlabs.no")))
                     .with(authentication(adapter())),
-            ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value(DenialReason.NO_CONTRACT.detail))
+            ).andExpect(status().isOk)
+
+        verify(responseEventService).handleEvent(any<ResponseFintEvent>())
+    }
+
+    @Test
+    fun `event response without an orgId is a bad request, not forbidden`() {
+        mockMvc
+            .perform(
+                post("/provider/event")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(responseEvent(orgId = null)))
+                    .with(authentication(adapter())),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errors[0].field").value("orgId"))
 
         verifyNoInteractions(responseEventService)
     }
@@ -436,56 +450,58 @@ class MethodSecurityIT {
     }
 
     @Test
-    fun `event fetch denies a package the adapter has no role for`() {
+    fun `event fetch serves a package the adapter has no role for`() {
         mockMvc
             .perform(get("/provider/event/utdanning/vurdering").with(authentication(adapter())))
-            .andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
+            .andExpect(status().isOk)
 
-        verifyNoInteractions(requestEventService)
+        verify(requestEventService).getEvents(
+            mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE),
+            EventScope("utdanning", "vurdering"),
+            0,
+        )
     }
 
     @Test
-    fun `event fetch denies an adapter with no contract and says to register one`() {
+    fun `event fetch serves an adapter with no contract everything except READ`() {
         whenever(contractService.lookup(any(), any())).thenReturn(ContractLookup.Absent)
 
         mockMvc
             .perform(get("/provider/event/utdanning/elev").with(authentication(adapter())))
-            .andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value(DenialReason.NO_REGISTERED_CONTRACT.detail))
+            .andExpect(status().isOk)
 
-        verifyNoInteractions(requestEventService)
+        verify(requestEventService).getEvents(
+            mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE),
+            EventScope("utdanning", "elev"),
+            0,
+        )
     }
 
     @Test
-    fun `event fetch covers only the orgs the adapter has a contract for`() {
-        val contract = contractFor("fintlabs.no")
-        whenever(contractService.lookup(USERNAME, "fintlabs.no")).thenReturn(ContractLookup.Found(contract))
+    fun `event fetch covers every served org, with what its contract lists or nothing`() {
+        val readsElev = EventCapabilities(mapOf(resourceRefOf("utdanning", "elev", "elev") to setOf(OperationType.READ)))
+        whenever(contractService.lookup(USERNAME, "fintlabs.no"))
+            .thenReturn(ContractLookup.Found(RegisteredContract(OrgId.from("fintlabs.no"), emptySet(), readsElev)))
         whenever(contractService.lookup(USERNAME, "test.fintlabs.no")).thenReturn(ContractLookup.Absent)
 
         mockMvc
             .perform(get("/provider/event/utdanning/elev").with(authentication(adapter(assets = "fintlabs.no,test.fintlabs.no"))))
             .andExpect(status().isOk)
 
-        verify(requestEventService).getEvents(listOf(contract), listOf(EventScope("utdanning", "elev")), 0)
+        verify(requestEventService).getEvents(
+            mapOf(OrgId.from("fintlabs.no") to readsElev, OrgId.from("test.fintlabs.no") to EventCapabilities.NONE),
+            EventScope("utdanning", "elev"),
+            0,
+        )
     }
 
     @Test
-    fun `event fetch for a domain covers only the packages the adapter has a role for`() {
-        val adapter =
-            adapter(
-                roles = listOf("FINT_Adapter_utdanning_elev", "FINT_Adapter_utdanning_vurdering", "FINT_Adapter_administrasjon_personal"),
-            )
-
+    fun `event fetch for a domain is one scope for the whole domain`() {
         mockMvc
-            .perform(get("/provider/event/utdanning").param("size", "5").with(authentication(adapter)))
+            .perform(get("/provider/event/utdanning").param("size", "5").with(authentication(adapter())))
             .andExpect(status().isOk)
 
-        verify(requestEventService).getEvents(
-            listOf(contractFor("fintlabs.no", resourceRefOf("utdanning", "elev", "elev"))),
-            listOf(EventScope("utdanning", "elev"), EventScope("utdanning", "vurdering")),
-            5,
-        )
+        verify(requestEventService).getEvents(mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE), EventScope("utdanning"), 5)
     }
 
     private fun adapter(
@@ -544,12 +560,13 @@ class MethodSecurityIT {
             this.capabilities = emptySet()
         }
 
-    private fun responseEvent(orgId: String): ResponseFintEvent =
+    private fun responseEvent(orgId: String?): ResponseFintEvent =
         ResponseFintEvent
             .builder()
             .corrId(UUID.randomUUID().toString())
             .orgId(orgId)
             .adapterId("adapter-id")
+            .operationType(OperationType.CREATE)
             .build()
 
     @Configuration

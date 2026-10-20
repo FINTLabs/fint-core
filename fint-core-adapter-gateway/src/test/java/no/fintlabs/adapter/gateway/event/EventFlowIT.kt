@@ -17,13 +17,16 @@ import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
+import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
@@ -69,7 +72,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `serves pending requests for the component the adapter has a role for`() {
+    fun `serves pending requests under the domain`() {
         val request = seedRequest(adapterCollection, orgId)
 
         mockMvc
@@ -79,29 +82,138 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `refuses to serve a domain the adapter has no role in`() {
-        seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
-
-        mockMvc
-            .perform(get("/provider/event/administrasjon").with(authentication(mockPrincipal)))
-            .andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
-    }
-
-    @Test
-    fun `an answer for a component the adapter has no role for is refused and the event stays pending`() {
+    fun `serves a domain the adapter has no role in`() {
         val request = seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
 
         mockMvc
-            .perform(
-                post("/provider/event")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsBytes(responseFor(request)))
-                    .with(authentication(mockPrincipal)),
-            ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value(DenialReason.MISSING_COMPONENT_ROLE.detail))
+            .perform(get("/provider/event/administrasjon").with(authentication(mockPrincipal)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].corrId").value(request.corrId))
+    }
+
+    @Test
+    fun `an answer for a component the adapter has no role for is accepted`() {
+        val request = seedRequest(adapterCollection, orgId, domain = "administrasjon", pkg = "personal")
+        val response =
+            responseFor(request).apply {
+                isFailed = true
+                errorMessage = "The source system is down"
+                value = null
+            }
+
+        answer(response).andExpect(status().isOk)
+
+        val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
+        assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
+        assertThat(stored?.response?.isFailed).isTrue
+    }
+
+    @Test
+    fun `an adapter without a contract is served its events and answers them, except READ`() {
+        val unregistered = principal(username = "other@adapter.$orgId")
+        val request = seedRequest(adapterCollection, orgId)
+        seedRequest(adapterCollection, orgId, operation = OperationType.READ)
+
+        mockMvc
+            .perform(get("/provider/event/$domainName").with(authentication(unregistered)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].corrId").value(request.corrId))
+
+        answer(responseFor(request), unregistered).andExpect(status().isOk)
+
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.ANSWERED)
+        assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNotNull
+    }
+
+    @Test
+    fun `a failed answer may carry an empty value, which is dropped`() {
+        val request = seedRequest(adapterCollection, orgId, operation = OperationType.UPDATE)
+        val response =
+            responseFor(request).apply {
+                operationType = OperationType.UPDATE
+                isFailed = true
+                errorMessage = "The source system is down"
+                value = SyncPageEntry()
+            }
+
+        answer(response).andExpect(status().isOk)
+
+        val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
+        assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
+        assertThat(stored?.response?.isFailed).isTrue
+        assertThat(stored?.response?.value).isNull()
+        assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
+    }
+
+    @Test
+    fun `a conflicted answer needs the resource the source system holds`() {
+        val request = seedRequest(adapterCollection, orgId, operation = OperationType.UPDATE)
+        val response =
+            responseFor(request).apply {
+                operationType = OperationType.UPDATE
+                isConflicted = true
+                conflictReason = "Changed since it was read"
+                value = null
+            }
+
+        answer(response)
+            .andExpect(status().isBadRequest)
+            .andExpect(content().string(containsString("has no value")))
 
         assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.PENDING)
+    }
+
+    @Test
+    fun `an answer that names another operation is accepted and the request's operation decides`() {
+        val request = seedRequest(adapterCollection, orgId)
+        val response = responseFor(request).apply { operationType = OperationType.UPDATE }
+
+        answer(response).andExpect(status().isOk)
+
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.response?.operationType)
+            .isEqualTo(OperationType.CREATE)
+        assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNotNull
+    }
+
+    @Test
+    fun `a VALIDATE that passed needs no value`() {
+        val request = seedRequest(adapterCollection, orgId, operation = OperationType.VALIDATE)
+        val response =
+            responseFor(request).apply {
+                operationType = OperationType.VALIDATE
+                value = null
+            }
+
+        answer(response).andExpect(status().isOk)
+
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.ANSWERED)
+        assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
+    }
+
+    @Test
+    fun `an answer without a corrId is a bad request`() {
+        val request = seedRequest(adapterCollection, orgId)
+
+        answer(responseFor(request).apply { corrId = null })
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.errors[0].field").value("corrId"))
+
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.PENDING)
+    }
+
+    @Test
+    fun `an answer that names another of the adapter's orgs than the event's is refused`() {
+        val subOrg = "sub.$orgId"
+        val subOrgCollection = OrgId.from(subOrg).toEventCollectionName()
+        val request = seedRequest(subOrgCollection, subOrg)
+
+        answer(responseFor(request).apply { orgId = this@EventFlowIT.orgId }, principal(assets = "$orgId,$subOrg"))
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value(DenialReason.EVENT_ORG_MISMATCH.detail))
+
+        assertThat(eventStore.findByCorrId(request.corrId, subOrgCollection)?.status).isEqualTo(EventState.PENDING)
+        mongoTemplate.dropCollection(subOrgCollection)
     }
 
     @Test
@@ -197,20 +309,16 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `a failing entity write rolls the answer claim back`() {
+    fun `an answer whose resource does not fit the model is refused and the event stays pending`() {
         val request = seedRequest(adapterCollection, orgId)
         val response =
             responseFor(request).apply {
                 value = SyncPageEntry.of("123", mapOf("systemId" to "will-crash-not-identifikator"))
             }
 
-        mockMvc
-            .perform(
-                post("/provider/event")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsBytes(response))
-                    .with(authentication(mockPrincipal)),
-            ).andExpect(status().is4xxClientError)
+        answer(response)
+            .andExpect(status().isBadRequest)
+            .andExpect(content().string(containsString("not a valid elev")))
 
         val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
         assertThat(stored?.status).isEqualTo(EventState.PENDING)
@@ -350,12 +458,24 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(stored?.response?.handledAt).isEqualTo(adapterResponse.handledAt)
     }
 
+    private fun answer(
+        response: ResponseFintEvent,
+        principal: CorePrincipal = mockPrincipal,
+    ): ResultActions =
+        mockMvc.perform(
+            post("/provider/event")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(response))
+                .with(authentication(principal)),
+        )
+
     private fun seedRequest(
         collectionName: String,
         requestOrgId: String,
         ttlMillis: Long = 900_000,
         domain: String = domainName,
         pkg: String = packageName,
+        operation: OperationType = OperationType.CREATE,
     ): RequestFintEvent {
         val request =
             RequestFintEvent().apply {
@@ -364,7 +484,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
                 domainName = domain
                 packageName = pkg
                 resourceName = this@EventFlowIT.resourceName
-                operationType = OperationType.CREATE
+                operationType = operation
                 created = System.currentTimeMillis()
                 timeToLive = created + ttlMillis
                 value = """{"systemId":{"identifikatorverdi":"123"}}"""
