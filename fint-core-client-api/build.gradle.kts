@@ -9,7 +9,7 @@ dependencies {
     implementation("no.fintlabs:fint-core-status-models:1.0.0")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
-    implementation("com.google.guava:guava:33.7.1-jre")
+    implementation("com.google.guava:guava:33.7.2-jre")
 
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("no.novari:fint-core-principal:4.1.0")
