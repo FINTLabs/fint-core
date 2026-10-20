@@ -103,7 +103,7 @@ class ResponseEventService(
         response: ResponseFintEvent,
         collectionName: String,
     ) {
-        val resource = if (response.carriesResource(request)) readResource(request, response, collectionName) else null
+        val resource = if (response.carriesResource(request)) readResource(request, response) else null
         // Nothing reads the value here, so drop it rather than store and publish whatever the adapter sent.
         if (resource == null) response.value = null
 
@@ -137,51 +137,28 @@ class ResponseEventService(
         )
     }
 
+    /**
+     * The resource in the answer, bound to the model. An answer without a usable one is refused
+     * with 400 and the event stays pending, so the adapter can answer again.
+     */
     private fun readResource(
         request: RequestFintEvent,
         response: ResponseFintEvent,
-        collectionName: String,
     ): FintResource {
         val coordinate = request.toCoordinate()
         val entry =
             response.value
-                ?: refuse(
-                    response,
-                    collectionName,
+                ?: invalid(
                     "The answer has no value. A successful ${request.operationType} and a conflicted answer need the resource in value.",
                 )
-        if (entry.identifier.isNullOrBlank()) refuse(response, collectionName, "The resource in value has no identifier.")
-        val raw = entry.resource ?: refuse(response, collectionName, "The resource in value is null.")
+        if (entry.identifier.isNullOrBlank()) invalid("The resource in value has no identifier.")
+        val raw = entry.resource ?: invalid("The resource in value is null.")
 
-        // Jackson quotes the rejected input, which can hold values a client may not see. The adapter
-        // sent them, so it gets the detail; the event stores a message without them.
         return runCatching { storageMapper.convertValue(raw, coordinate.toResourceClass()) }
-            .getOrElse {
-                refuse(
-                    response,
-                    collectionName,
-                    reason = "The resource in value is not a valid ${coordinate.resourceName}: ${it.message}",
-                    stored = "The resource in value is not a valid ${coordinate.resourceName}.",
-                )
-            }
+            .getOrElse { invalid("The resource in value is not a valid ${coordinate.resourceName}: ${it.message}") }
     }
 
-    /**
-     * Answers the adapter with 400 and [reason], and closes the event as failed with [stored], so
-     * the client gets the error now instead of at the deadline.
-     */
-    private fun refuse(
-        response: ResponseFintEvent,
-        collectionName: String,
-        reason: String,
-        stored: String = reason,
-    ): Nothing {
-        val failed = response.failedBecause(stored)
-        if (eventStore.markAnswered(failed, collectionName) == ClaimOutcome.Claimed) {
-            responseFintEventProducer.publish(failed)
-        }
-        throw InvalidResponseFintEventException(reason)
-    }
+    private fun invalid(reason: String): Nothing = throw InvalidResponseFintEventException(reason)
 
     /** A conflicted answer carries the resource the source system holds, which the client gets. */
     private fun ResponseFintEvent.carriesResource(request: RequestFintEvent): Boolean =
@@ -196,17 +173,6 @@ class ResponseEventService(
         }
 
     private fun ResponseFintEvent.succeeded(): Boolean = !isFailed && !isRejected && !isConflicted
-
-    private fun ResponseFintEvent.failedBecause(reason: String): ResponseFintEvent =
-        ResponseFintEvent().apply {
-            corrId = this@failedBecause.corrId
-            orgId = this@failedBecause.orgId
-            adapterId = this@failedBecause.adapterId
-            operationType = this@failedBecause.operationType
-            handledAt = this@failedBecause.handledAt
-            isFailed = true
-            errorMessage = reason
-        }
 
     private fun StoredEvent.isExpired(now: Instant): Boolean = !now.isBefore(deadline)
 

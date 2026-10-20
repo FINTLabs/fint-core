@@ -161,10 +161,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
             .andExpect(status().isBadRequest)
             .andExpect(content().string(containsString("has no value")))
 
-        val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
-        assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
-        assertThat(stored?.response?.isFailed).isTrue
-        assertThat(stored?.response?.errorMessage).contains("has no value")
+        assertThat(eventStore.findByCorrId(request.corrId, adapterCollection)?.status).isEqualTo(EventState.PENDING)
     }
 
     @Test
@@ -312,7 +309,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `an answer whose resource does not fit the model is refused and the event is closed as failed`() {
+    fun `an answer whose resource does not fit the model is refused and the event stays pending`() {
         val request = seedRequest(adapterCollection, orgId)
         val response =
             responseFor(request).apply {
@@ -322,18 +319,16 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         answer(response)
             .andExpect(status().isBadRequest)
             .andExpect(content().string(containsString("not a valid elev")))
-            .andExpect(content().string(containsString("will-crash-not-identifikator")))
 
         val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
-        assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
-        assertThat(stored?.response?.isFailed).isTrue
-        assertThat(stored?.response?.errorMessage).contains("not a valid elev").doesNotContain("will-crash-not-identifikator")
+        assertThat(stored?.status).isEqualTo(EventState.PENDING)
+        assertThat(stored?.response).isNull()
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
 
         mockMvc
             .perform(get("/provider/event/$domainName").with(authentication(mockPrincipal)))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(0))
+            .andExpect(jsonPath("$[0].corrId").value(request.corrId))
     }
 
     @Test
