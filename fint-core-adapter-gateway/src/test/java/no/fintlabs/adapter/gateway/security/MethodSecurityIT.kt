@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.EventLongPollProperties
 import no.fintlabs.adapter.gateway.config.OrgIdConverter
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.EventController
@@ -572,7 +573,7 @@ class MethodSecurityIT {
     @Configuration
     @Profile(PROFILE)
     @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
-    @EnableConfigurationProperties(ProviderProperties::class)
+    @EnableConfigurationProperties(ProviderProperties::class, EventLongPollProperties::class)
     @Import(
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,

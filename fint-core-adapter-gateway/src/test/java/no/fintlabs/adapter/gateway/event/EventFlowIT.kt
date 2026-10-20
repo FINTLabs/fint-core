@@ -15,6 +15,7 @@ import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.Save
+import no.novari.core.shared.web.PreferHeader
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import no.novari.resource.server.authentication.CorePrincipal
@@ -30,10 +31,13 @@ import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import kotlin.concurrent.thread
 
 class EventFlowIT : GatewayIntegrationTestBase() {
     @Autowired
@@ -458,6 +462,74 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         assertThat(stored?.response?.handledAt).isEqualTo(adapterResponse.handledAt)
     }
 
+    @Test
+    fun `without a wait preference an empty poll answers at once`() {
+        listOf(null, "wait=0", "wait=soon").forEach { prefer ->
+            val elapsed =
+                timed {
+                    mockMvc
+                        .perform(pollEvents(prefer))
+                        .andExpect(status().isOk)
+                        .andExpect(content().json("[]"))
+                        .andExpect(header().doesNotExist(PreferHeader.APPLIED))
+                }
+
+            assertThat(elapsed).`as`("Prefer: %s", prefer).isLessThan(Duration.ofSeconds(1))
+        }
+    }
+
+    @Test
+    fun `an empty long poll is held for the wait it applied, capped at the maximum`() {
+        val elapsed =
+            timed {
+                mockMvc
+                    .perform(pollEvents("wait=30"))
+                    .andExpect(status().isOk)
+                    .andExpect(content().json("[]"))
+                    .andExpect(header().string(PreferHeader.APPLIED, "wait=2"))
+            }
+
+        assertThat(elapsed).isBetween(Duration.ofMillis(1_900), Duration.ofSeconds(5))
+    }
+
+    @Test
+    fun `a pending event is served at once even when the adapter asks to wait`() {
+        val request = seedRequest(adapterCollection, orgId)
+
+        val elapsed =
+            timed {
+                mockMvc
+                    .perform(pollEvents("wait=2"))
+                    .andExpect(status().isOk)
+                    .andExpect(jsonPath("$[0].corrId").value(request.corrId))
+            }
+
+        assertThat(elapsed).isLessThan(Duration.ofSeconds(1))
+    }
+
+    @Test
+    fun `a held long poll returns the event as soon as it is stored`() {
+        lateinit var request: RequestFintEvent
+        val seeder =
+            thread {
+                Thread.sleep(300)
+                request = seedRequest(adapterCollection, orgId)
+            }
+
+        val result =
+            timedResult {
+                mockMvc
+                    .perform(pollEvents("wait=2"))
+                    .andExpect(status().isOk)
+                    .andExpect(header().string(PreferHeader.APPLIED, "wait=2"))
+                    .andReturn()
+            }
+        seeder.join()
+
+        assertThat(result.second).isLessThan(Duration.ofMillis(1_500))
+        assertThat(result.first.response.contentAsString).contains(request.corrId)
+    }
+
     private fun answer(
         response: ResponseFintEvent,
         principal: CorePrincipal = mockPrincipal,
@@ -468,6 +540,19 @@ class EventFlowIT : GatewayIntegrationTestBase() {
                 .content(objectMapper.writeValueAsBytes(response))
                 .with(authentication(principal)),
         )
+
+    private fun pollEvents(prefer: String?) =
+        get("/provider/event/$domainName")
+            .with(authentication(mockPrincipal))
+            .let { builder -> if (prefer == null) builder else builder.header(PreferHeader.NAME, prefer) }
+
+    private fun timed(block: () -> Unit): Duration = timedResult(block).second
+
+    private fun <T> timedResult(block: () -> T): Pair<T, Duration> {
+        val start = System.nanoTime()
+        val result = block()
+        return result to Duration.ofNanos(System.nanoTime() - start)
+    }
 
     private fun seedRequest(
         collectionName: String,

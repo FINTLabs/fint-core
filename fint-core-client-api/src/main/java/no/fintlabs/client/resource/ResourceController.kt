@@ -9,7 +9,6 @@ import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.LastUpdatedResponse
 import no.fintlabs.client.resource.dto.ResourceCacheSizeResponse
 import no.fintlabs.client.resource.event.LiveReadService
-import no.fintlabs.client.resource.event.PreferHeader
 import no.fintlabs.client.resource.event.RequestAccepted
 import no.fintlabs.client.resource.event.RequestFailed
 import no.fintlabs.client.resource.event.RequestFintEventService
@@ -23,6 +22,7 @@ import no.fintlabs.client.resource.event.ResourceRead
 import no.fintlabs.client.resource.event.ResourcesRead
 import no.fintlabs.client.resource.paging.PageCursor
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.web.PreferHeader
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus

@@ -8,6 +8,10 @@ fint:
       replicas: 1
     resource-ttl:
       enabled: false
+    event:
+      long-poll:
+        max-wait: PT2S
+        recheck-interval: PT0.1S
   metamodel:
     base-url: http://localhost:8082 # You can mock this using WireMock later if your service actually calls it
 spring:

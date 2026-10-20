@@ -8,6 +8,7 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.client.resource.ListOptions
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.web.PreferHeader
 import org.springframework.stereotype.Service
 
 /**

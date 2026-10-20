@@ -96,3 +96,33 @@ An adapter registers a contract with `POST /provider/register`. The contract dec
 
 An answer is checked the same way against the stored request, so an adapter cannot answer an event it would not have
 been served.
+
+## Waiting for events (long polling)
+
+An adapter may ask the gateway to hold an empty poll open instead of answering at once, by sending
+`Prefer: wait=<seconds>` (RFC 7240) on `GET /provider/event/...`.
+
+| Situation                           | Answer                                                                        |
+|-------------------------------------|-------------------------------------------------------------------------------|
+| No `Prefer: wait`, or `wait=0`      | At once, as before                                                            |
+| `wait` given and events are pending | At once, with the pending events                                              |
+| `wait` given and nothing is pending | Held until an event arrives or the wait runs out, then the list (maybe empty) |
+| `wait` above the maximum            | Held for the maximum instead                                                  |
+
+When the gateway holds the poll it answers with `Preference-Applied: wait=<seconds it used>`. A gateway that ignores
+the preference answers at once without that header, so an adapter that gets an empty list without it should pause
+before it polls again. The body, the authorization and the filtering are the same as for a normal poll.
+
+An event stays PENDING until it is answered, so a poll returns an event the adapter was already served for as long as
+the answer has not landed. An adapter that long-polls should post its answers before it polls again, or it will be
+answered at once with the same events.
+
+The gateway is not told when client-api stores an event, so a held poll asks Mongo again every recheck interval. A held
+poll is let go when the gateway shuts down.
+
+| Timing                                     | Value       | Where it is set                                                    |
+|--------------------------------------------|-------------|--------------------------------------------------------------------|
+| Longest a poll is held                     | 90 seconds  | `fint.provider.event.long-poll.max-wait` (adapter-gateway)         |
+| How often a held poll looks for new events | 0.5 seconds | `fint.provider.event.long-poll.recheck-interval` (adapter-gateway) |
+
+The maximum stays well below the 120-second request limit of the access gateway in front of the adapter-gateway.
