@@ -60,7 +60,13 @@ class EventInsertWatcher(
                     while (running) {
                         // No resume token: a woken poll finds its events with its own query, so one lost
                         // notification costs at most a recheck.
-                        if (cursor.tryNext() != null) eventArrivals.signal()
+                        if (cursor.tryNext() != null) {
+                            eventArrivals.signal()
+                        } else if (cursor.serverCursor == null) {
+                            // Closed by the server, for example after an invalidate. From here tryNext returns
+                            // null at once without asking the server, so reading on would spin.
+                            throw IllegalStateException("The server closed the event change stream.")
+                        }
                     }
                 }
             } catch (e: Exception) {
