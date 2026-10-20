@@ -39,20 +39,20 @@ enum class DenialReason(
     ),
     NO_CONTRACT(
         "The adapter has no contract for the organization. " +
-            "Register a contract for it with POST /provider/register before syncing or answering events.",
+            "Register a contract for it with POST /provider/register before syncing.",
     ),
     RESOURCE_NOT_IN_CONTRACT(
         "The adapter's contract for the organization does not include the requested resource. " +
             "Add the resource to the contract's capabilities and register again.",
     ),
-    NO_REGISTERED_CONTRACT(
-        "The adapter has not registered a contract for any of its organizations. " +
-            "Register a contract with POST /provider/register for each organization before fetching events.",
-    ),
     EVENT_NOT_IN_CONTRACT(
         "The adapter's contract for the organization does not cover this event: the resource is listed " +
             "without this operation, or the event is a READ for a resource the contract does not list. " +
             "Add the operation to the resource in the contract's eventCapabilities and register again.",
+    ),
+    EVENT_ORG_MISMATCH(
+        "The event belongs to another of the adapter's organizations than the orgId of the answer. " +
+            "Answer with the orgId of the request.",
     ),
     ;
 

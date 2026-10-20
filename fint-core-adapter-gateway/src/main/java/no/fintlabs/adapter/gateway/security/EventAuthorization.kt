@@ -1,8 +1,7 @@
 package no.fintlabs.adapter.gateway.security
 
-import no.fintlabs.adapter.gateway.register.RegisteredContract
+import no.fintlabs.adapter.gateway.register.EventCapabilities
 import no.fintlabs.adapter.models.event.RequestFintEvent
-import no.novari.core.shared.event.EventScope
 import no.novari.core.shared.event.toResourceRef
 import no.novari.core.shared.model.OrgId
 import org.springframework.security.access.AccessDeniedException
@@ -12,59 +11,35 @@ import org.springframework.stereotype.Component
 
 /**
  * The rules for reading and answering events, built on the adapter rules in
- * [AdapterAuthorization]. They throw rather than return false, because the controller needs
- * the allowed contracts and scopes back, not a yes or no.
+ * [AdapterAuthorization]. Events need neither a component role nor a contract, as on
+ * provider-gateway: an adapter reads and answers the events of the orgs in its own token, and
+ * the path only filters. A contract narrows what a listed resource gets and is the only way to
+ * be served a READ. The rules throw rather than return false, because the controller needs the
+ * orgs back, not a yes or no.
  */
 @Component
 class EventAuthorization(
     private val adapterAuthorization: AdapterAuthorization,
 ) {
     /**
-     * The scopes an adapter may read under [domainName]. A package it asks for by name must be
-     * one it holds the role for. A domain-only request expands to one scope per package it
-     * holds a role for in that domain, so the adapter is never handed an event it would be
-     * refused to answer. Both failures are denied rather than answered with an empty list, so
-     * an adapter that is set up wrong learns why.
+     * The orgs an adapter reads events for, with what each is served: every JWT asset this
+     * gateway serves, with the event capabilities of its registered contract, or
+     * [EventCapabilities.NONE] for an org without one, which stands for every operation except
+     * READ. A token whose orgs are all served elsewhere is denied with a reason rather than
+     * answered with an empty list, so an adapter pointed at the wrong gateway learns why. A token
+     * with no assets never gets this far, because CorePrincipal refuses to be built from one.
      */
-    fun readableScopes(
-        authentication: Authentication,
-        domainName: String,
-        packageName: String?,
-        resourceName: String?,
-    ): List<EventScope> {
-        if (packageName != null) {
-            if (!adapterAuthorization.hasComponent(authentication, domainName, packageName)) {
-                denied(DenialReason.MISSING_COMPONENT_ROLE)
-            }
-            return listOf(EventScope.of(domainName, packageName, resourceName))
-        }
-
-        val packages = adapterAuthorization.componentsIn(authentication, domainName)
-        if (packages.isEmpty()) denied(DenialReason.MISSING_COMPONENT_ROLE)
-        return packages.map { EventScope.of(domainName, it, null) }
-    }
-
-    /**
-     * The contracts an adapter may read events under: one per JWT asset this gateway serves
-     * that the adapter has registered a contract for. An org without a contract is left out
-     * quietly, because one missing sub-org should not block the others. No contract at all is
-     * denied with a reason, since an empty list would hide that the adapter still has to
-     * register. A token with no assets never gets this far, because CorePrincipal refuses to be
-     * built from one.
-     */
-    fun readableContracts(authentication: Authentication): List<RegisteredContract> {
+    fun readableOrgs(authentication: Authentication): Map<OrgId, EventCapabilities> {
         val served = adapterAuthorization.servedOrgs(authentication)
         if (served.isEmpty()) denied(DenialReason.ORG_NOT_SERVED)
 
-        val contracts = served.mapNotNull { adapterAuthorization.contractFor(authentication, it) }
-        if (contracts.isEmpty()) denied(DenialReason.NO_REGISTERED_CONTRACT)
-        return contracts
+        return served.associateWith { adapterAuthorization.eventCapabilitiesFor(authentication, it) }
     }
 
     /**
-     * Throws [AccessDeniedException] unless the answering adapter holds the component role for
-     * the domain and package of [request], and its contract for the org covers the request's
-     * resource and operation.
+     * Throws [AccessDeniedException] when what the adapter is served for the org of [request]
+     * does not cover its resource and operation: a contract that lists the resource without the
+     * operation, or a READ the contract does not list. Without a contract only a READ is refused.
      *
      * A [no.fintlabs.adapter.models.event.ResponseFintEvent] carries only a corrId and an orgId,
      * so the resource being answered is known only from the request the consumer stored. That is
@@ -74,22 +49,27 @@ class EventAuthorization(
      * of authentication types.
      */
     fun requireAnswerAllowed(request: RequestFintEvent) {
-        val authentication =
-            SecurityContextHolder.getContext().authentication
-                ?: throw AccessDeniedException("Event answer has no authentication")
+        val capabilities = adapterAuthorization.eventCapabilitiesFor(authentication(), OrgId.from(request.orgId))
 
-        if (!adapterAuthorization.hasComponent(authentication, request.domainName, request.packageName)) {
-            denied(DenialReason.MISSING_COMPONENT_ROLE)
-        }
-
-        val contract =
-            adapterAuthorization.contractFor(authentication, OrgId.from(request.orgId))
-                ?: denied(DenialReason.NO_CONTRACT)
-
-        if (!contract.eventCapabilities.covers(request.toResourceRef(), request.operationType)) {
+        if (!capabilities.covers(request.toResourceRef(), request.operationType)) {
             denied(DenialReason.EVENT_NOT_IN_CONTRACT)
         }
     }
+
+    /**
+     * The orgs of the answering adapter that this gateway serves, read from the security context
+     * like [requireAnswerAllowed].
+     */
+    fun answerableOrgs(): List<OrgId> = adapterAuthorization.servedOrgs(authentication())
+
+    /**
+     * Refuses an answer that names another of the adapter's orgs than the one the event belongs to.
+     */
+    fun denyAnswerForOtherOrg(): Nothing = denied(DenialReason.EVENT_ORG_MISMATCH)
+
+    private fun authentication(): Authentication =
+        SecurityContextHolder.getContext().authentication
+            ?: throw AccessDeniedException("Event answer has no authentication")
 
     private fun denied(reason: DenialReason): Nothing {
         DenialRecorder.record(reason)
