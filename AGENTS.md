@@ -11,6 +11,8 @@ It then reads from that buffer again to process the data and persist it in a dat
 requires us to acknowledge that the data is received very fast. That is why we have the kafka buffer.
 When a data provider wants to deliver data they implement what we call an Adapter.
 We keep the data as FINT Informasjonsmodell objects. This is to keep a standard across all data providers.
+Clients and adapters reach both services through NAM, an access gateway that ends every request after 120 seconds.
+We cannot change that limit, so a request can be held open, or a response take, at most 120 seconds.
 
 
 ## Build, Test, and Development Commands
