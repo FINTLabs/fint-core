@@ -171,22 +171,30 @@ class ResponseEventService(
         if (entry.identifier.isNullOrBlank()) refuse(response, collectionName, "The resource in value has no identifier.")
         val raw = entry.resource ?: refuse(response, collectionName, "The resource in value is null.")
 
+        // Jackson quotes the rejected input, which can hold values a client may not see. The adapter
+        // sent them, so it gets the detail; the event stores a message without them.
         return runCatching { storageMapper.convertValue(raw, coordinate.toResourceClass()) }
             .getOrElse {
                 refuse(
                     response,
                     collectionName,
-                    "The resource in value is not a valid ${coordinate.resourceName}: ${it.message}",
+                    reason = "The resource in value is not a valid ${coordinate.resourceName}: ${it.message}",
+                    stored = "The resource in value is not a valid ${coordinate.resourceName}.",
                 )
             }
     }
 
+    /**
+     * Answers the adapter with 400 and [reason], and closes the event as failed with [stored],
+     * which the client gets and the feed carries.
+     */
     private fun refuse(
         response: ResponseFintEvent,
         collectionName: String,
         reason: String,
+        stored: String = reason,
     ): Nothing {
-        val failed = response.failedBecause(reason)
+        val failed = response.failedBecause(stored)
         if (eventStore.markAnswered(failed, collectionName) == ClaimOutcome.Claimed) {
             responseFintEventProducer.publish(failed)
         }

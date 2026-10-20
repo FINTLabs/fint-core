@@ -322,11 +322,12 @@ class EventFlowIT : GatewayIntegrationTestBase() {
         answer(response)
             .andExpect(status().isBadRequest)
             .andExpect(content().string(containsString("not a valid elev")))
+            .andExpect(content().string(containsString("will-crash-not-identifikator")))
 
         val stored = eventStore.findByCorrId(request.corrId, adapterCollection)
         assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
         assertThat(stored?.response?.isFailed).isTrue
-        assertThat(stored?.response?.errorMessage).contains("not a valid elev")
+        assertThat(stored?.response?.errorMessage).contains("not a valid elev").doesNotContain("will-crash-not-identifikator")
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
 
         mockMvc
