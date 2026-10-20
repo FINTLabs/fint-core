@@ -81,6 +81,7 @@ model are abstract or complex types, such as `lonn`, `fagvurdering` and `noark/*
 | One org without a contract                   | its events are served        | its events are left out                  |
 | Which operations are served                  | all                          | as listed in `eventCapabilities`. A resource that is not listed gets every operation except `READ`, which matches the old behaviour |
 | Nothing to serve                             | `[]`                         | `[]`                                     |
+| `Prefer: wait=<seconds>`                     | ignored, answers at once     | holds an empty poll for up to that long, at most 90 seconds, and answers with `Preference-Applied`. Without the header it answers at once, as before. See [events.md](../events.md#waiting-for-events-long-polling) |
 | Order                                        | cache order                  | oldest first                             |
 | Response body                                | infra-models 2.1             | adds `"filter": null` and `"id": null`, which a strict client outside Spring could refuse |
 

@@ -9,6 +9,7 @@ Shared library used by both deployable services. What lives here:
 | `kafka` | Header codecs and sync metadata for the Kafka topics. |
 | `uri` | `LinkCodec`, the only place a link id value is percent-encoded or decoded. |
 | `model` | Small shared value types (`OrgId`, `ResourceCoordinate`). |
+| `web` | HTTP headers both services read or send (`PreferHeader`, `CoreVersionHeader`). |
 
 ---
 
