@@ -22,6 +22,7 @@ import java.time.Duration
 class RequestEventService(
     private val eventStore: EventStore,
     private val longPollProperties: EventLongPollProperties,
+    private val eventArrivals: EventArrivals,
     private val clock: Clock,
 ) {
     @Volatile
@@ -54,13 +55,14 @@ class RequestEventService(
         val deadline = System.nanoTime() + wait.toNanos()
 
         while (true) {
+            // Read before the query, so an event stored between the query and the wait still wakes it.
+            val seen = eventArrivals.version
             val events = getEvents(orgs, scope, size)
             val remaining = Duration.ofNanos(deadline - System.nanoTime())
             if (events.isNotEmpty() || !remaining.isPositive || shuttingDown) return events
 
             try {
-                // client-api stores events without telling the gateway, so look again after a while.
-                Thread.sleep(minOf(remaining, longPollProperties.recheckInterval))
+                eventArrivals.awaitAfter(seen, minOf(remaining, recheckInterval()))
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
                 return events
@@ -68,9 +70,18 @@ class RequestEventService(
         }
     }
 
+    // Without a change stream nothing wakes a held poll, so it has to look again soon on its own.
+    private fun recheckInterval(): Duration =
+        if (eventArrivals.watched) {
+            longPollProperties.changeStream.recheckInterval
+        } else {
+            longPollProperties.recheckInterval
+        }
+
     /** Lets held polls go when the application starts closing, so a shutdown does not wait them out. */
     @EventListener(ContextClosedEvent::class)
     fun releaseHeldRequests() {
         shuttingDown = true
+        eventArrivals.signal()
     }
 }

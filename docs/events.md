@@ -117,12 +117,23 @@ An event stays PENDING until it is answered, so a poll returns an event the adap
 the answer has not landed. An adapter that long-polls should post its answers before it polls again, or it will be
 answered at once with the same events.
 
-The gateway is not told when client-api stores an event, so a held poll asks Mongo again every recheck interval. A held
-poll is let go when the gateway shuts down.
+client-api stores events without telling the gateway, so the gateway watches Mongo for them with a change stream: one
+per gateway pod, on inserts into the `*_events` collections. An insert wakes every held poll, and each one runs its
+normal query again, so an insert for another org or another resource only costs a query. The stream is a doorbell, not
+a source: the events served always come from the same query as a normal poll.
 
-| Timing                                     | Value       | Where it is set                                                    |
-|--------------------------------------------|-------------|--------------------------------------------------------------------|
-| Longest a poll is held                     | 90 seconds  | `fint.provider.event.long-poll.max-wait` (adapter-gateway)         |
-| How often a held poll looks for new events | 0.5 seconds | `fint.provider.event.long-poll.recheck-interval` (adapter-gateway) |
+A held poll also asks Mongo again on its own every recheck interval, in case a notification never comes. While the
+stream is connected that is every 5 seconds. While it is down, for example right after a DocumentDB failover, it is
+every 0.5 seconds, and the gateway reopens the stream in the background. A held poll is let go when the gateway shuts
+down.
+
+| Timing                                                     | Value       | Where it is set                                                                  |
+|------------------------------------------------------------|-------------|----------------------------------------------------------------------------------|
+| Longest a poll is held                                     | 90 seconds  | `fint.provider.event.long-poll.max-wait` (adapter-gateway)                       |
+| How often a held poll looks again while the stream is up   | 5 seconds   | `fint.provider.event.long-poll.change-stream.recheck-interval` (adapter-gateway) |
+| How often a held poll looks again while the stream is down | 0.5 seconds | `fint.provider.event.long-poll.recheck-interval` (adapter-gateway)               |
+
+`fint.provider.event.long-poll.change-stream.enabled: false` turns the stream off, which leaves held polls on the
+0.5-second recheck.
 
 The maximum stays well below the 120-second request limit of the access gateway in front of the adapter-gateway.

@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.event
 
 import no.fintlabs.adapter.gateway.GatewayIntegrationTestBase
 import no.fintlabs.adapter.gateway.config.ProviderProperties
+import no.fintlabs.adapter.gateway.event.request.EventArrivals
 import no.fintlabs.adapter.gateway.security.DenialReason
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
@@ -20,6 +21,7 @@ import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
 import no.novari.resource.server.authentication.CorePrincipal
 import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.kotlin.await
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -57,6 +59,9 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Autowired
     private lateinit var orgStore: OrgStore
+
+    @Autowired
+    private lateinit var eventArrivals: EventArrivals
 
     private val adapterCollection get() = OrgId.from(orgId).toEventCollectionName()
     private val sweeperCollection get() = providerProperties.orgId.toEventCollectionName()
@@ -508,7 +513,9 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `a held long poll returns the event as soon as it is stored`() {
+    fun `a held long poll is woken by the change stream as soon as the event is stored`() {
+        await.atMost(Duration.ofSeconds(10)).until { eventArrivals.watched }
+
         lateinit var request: RequestFintEvent
         val seeder =
             thread {
@@ -528,6 +535,33 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
         assertThat(result.second).isLessThan(Duration.ofMillis(1_500))
         assertThat(result.first.response.contentAsString).contains(request.corrId)
+    }
+
+    @Test
+    fun `an event for another org wakes a held long poll but does not end it`() {
+        await.atMost(Duration.ofSeconds(10)).until { eventArrivals.watched }
+
+        val otherOrg = "other.fintlabs.no"
+        val otherCollection = OrgId.from(otherOrg).toEventCollectionName()
+        val versionBefore = eventArrivals.version
+        val seeder =
+            thread {
+                Thread.sleep(300)
+                seedRequest(otherCollection, otherOrg)
+            }
+
+        val elapsed =
+            timed {
+                mockMvc
+                    .perform(pollEvents("wait=2"))
+                    .andExpect(status().isOk)
+                    .andExpect(content().json("[]"))
+            }
+        seeder.join()
+        mongoTemplate.dropCollection(otherCollection)
+
+        assertThat(eventArrivals.version).isGreaterThan(versionBefore)
+        assertThat(elapsed).isBetween(Duration.ofMillis(1_900), Duration.ofSeconds(5))
     }
 
     private fun answer(
