@@ -6,6 +6,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.exception.resource.InvalidResourceBodyException
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestAccepted
@@ -63,7 +64,12 @@ class ResourceEventEndpointsIT {
         ],
     )
     @EnableConfigurationProperties(ConsumerConfiguration::class)
-    @Import(ResourceController::class, JacksonConfiguration::class, TomcatConfiguration::class)
+    @Import(
+        ResourceController::class,
+        ResourceExceptionHandler::class,
+        JacksonConfiguration::class,
+        TomcatConfiguration::class,
+    )
     open class SliceApplication
 
     @MockitoBean
@@ -112,6 +118,17 @@ class ResourceEventEndpointsIT {
             "https://api.felleskomponent.no/utdanning/vurdering/elevfravar/status/corr-fravar",
             locationOf(response),
         )
+    }
+
+    @Test
+    fun `posting a body that does not fit the model is a bad request with the reason`() {
+        given(requestFintEventService.createAndPublish(coordinate, mapOf("systemId" to "not-an-identifikator"), false))
+            .willThrow(InvalidResourceBodyException("elev", IllegalStateException("systemId is not an Identifikator")))
+
+        val response = post("/utdanning/elev/elev", """{"systemId":"not-an-identifikator"}""")
+
+        assertEquals(400, response.statusCode())
+        assertEquals("The body is not a valid elev: systemId is not an Identifikator", response.body())
     }
 
     @Test
