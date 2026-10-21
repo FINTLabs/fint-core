@@ -1,7 +1,7 @@
 version: '3'
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.9.2
+    image: confluentinc/cp-zookeeper:7.9.10
     networks:
       - broker-kafka
     environment:
@@ -9,7 +9,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
-    image: confluentinc/cp-kafka:7.9.2
+    image: confluentinc/cp-kafka:8.3.2
     networks:
       - broker-kafka
     depends_on:
@@ -72,7 +72,7 @@ services:
           memory: 2g
 
   toxiproxy:
-    image: ghcr.io/shopify/toxiproxy:2.12.0
+    image: ghcr.io/shopify/toxiproxy:2.13.0
     networks:
       - broker-kafka
     depends_on:
