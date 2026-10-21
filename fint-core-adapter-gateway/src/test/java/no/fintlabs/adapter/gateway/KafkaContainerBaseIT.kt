@@ -15,7 +15,7 @@ import org.testcontainers.utility.DockerImageName
  */
 abstract class KafkaContainerBaseIT {
     companion object {
-        private const val IMAGE = "confluentinc/cp-kafka:7.8.0"
+        private const val IMAGE = "confluentinc/cp-kafka:7.9.2"
 
         @JvmStatic
         val KAFKA: ConfluentKafkaContainer =
