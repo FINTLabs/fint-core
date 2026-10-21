@@ -69,6 +69,20 @@ class RequestFintEventServiceTest {
     }
 
     @Test
+    fun `a date sent with milliseconds and an offset is accepted and passed on in UTC`() {
+        val samtykke = ResourceCoordinate("fintlabs.no", "personvern", "samtykke", "samtykke")
+        val body =
+            mapOf(
+                "systemId" to mapOf("identifikatorverdi" to "42"),
+                "gyldighetsperiode" to mapOf("start" to "2026-10-21T09:00:00.000+02:00"),
+            )
+
+        val event = service.createAndPublish(samtykke, body, validateOnly = false)
+
+        assertThat(event.value).contains("\"start\":\"2026-10-21T07:00:00Z\"")
+    }
+
+    @Test
     fun `validateOnly creates a validate event`() {
         val event = service.createAndPublish(coordinate, resourceData, validateOnly = true)
 
