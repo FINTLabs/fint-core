@@ -16,14 +16,14 @@ import java.time.LocalDateTime
  * Binding rules for the information model. The model jar is deliberately Jackson-free, so the
  * annotations its types cannot carry themselves live here as mixins. Registered on the two
  * interfaces, they propagate to every implementor; no per-type registration exists or is needed.
- * Its dates are read by [LenientDateDeserializer].
+ * Its dates are read by [LenientLocalDateTimeDeserializer] and [LenientLocalDateDeserializer].
  * Both [FintJson] mappers install this module; it is the floor the storage and response
  * contracts share.
  */
 class FintModelModule : SimpleModule("fint-model") {
     init {
-        addDeserializer(LocalDateTime::class.java, LenientDateDeserializer.LOCAL_DATE_TIME)
-        addDeserializer(LocalDate::class.java, LenientDateDeserializer.LOCAL_DATE)
+        addDeserializer(LocalDateTime::class.java, LenientLocalDateTimeDeserializer())
+        addDeserializer(LocalDate::class.java, LenientLocalDateDeserializer())
     }
 
     override fun setupModule(context: SetupContext) {

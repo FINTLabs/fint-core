@@ -21,7 +21,7 @@ private data class WithDate(
     val on: LocalDate?,
 )
 
-class LenientDateDeserializerTest {
+class LenientDateDeserializersTest {
     private val mapper = FintJson.storageMapper()
 
     private fun dateTime(value: Any) = mapper.convertValue(mapOf("at" to value), WithDateTime::class.java).at
