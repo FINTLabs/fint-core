@@ -3,7 +3,6 @@ package no.fintlabs.client.resource;
 import lombok.extern.slf4j.Slf4j;
 import no.fint.antlr.exception.FilterException;
 import no.fintlabs.client.exception.resource.IdentificatorNotFoundException;
-import no.fintlabs.client.exception.resource.InvalidResourceBodyException;
 import no.fintlabs.client.exception.resource.ResourceNotFoundException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -24,11 +23,6 @@ public class ResourceExceptionHandler {
 
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<?> missingRequestHeader(MissingRequestHeaderException e) {
-        return ResponseEntity.badRequest().body(e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidResourceBodyException.class)
-    public ResponseEntity<?> invalidResourceBody(InvalidResourceBodyException e) {
         return ResponseEntity.badRequest().body(e.getMessage());
     }
 
