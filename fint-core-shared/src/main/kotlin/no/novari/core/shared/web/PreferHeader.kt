@@ -25,8 +25,8 @@ class PreferHeader private constructor(
 
         fun parse(header: String?): PreferHeader {
             val preferences = LinkedHashMap<String, String?>()
-            header.orEmpty().split(',').forEach { preference ->
-                val token = preference.substringBefore(';')
+            header.orEmpty().splitOutsideQuotes(',').forEach { preference ->
+                val token = preference.splitOutsideQuotes(';').first()
                 val name = token.substringBefore('=').trim().lowercase()
                 // Only the first of a repeated preference counts, as the RFC says.
                 if (name.isEmpty() || name in preferences) return@forEach
@@ -34,10 +34,48 @@ class PreferHeader private constructor(
                     token
                         .substringAfter('=', "")
                         .trim()
-                        .removeSurrounding("\"")
+                        .unquoted()
                         .ifEmpty { null }
             }
             return PreferHeader(preferences)
+        }
+
+        // A quoted value may hold the separator, and a backslash in it escapes the next character.
+        private fun String.splitOutsideQuotes(separator: Char): List<String> {
+            val parts = mutableListOf<String>()
+            val part = StringBuilder()
+            var quoted = false
+            var escaped = false
+            for (c in this) {
+                if (!quoted && c == separator) {
+                    parts += part.toString()
+                    part.clear()
+                    continue
+                }
+                when {
+                    escaped -> escaped = false
+                    quoted && c == '\\' -> escaped = true
+                    c == '"' -> quoted = !quoted
+                }
+                part.append(c)
+            }
+            parts += part.toString()
+            return parts
+        }
+
+        private fun String.unquoted(): String {
+            if (length < 2 || first() != '"' || last() != '"') return this
+            val text = StringBuilder()
+            var escaped = false
+            for (c in substring(1, length - 1)) {
+                if (!escaped && c == '\\') {
+                    escaped = true
+                } else {
+                    text.append(c)
+                    escaped = false
+                }
+            }
+            return text.toString()
         }
     }
 }

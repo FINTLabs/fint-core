@@ -40,6 +40,31 @@ class PreferHeaderTest {
     }
 
     @Test
+    fun `a comma inside a quoted value does not start a new preference`() {
+        assertNull(PreferHeader.parse("""extension="x,wait=90,y"""").wait)
+        assertEquals(Duration.ofSeconds(10), PreferHeader.parse("""extension="x,wait=0,y", wait=10""").wait)
+    }
+
+    @Test
+    fun `an escaped quote does not end a quoted value`() {
+        assertEquals(Duration.ofSeconds(5), PreferHeader.parse("""extension="a\",wait=90", wait=5""").wait)
+        assertEquals(Duration.ofSeconds(7), PreferHeader.parse("""extension="a\\", wait=7""").wait)
+    }
+
+    @Test
+    fun `a quoted parameter value does not leak into the preferences`() {
+        val prefer = PreferHeader.parse("""respond-async; foo="a,wait=90;b"""")
+
+        assertTrue(prefer.respondAsync)
+        assertNull(prefer.wait)
+    }
+
+    @Test
+    fun `an unterminated quote swallows the rest of the header`() {
+        assertNull(PreferHeader.parse("""extension="x, wait=90""").wait)
+    }
+
+    @Test
     fun `only the first of a repeated preference counts`() {
         assertEquals(Duration.ofSeconds(10), PreferHeader.parse("wait=10, wait=60").wait)
         assertNull(PreferHeader.parse("wait=soon, wait=60").wait)
