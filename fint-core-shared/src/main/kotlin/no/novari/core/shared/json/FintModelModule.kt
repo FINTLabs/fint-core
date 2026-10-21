@@ -9,15 +9,23 @@ import no.novari.fint.core.model.Link
 import tools.jackson.databind.annotation.JsonDeserialize
 import tools.jackson.databind.annotation.JsonSerialize
 import tools.jackson.databind.module.SimpleModule
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * Binding rules for the information model. The model jar is deliberately Jackson-free, so the
  * annotations its types cannot carry themselves live here as mixins. Registered on the two
  * interfaces, they propagate to every implementor; no per-type registration exists or is needed.
+ * Its dates are read by [LenientDateDeserializer].
  * Both [FintJson] mappers install this module; it is the floor the storage and response
  * contracts share.
  */
 class FintModelModule : SimpleModule("fint-model") {
+    init {
+        addDeserializer(LocalDateTime::class.java, LenientDateDeserializer.LOCAL_DATE_TIME)
+        addDeserializer(LocalDate::class.java, LenientDateDeserializer.LOCAL_DATE)
+    }
+
     override fun setupModule(context: SetupContext) {
         context.setMixIn(FintObject::class.java, FintObjectMixin::class.java)
         context.setMixIn(FintResource::class.java, FintResourceMixin::class.java)
