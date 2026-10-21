@@ -21,7 +21,7 @@ object FintJson {
      * The durable, id-based form: `_links` holds `{idField, idValue}` entries and `self` is never
      * present. This is what Mongo documents and the provider's buffer topic contain, and what
      * `FintLinksDeserializer` produces from inbound adapter hrefs. Use it for everything read
-     * from or written to storage; it never renders an href. It reads a date from any ISO 8601
+     * from or written to storage. It never renders an href. It reads a date from any ISO 8601
      * form, with or without offset or milliseconds, or from epoch milliseconds.
      */
     fun storageMapper(): JsonMapper = mapperBuilder().build()
