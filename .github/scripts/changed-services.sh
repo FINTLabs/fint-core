@@ -15,6 +15,17 @@ fi
 
 changed_files=$(git diff --name-only "$base" "$head")
 
+while IFS= read -r file; do
+  case "${file##*/}" in
+    Dockerfile|Dockerfile.*|*.Dockerfile|docker-compose*.yml|docker-compose*.yaml|compose.yml|compose.yaml|compose.*.yml|compose.*.yaml|.dockerignore|*.dockerignore)
+      echo "client=true"
+      echo "adapter-gateway=true"
+      echo "shared=true"
+      exit 0
+      ;;
+  esac
+done <<< "$changed_files"
+
 touches() {
   for path in $1; do
     if echo "$changed_files" | grep -q "^$path\(/\|$\)"; then
