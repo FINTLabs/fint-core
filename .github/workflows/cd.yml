@@ -141,15 +141,26 @@ jobs:
         uses: azure/k8s-artifact-substitute@v2.0.0
         with:
           manifests: ${{ steps.bake.outputs.manifestsBundle }}
+          # Replace image tags in Flais Application resources because k8s-deploy skips the custom resources.
           images: ${{ steps.image_tags.outputs.images }}
+
+      - name: Prepare manifests for deployment
+        id: deploy-manifests
+        shell: bash
+        env:
+          SOURCE_DIRECTORY: ${{ steps.substitute.outputs.directory }}
+        run: |
+          set -euo pipefail
+
+          destination="$GITHUB_WORKSPACE/.k8s-deploy-manifests"
+          mkdir -p "$destination"
+          cp -aL -- "$SOURCE_DIRECTORY/." "$destination/"
+
+          echo "manifests=$destination" >> "$GITHUB_OUTPUT"
 
       - uses: azure/login@v3.1.0
         with:
           creds: "${{ secrets[format('AKS_{0}_FINT_GITHUB', needs.setup.outputs.environment)] }}"
-
-      - uses: azure/use-kubelogin@v1
-        with:
-          kubelogin-version: "v0.0.26"
 
       - name: Set the target cluster
         uses: azure/aks-set-context@v5.0.1
@@ -157,7 +168,6 @@ jobs:
           cluster-name: "${{ steps.aks.outputs.cluster }}"
           resource-group: "${{ steps.aks.outputs.resource-group }}"
           admin: "true"
-          use-kubelogin: "true"
 
       - name: Ensure namespace ${{ matrix.org }}
         run: kubectl create namespace ${{ matrix.org }} --dry-run=client -o yaml | kubectl apply -f -
@@ -166,7 +176,6 @@ jobs:
         uses: azure/k8s-deploy@v7.0.1
         with:
           action: deploy
-          manifests: ${{ steps.substitute.outputs.manifests }}
-          images: ${{ steps.image_tags.outputs.images }}
+          manifests: ${{ steps.deploy-manifests.outputs.manifests }}
           pull-images: false
           namespace: ${{ matrix.org }}
