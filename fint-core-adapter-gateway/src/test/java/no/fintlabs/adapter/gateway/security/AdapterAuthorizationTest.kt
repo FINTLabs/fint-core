@@ -7,6 +7,7 @@ import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.register.EventCapabilities
 import no.fintlabs.adapter.gateway.register.RegisteredContract
+import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.resourceRefOf
 import no.novari.fint.core.model.FintResourceRef
@@ -112,19 +113,21 @@ class AdapterAuthorizationTest {
     }
 
     @Nested
-    inner class CanAnswerFor {
+    inner class EventCapabilitiesFor {
         @Test
-        fun `accepts when a contract exists for the org even without a matching capability`() {
-            givenContract()
+        fun `reads what the contract lists`() {
+            val readsElev = EventCapabilities(mapOf(resourceRefOf("utdanning", "elev", "elev") to setOf(OperationType.READ)))
+            every { contractService.lookup(any(), any()) } returns
+                ContractLookup.Found(RegisteredContract(OrgId.from(MAIN_ORG), emptySet(), readsElev))
 
-            assertThat(authorization.canAnswerFor(adapter(), MAIN_ORG)).isTrue()
+            assertThat(authorization.eventCapabilitiesFor(adapter(), OrgId.from(MAIN_ORG))).isEqualTo(readsElev)
         }
 
         @Test
-        fun `rejects when the adapter has no contract for the org`() {
+        fun `an org without a contract is served everything except READ`() {
             every { contractService.lookup(any(), any()) } returns ContractLookup.Absent
 
-            assertThat(authorization.canAnswerFor(adapter(), MAIN_ORG)).isFalse()
+            assertThat(authorization.eventCapabilitiesFor(adapter(), OrgId.from(MAIN_ORG))).isEqualTo(EventCapabilities.NONE)
         }
     }
 

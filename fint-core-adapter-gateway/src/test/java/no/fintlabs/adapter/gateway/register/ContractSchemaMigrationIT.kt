@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ContractSchemaMigrationIT {
-    private val postgres = PostgreSQLContainer("postgres:18.3")
+    private val postgres = PostgreSQLContainer("postgres:18.6")
     private lateinit var jdbc: JdbcTemplate
 
     @BeforeAll

@@ -135,7 +135,7 @@ class ResourceController(
     ): ResponseEntity<LastUpdatedResponse> =
         statsService
             .getLastUpdated(ResourceCoordinate(orgId, domainName, packageName, resourceName))
-            .let { ResponseEntity.ok(LastUpdatedResponse(it)) }
+            .let { ResponseEntity.ok(LastUpdatedResponse(it.toString())) }
 
     @GetMapping(EndpointsConstants.CACHE_SIZE)
     fun getResourceCacheSize(

@@ -20,18 +20,20 @@ class SyncPageService(
     fun <T : SyncPage> doSync(
         syncPage: T,
         coords: ResourceCoordinate,
-    ) = syncPage.logSync {
-        if (syncPage.syncType == SyncType.DELETE) {
-            syncPage.resources.forEach { syncPageEntry -> syncPageEntry.resource = null }
-        }
-
-        // Set time of SyncPage to when we processed it
-        // This lets us see in Status-Service when we have processed this page
+    ) {
+        // Status-service needs these fields, so we set them here
+        // Time is when we processed the page
+        syncPage.metadata.uriRef = coords.toResourceUri()
         syncPage.metadata.time = System.currentTimeMillis()
 
-        metaDataKafkaProducer.send(syncPage.metadata, syncPage.syncType.toEventName()) // Send to Status-Service
+        syncPage.logSync {
+            if (syncPage.syncType == SyncType.DELETE) {
+                syncPage.resources.forEach { syncPageEntry -> syncPageEntry.resource = null }
+            }
 
-        sendToBuffer(syncPage, coords)
+            metaDataKafkaProducer.send(syncPage.metadata, syncPage.syncType.toEventName()) // Send to Status-Service
+            sendToBuffer(syncPage, coords)
+        }
     }
 
     private fun sendToBuffer(

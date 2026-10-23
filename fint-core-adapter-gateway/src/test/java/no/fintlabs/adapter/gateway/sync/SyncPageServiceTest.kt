@@ -39,9 +39,20 @@ class SyncPageServiceTest {
         verify(exactly = 0) { bufferWriter.sendSyncResetMarker(any(), any()) }
     }
 
+    @Test
+    fun `uriRef sent to status-service is taken from the path and not from the adapter`() {
+        every { bufferWriter.sendSyncEntity(any(), any(), any()) } returns CompletableFuture.completedFuture(mockk())
+
+        val entry = SyncPageEntry.of("EF-1", mapOf("name" to "Test"))
+        syncPageService.doSync(fullSync(totalSize = 1, resources = listOf(entry), uriRef = null), coordinate)
+
+        verify(exactly = 1) { metaDataKafkaProducer.send(match { it.uriRef == "utdanning/elev/elevforhold" }, any()) }
+    }
+
     private fun fullSync(
         totalSize: Long,
         resources: List<SyncPageEntry>,
+        uriRef: String? = "utdanning/elev/elevforhold",
     ): SyncPage =
         FullSyncPage().apply {
             metadata =
@@ -53,7 +64,7 @@ class SyncPageServiceTest {
                     page = 1
                     pageSize = resources.size.toLong()
                     totalPages = 1
-                    uriRef = "utdanning/elev/elevforhold"
+                    this.uriRef = uriRef
                 }
             this.resources = resources
         }

@@ -7,6 +7,7 @@ import no.fintlabs.adapter.models.sync.FullSyncPage
 import no.fintlabs.adapter.models.sync.SyncPage
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.model.resourceRefOf
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -58,11 +59,9 @@ class SyncController(
         status: HttpStatus,
     ): ResponseEntity<Void> {
         val coords =
-            ResourceCoordinate(
-                OrgId.from(syncPage.metadata.orgId).value,
-                domainName,
-                packageName,
-                resourceName,
+            ResourceCoordinate.of(
+                OrgId.from(syncPage.metadata.orgId),
+                resourceRefOf(domainName, packageName, resourceName),
             )
         syncPageService.doSync(syncPage, coords)
         return ResponseEntity.status(status).build()

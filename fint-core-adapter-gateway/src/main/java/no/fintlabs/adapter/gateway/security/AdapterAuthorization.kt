@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
+import no.fintlabs.adapter.gateway.register.EventCapabilities
 import no.fintlabs.adapter.gateway.register.RegisteredContract
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.resourceRefOf
@@ -82,16 +83,6 @@ class AdapterAuthorization(
         return principal.username == username || deny(DenialReason.USERNAME_MISMATCH)
     }
 
-    fun hasComponent(
-        authentication: Authentication,
-        domainName: String,
-        packageName: String,
-    ): Boolean {
-        val principal = adapterOrNull(authentication) ?: return false
-        return principal.hasComponent(domainName.trim().lowercase(), packageName.trim().lowercase()) ||
-            deny(DenialReason.MISSING_COMPONENT_ROLE)
-    }
-
     /**
      * The component role for the path is already required by the filter chain, so this adds
      * the two things only the body can answer: which org the page is for, and whether the
@@ -115,39 +106,6 @@ class AdapterAuthorization(
     }
 
     /**
-     * The body only says which org the answer is for, so this checks the org and that a contract
-     * exists for it. Whether the contract covers the event's resource and operation is checked
-     * against the stored request in [EventAuthorization.requireAnswerAllowed].
-     */
-    fun canAnswerFor(
-        authentication: Authentication,
-        orgId: String?,
-    ): Boolean {
-        if (!hasOrg(authentication, orgId)) return false
-        val principal = adapterOrNull(authentication) ?: return false
-
-        return when (contractService.lookup(principal.username, orgId!!)) {
-            is ContractLookup.Found -> true
-            ContractLookup.Absent -> deny(DenialReason.NO_CONTRACT)
-        }
-    }
-
-    /**
-     * The packages under [domainName] the adapter holds a component role for, sorted.
-     */
-    fun componentsIn(
-        authentication: Authentication,
-        domainName: String,
-    ): List<String> {
-        val principal = adapterOrNull(authentication) ?: return emptyList()
-        val prefix = "${domainName.trim().lowercase()}_"
-        return principal.components
-            .filter { it.startsWith(prefix) }
-            .map { it.removePrefix(prefix) }
-            .sorted()
-    }
-
-    /**
      * The JWT assets that this gateway serves. Assets for another main org are dropped, so a
      * gateway never reads or writes another org's data.
      */
@@ -157,9 +115,15 @@ class AdapterAuthorization(
     }
 
     /**
-     * The contract the adapter registered for [orgId], or null when it has none.
+     * The event capabilities of the adapter's contract for [orgId], or [EventCapabilities.NONE]
+     * without one: every operation except READ.
      */
-    fun contractFor(
+    fun eventCapabilitiesFor(
+        authentication: Authentication,
+        orgId: OrgId,
+    ): EventCapabilities = contractFor(authentication, orgId)?.eventCapabilities ?: EventCapabilities.NONE
+
+    private fun contractFor(
         authentication: Authentication,
         orgId: OrgId,
     ): RegisteredContract? {

@@ -3,6 +3,7 @@ package no.fintlabs.adapter.gateway.register
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.adapter.models.EventCapability
+import no.novari.core.shared.org.OrgStore
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -12,16 +13,17 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 
 /**
- * Publishes every stored contract to the contract topic when the gateway starts. Adapters
- * only register when they start, so without this a contract registered before the topic was
- * compacted would not be on the topic until the adapter restarts. Publishing again is safe:
- * the topic is keyed, so compaction keeps one record per contract.
+ * Publishes every stored contract to the contract topic and registers its org when the gateway
+ * starts. Adapters only register when they start, so without this a contract registered before
+ * the topic was compacted would not be on the topic until the adapter restarts. Publishing again
+ * is safe: the topic is keyed, so compaction keeps one record per contract.
  */
 @Component
 @ConditionalOnProperty(prefix = "fint.provider", name = ["republish-contracts"], havingValue = "true", matchIfMissing = true)
 class ContractRepublisher(
     private val contractJpaRepository: ContractJpaRepository,
     private val adapterContractProducer: AdapterContractProducer,
+    private val orgStore: OrgStore,
     private val clock: Clock,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -31,6 +33,9 @@ class ContractRepublisher(
     fun republishContracts() {
         val contracts = contractJpaRepository.findAllWithCapabilities()
         contracts.forEach { adapterContractProducer.send(it.toAdapterContract()) }
+        // A contract put straight into the database never went through registration, so its org
+        // is registered here, the same way its contract is put on the topic.
+        contracts.map { it.orgId }.distinct().forEach(orgStore::upsert)
         logger.info("Republished {} contracts to the contract topic", contracts.size)
     }
 

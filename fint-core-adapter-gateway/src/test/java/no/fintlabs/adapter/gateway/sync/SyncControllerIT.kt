@@ -109,6 +109,28 @@ class SyncControllerIT : GatewayIntegrationTestBase() {
     }
 
     @Test
+    fun `Should accept a resource name with capitals in the path, as provider-gateway did`() {
+        registerAdapter()
+
+        val syncPage =
+            FullSyncPage().apply {
+                this.metadata = syncPageMetadata(totalSize = 1, pageSize = 1)
+                this.resources =
+                    listOf(
+                        SyncPageEntry.of("$domainName.$packageName.$resourceName/systemid/1", mapOf("name" to "Test1")),
+                    )
+            }
+
+        mockMvc
+            .perform(
+                post("/provider/$domainName/$packageName/${resourceName.uppercase()}")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(syncPage))
+                    .with(authentication(mockPrincipal)),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
     fun `Should reject sync when orgId does not match JWT`() {
         registerAdapter()
 

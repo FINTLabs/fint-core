@@ -1,6 +1,5 @@
 package no.novari.core.shared.json
 
-import com.fasterxml.jackson.annotation.JsonFormat
 import com.fasterxml.jackson.annotation.JsonInclude
 import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.MapperFeature
@@ -8,7 +7,6 @@ import tools.jackson.databind.cfg.DateTimeFeature
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 import java.text.SimpleDateFormat
-import java.time.LocalDateTime
 import java.util.TimeZone
 
 const val RESPONSE_DATE_TIME_PATTERN = "yyyy-MM-dd'T'HH:mm:ss'Z'"
@@ -23,7 +21,8 @@ object FintJson {
      * The durable, id-based form: `_links` holds `{idField, idValue}` entries and `self` is never
      * present. This is what Mongo documents and the provider's buffer topic contain, and what
      * `FintLinksDeserializer` produces from inbound adapter hrefs. Use it for everything read
-     * from or written to storage; it never renders an href.
+     * from or written to storage. It never renders an href. It reads a date from any ISO 8601
+     * form, with or without offset or milliseconds, or from epoch milliseconds.
      */
     fun storageMapper(): JsonMapper = mapperBuilder().build()
 
@@ -42,7 +41,7 @@ object FintJson {
     ): JsonMapper =
         mapperBuilder()
             .addModule(ResponseLinksModule(baseUrl, componentResolver))
-            .withConfigOverride(LocalDateTime::class.java) { it.format = JsonFormat.Value.forPattern(RESPONSE_DATE_TIME_PATTERN) }
+            // it also parses with this format, which takes nothing else, so dates are read through the storage mapper
             .defaultDateFormat(SimpleDateFormat(RESPONSE_DATE_TIME_PATTERN).apply { timeZone = TimeZone.getTimeZone("UTC") })
             .build()
 

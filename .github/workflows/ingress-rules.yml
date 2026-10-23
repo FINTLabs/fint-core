@@ -1,8 +1,8 @@
 name: Ingress rules
 
-# Fails the build if any overlay lets a V3 client (no version header, or a v3
-# header) reach the client-api, or keeps a V4 client away from it. Runs the
-# rendered Traefik rules in the real Traefik image, see kustomize/rules-test.
+# Fails the build if any overlay breaks the routing policy in
+# kustomize/rules-test/test.sh. Runs the rendered rules in the real Traefik
+# image.
 on:
   pull_request:
     paths: [kustomize/**, .github/workflows/ingress-rules.yml]

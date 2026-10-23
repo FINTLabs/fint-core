@@ -44,14 +44,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")
-    implementation("no.fintlabs:fint-core-infra-models:3.4.2")
+    implementation("no.fintlabs:fint-core-infra-models:3.4.3")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
-    implementation("no.novari:fint-core-information-model:0.7.0")
+    implementation("no.novari:fint-core-information-model:0.8.0")
 }
 
 testing {
