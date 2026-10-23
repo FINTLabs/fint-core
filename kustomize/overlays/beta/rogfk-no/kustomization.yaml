@@ -4,6 +4,7 @@ resources:
   - ../../../base
   - org-values.yaml
 components:
+  - ../../../components/utdanning
   - ../../../components/personvern
   - ../../../components/administrasjon
   - ../../../components/org

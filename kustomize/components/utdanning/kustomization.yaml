@@ -1,0 +1,17 @@
+# Sends the whole utdanning domain to the client-api, whatever the headers. For beta, where core 1 serves no utdanning.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: IngressRoute
+      name: fint-core-client-api-ingress
+    patch: |-
+      - op: add
+        path: /spec/routes/-
+        value:
+          kind: Rule
+          match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/utdanning`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
+          services:
+            - name: fint-core-client-api
+              namespace: REPLACE-DASHED
+              port: 8080

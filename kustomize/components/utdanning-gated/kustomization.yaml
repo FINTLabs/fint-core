@@ -1,0 +1,18 @@
+# Sends utdanning to the client-api only when the request asks for V4. For api, where core 1 still serves it as V3.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: IngressRoute
+      name: fint-core-client-api-ingress
+    patch: |-
+      - op: add
+        path: /spec/routes/-
+        value:
+          kind: Rule
+          # larling and ot have no core 1, so they need no header
+          match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/utdanning`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && (PathPrefix(`/utdanning/{p:(larling|ot)}`) || HeadersRegexp(`x-fint-model-version-override`, `(?i)^v4$`) || (!HeadersRegexp(`x-fint-model-version-override`, `(?i)^v3$`) && HeadersRegexp(`x-fint-model-version`, `(?i)^v4$`)))'
+          services:
+            - name: fint-core-client-api
+              namespace: REPLACE-DASHED
+              port: 8080
