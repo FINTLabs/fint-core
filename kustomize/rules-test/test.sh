@@ -35,7 +35,7 @@ check() {
 ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
 # Environments where personvern goes to the client-api. In api it stays on core 2 for now.
 PERSONVERN_ENVS="beta"
-# Shared test orgs the client-api serves whole, apart from felles kodeverk and the V4 gate.
+# Shared test orgs the client-api serves whole, apart from felles kodeverk, okonomi on core 1 and the V4 gate.
 WHOLE_ORGS="novari.no"
 
 V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
@@ -60,8 +60,8 @@ while read -r env org host id enabled; do
   # core 1 serves these utdanning packages as V3. Larling and ot have no core 1.
   gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
   always client-api /utdanning/larling/ /utdanning/ot/
-  # core 1 serves okonomi faktura and kodeverk as V3. Regnskap is core 2.
-  gated /okonomi/faktura/ /okonomi/kodeverk/
+  # okonomi goes by package, not by header. Core 1 serves faktura and kodeverk, core 2 serves regnskap.
+  always core1 /okonomi/faktura/ /okonomi/kodeverk/
   always client-api /okonomi/regnskap/
   always client-api /felles/person/ /ressurs/datautstyr/
   always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
