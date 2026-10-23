@@ -11,8 +11,12 @@ patches:
       name: fint-core-client-api-ingress
     patch: |-
       - op: replace
-        path: /spec/routes/0/match
-        value: 'Host(`alpha.felleskomponent.no`) && PathPrefix(`/`) && !PathPrefix(`/provider`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `(^|\.)novari\.no$`)'
-      - op: add
-        path: /spec/routes/0/priority
-        value: 1000
+        path: /spec/routes
+        value:
+          - kind: Rule
+            match: 'Host(`alpha.felleskomponent.no`) && PathPrefix(`/`) && !PathPrefix(`/provider`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && HeadersRegexp(`x-org-id`, `(^|\.)novari\.no$`)'
+            priority: 1000
+            services:
+              - name: fint-core-client-api
+                namespace: novari-no
+                port: 8080

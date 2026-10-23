@@ -11,6 +11,9 @@ To move a county onto the client-api:
    backends compete for the same requests.
 2. Rename `<org>.disabled` to `<org>` and merge to `main`.
 
-The ingress rule comes from `kustomize/base/consumer-ingress.yaml` and only
-takes a request away from core 1 when the client asks for V4. The Ingress
-rules workflow checks that for every overlay, disabled ones included.
+The client-api routes come from `kustomize/base/consumer-ingress.yaml`, one
+per domain. An org whose administrasjon is on core 2 also gets
+`components/administrasjon`. List `components/org` last, since it fills in
+the routes the other components add. The routing policy lives in
+`kustomize/rules-test/test.sh`, and the Ingress rules workflow checks it for
+every overlay.
