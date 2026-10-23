@@ -9,12 +9,35 @@ metadata:
     app.kubernetes.io/part-of: fint-core
     fintlabs.no/team: core
     fintlabs.no/org-id: REPLACE
+# One route per domain. Every match starts with Host and x-org-id, which components/org fills in.
+# Anything no route claims stays on core 1 and core 2. The policy is tested in kustomize/rules-test/test.sh.
 spec:
   entryPoints:
     - web
   routes:
+    # Core 1 serves utdanning as V3, so only a V4 request comes here. Larling and ot have no core 1.
     - kind: Rule
-      match: 'Host(`REPLACE`) && (PathPrefix(`/felles`) || PathPrefix(`/personvern`) || PathPrefix(`/ressurs`) || PathPrefix(`/utdanning`) || PathPrefix(`/okonomi`)) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && !PathPrefix(`/felles/kodeverk`) && HeadersRegexp(`x-org-id`, `REPLACE`) && (!(PathPrefix(`/utdanning/{p:(elev|kodeverk|timeplan|utdanningsprogram|vurdering)}`) || PathPrefix(`/okonomi/{p:(faktura|kodeverk)}`)) || (HeadersRegexp(`x-fint-model-version-override`, `(?i)^v4$`) || HeadersRegexp(`x-fint-version-override`, `(?i)^v4$`) || (!HeadersRegexp(`x-fint-model-version-override`, `(?i)^v3$`) && !HeadersRegexp(`x-fint-version-override`, `(?i)^v3$`) && HeadersRegexp(`x-fint-model-version`, `(?i)^v4$`))))'
+      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/utdanning`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && (PathPrefix(`/utdanning/{p:(larling|ot)}`) || HeadersRegexp(`x-fint-model-version-override`, `(?i)^v4$`) || (!HeadersRegexp(`x-fint-model-version-override`, `(?i)^v3$`) && HeadersRegexp(`x-fint-model-version`, `(?i)^v4$`)))'
+      services:
+        - name: fint-core-client-api
+          namespace: REPLACE-DASHED
+          port: 8080
+    # Core 1 serves faktura and kodeverk as V3, so only a V4 request comes here. Regnskap is core 2.
+    - kind: Rule
+      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/okonomi`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`) && (PathPrefix(`/okonomi/regnskap`) || HeadersRegexp(`x-fint-model-version-override`, `(?i)^v4$`) || (!HeadersRegexp(`x-fint-model-version-override`, `(?i)^v3$`) && HeadersRegexp(`x-fint-model-version`, `(?i)^v4$`)))'
+      services:
+        - name: fint-core-client-api
+          namespace: REPLACE-DASHED
+          port: 8080
+    # Felles kodeverk is shared by all orgs and stays on core 1.
+    - kind: Rule
+      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/felles`) && !PathPrefix(`/felles/kodeverk`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
+      services:
+        - name: fint-core-client-api
+          namespace: REPLACE-DASHED
+          port: 8080
+    - kind: Rule
+      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/ressurs`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
       services:
         - name: fint-core-client-api
           namespace: REPLACE-DASHED

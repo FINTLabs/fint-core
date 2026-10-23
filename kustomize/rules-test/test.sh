@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # For every overlay in targets.txt, send a matrix of version-header
-# combinations through the local Traefik and check which backend answers.
-# The rule under test: where core 1 still serves a package as V3, the client-api
-# (core 2) gets the request only when the client asks for V4; packages without
-# any V3 consumer go to the client-api whatever the headers.
+# combinations through the local Traefik and check which backend answers
+# against the routing policy below. "core1" stands for every backend that is
+# not the client-api, so core 1 and the old core 2 consumers.
 # Usage: ./render.sh && docker compose up -d && ./test.sh
 set -o pipefail
 cd "$(dirname "$0")"
@@ -12,11 +11,11 @@ T=http://127.0.0.1:18080
 # wait until Traefik has loaded every router from dynamic.yaml
 want=$(grep -c 'rule:' dynamic.yaml)
 for _ in $(seq 1 60); do
-  n=$(curl -s --retry-connrefused http://127.0.0.1:18081/api/http/routers 2>/dev/null | grep -o '"status":"enabled"' | wc -l)
+  n=$(curl -s --retry-connrefused "http://127.0.0.1:18081/api/http/routers?per_page=1000" 2>/dev/null | grep -o '"status":"enabled"' | wc -l)
   [ "$n" -ge "$want" ] && break
   sleep 1
 done
-[ "$n" -ge "$want" ] || { echo "only $n of $want routers enabled"; curl -s http://127.0.0.1:18081/api/http/routers; exit 1; }
+[ "$n" -ge "$want" ] || { echo "only $n of $want routers enabled"; curl -s "http://127.0.0.1:18081/api/http/routers?per_page=1000"; exit 1; }
 
 fail=0
 # check <expected> <host> <path> <org> ["hdr1|hdr2"]
@@ -30,33 +29,56 @@ check() {
   else printf '  FAIL  %-36s %-32s %-60s -> %s (expected %s)\n' "$path" "$org" "${hs:-<no version headers>}" "$got" "$exp"; fail=1; fi
 }
 
-V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4" "x-fint-version-override: V3|x-fint-model-version: V4")
-V4=("x-fint-model-version: V4" "x-fint-model-version: v4" "x-fint-model-version-override: V4" "x-fint-version-override: V4" "x-fint-model-version-override: V4|x-fint-model-version: V3")
+# Orgs whose administrasjon is on core 2. Their overlays send administrasjon to
+# the client-api once enabled, and a disabled one is not checked. Every other
+# org must never get administrasjon on the client-api.
+ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
+# Environments where personvern goes to the client-api. In api it stays on core 2 for now.
+PERSONVERN_ENVS="beta"
+# Shared test orgs the client-api serves whole, apart from felles kodeverk and the V4 gate.
+WHOLE_ORGS="novari.no"
 
-while read -r env org host id admin; do
-  echo "== $env/$org ($id @ $host)"
-  # packages core 1 still serves as V3: only a V4 client reaches the client-api
-  for path in /utdanning/utdanningsprogram/ /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/vurdering/ /okonomi/faktura/ /okonomi/kodeverk/; do
+V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
+V4=("x-fint-model-version: V4" "x-fint-model-version: v4" "x-fint-model-version-override: V4" "x-fint-model-version-override: V4|x-fint-model-version: V3")
+
+has() { case " $2 " in *" $1 "*) return 0 ;; esac; return 1; }
+# always <expected> <path>... gives the same backend whatever the headers
+always() { local exp=$1 path hs; shift; for path; do for hs in "${V3[@]}" "${V4[@]}"; do check "$exp" "$host" "$path" "$id" "$hs"; done; done; }
+# gated <path>... sends only a V4 request to the client-api
+gated() {
+  local path hs
+  for path; do
     for hs in "${V3[@]}"; do check core1 "$host" "$path" "$id" "$hs"; done
     for hs in "${V4[@]}"; do check client-api "$host" "$path" "$id" "$hs"; done
   done
-  # packages with no V3 consumer anywhere: the client-api takes them whatever the headers
-  for path in /utdanning/larling/ /utdanning/ot/ /okonomi/regnskap/ /personvern/samtykke/ /personvern/kodeverk/ /ressurs/datautstyr/ /felles/person/; do
-    for hs in "${V3[@]}" "${V4[@]}"; do check client-api "$host" "$path" "$id" "$hs"; done
-  done
-  # never the client-api, whatever the headers
-  check core1 "$host" /felles/kodeverk/ "$id" "x-fint-model-version: V4"
-  check core1 "$host" /utdanning/utdanningsprogram/provider/ "$id" "x-fint-model-version: V4"
-  # administrasjon (and arkiv): wholesale to the client-api only when the overlay says so
-  if [ "$admin" = 1 ]; then
-    check client-api "$host" /administrasjon/personal/ "$id"
-    check client-api "$host" /administrasjon/personal/ "$id" "x-fint-model-version: V3"
+}
+
+admin=(/administrasjon/personal/ /administrasjon/organisasjon/ /administrasjon/kodeverk/ /administrasjon/fullmakt/)
+while read -r env org host id enabled; do
+  echo "== $env/$org ($id @ $host)$([ "$enabled" = 0 ] && echo ', disabled')"
+  whole=0; has "$id" "$WHOLE_ORGS" && whole=1
+  # core 1 serves these utdanning packages as V3. Larling and ot have no core 1.
+  gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
+  always client-api /utdanning/larling/ /utdanning/ot/
+  # core 1 serves okonomi faktura and kodeverk as V3. Regnskap is core 2.
+  gated /okonomi/faktura/ /okonomi/kodeverk/
+  always client-api /okonomi/regnskap/
+  always client-api /felles/person/ /ressurs/datautstyr/
+  always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
+  if [ $whole = 1 ] || has "$env" "$PERSONVERN_ENVS"; then
+    always client-api /personvern/samtykke/ /personvern/kodeverk/
   else
-    check core1 "$host" /administrasjon/personal/ "$id"
-    check core1 "$host" /administrasjon/personal/ "$id" "x-fint-model-version: V4"
-    check core1 "$host" /arkiv/noark/ "$id" "x-fint-model-version: V4"
+    always core1 /personvern/samtykke/ /personvern/kodeverk/
   fi
-  # a sub-org follows its parent; in api (no shared catch-all) a look-alike org does not
+  if [ $whole = 1 ] || { has "$id" "$ADMIN_ORGS" && [ "$enabled" = 1 ]; }; then
+    always client-api "${admin[@]}"
+  elif ! has "$id" "$ADMIN_ORGS"; then
+    always core1 "${admin[@]}"
+  else
+    echo "  skip  administrasjon, the overlay is disabled"
+  fi
+  if [ $whole = 1 ]; then always client-api /arkiv/noark/ /profilbilde/; else always core1 /arkiv/noark/ /profilbilde/; fi
+  # a sub-org follows its parent. In api (no shared catch-all) a look-alike org does not.
   check client-api "$host" /utdanning/utdanningsprogram/ "sub.$id" "x-fint-model-version: V4"
   check core1 "$host" /utdanning/utdanningsprogram/ "sub.$id"
   [ "$env" = api ] && check core1 "$host" /utdanning/utdanningsprogram/ "not$id" "x-fint-model-version: V4"

@@ -4,10 +4,9 @@
 # file-provider config. A catch-all "core1" router per host, at the lowest
 # priority, stands in for every route that is not the client-api. No priority
 # is set on the client-api routers, so Traefik ranks them by rule length as in
-# the clusters. Also writes targets.txt: "<env> <org> <host> <org-id> <admin>"
-# per overlay, where admin is 1 when the client-api takes administrasjon (and
-# everything else) wholesale: the overlay includes components/administrasjon or
-# patches in a PathPrefix(`/`) catch-all like the shared novari route.
+# the clusters. Also writes targets.txt with "<env> <org> <host> <org-id> <enabled>"
+# per overlay, where enabled is 0 for a *.disabled overlay. Fails when a rule
+# still holds a REPLACE placeholder.
 set -euo pipefail
 cd "$(dirname "$0")"
 : > targets.txt
@@ -17,12 +16,12 @@ hosts=""
   echo "  routers:"
   for overlay in ../overlays/*/*/; do
     env=$(basename "$(dirname "$overlay")")
-    org=$(basename "$overlay"); org=${org%.disabled}
+    org=$(basename "$overlay"); enabled=1
+    case "$org" in *.disabled) org=${org%.disabled}; enabled=0 ;; esac
     [ "$env" = alpha ] && continue
     host=$(sed -n 's/^ *host: *//p' "$overlay/org-values.yaml")
     id=$(sed -n 's/^ *id-dotted: *//p' "$overlay/org-values.yaml")
-    admin=0; grep -qE 'components/administrasjon|PathPrefix\(`/`\)' "$overlay/kustomization.yaml" && admin=1
-    echo "$env $org $host $id $admin" >> targets.txt
+    echo "$env $org $host $id $enabled" >> targets.txt
     case " $hosts " in *" $host "*) ;; *) hosts="$hosts $host" ;; esac
     i=0
     kubectl kustomize "$overlay" \
@@ -51,4 +50,5 @@ hosts=""
     echo "          - url: http://$s:80"
   done
 } > dynamic.yaml
+if grep -n REPLACE dynamic.yaml; then echo "unfilled REPLACE in a rule, list components/org last in the overlay"; exit 1; fi
 echo "wrote dynamic.yaml with $(grep -c 'rule:' dynamic.yaml) routers for $(wc -l < targets.txt | tr -d ' ') overlays"
