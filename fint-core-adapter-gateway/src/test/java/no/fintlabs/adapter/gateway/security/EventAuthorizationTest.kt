@@ -26,7 +26,7 @@ class EventAuthorizationTest {
     private val contractService = mockk<ContractService>()
 
     private val authorization: EventAuthorization =
-        EventAuthorization(AdapterAuthorization(ProviderProperties(orgIdValue = MAIN_ORG), contractService))
+        EventAuthorization(AdapterAuthorization(ProviderProperties(orgIdValues = listOf(MAIN_ORG)), contractService))
 
     @AfterEach
     fun clearSecurityContext() = SecurityContextHolder.clearContext()

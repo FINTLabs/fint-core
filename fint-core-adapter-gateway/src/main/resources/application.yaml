@@ -1,8 +1,7 @@
 fint:
   provider:
-    org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
+    org-ids: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     buffer:
-      topic: ${fint.provider.org-id}
       consumer:
         batch-size: 100
         concurrency: 1

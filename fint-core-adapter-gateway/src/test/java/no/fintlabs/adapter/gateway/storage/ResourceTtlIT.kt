@@ -278,7 +278,7 @@ class ResourceTtlIT {
         syncProgressStore,
         ResourceWipeService(wipingWith, relationEdgeStore, fullSyncStatusStore, meterRegistry),
         runner,
-        ProviderProperties(GATEWAY_ORG),
+        ProviderProperties(listOf(GATEWAY_ORG)),
         properties,
         clock,
     )

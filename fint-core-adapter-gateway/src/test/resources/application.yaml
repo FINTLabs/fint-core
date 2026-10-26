@@ -3,7 +3,7 @@ server:
 
 fint:
   provider:
-    org-id: fintlabs.no
+    org-ids: fintlabs.no
     kafka:
       replicas: 1
     resource-ttl:

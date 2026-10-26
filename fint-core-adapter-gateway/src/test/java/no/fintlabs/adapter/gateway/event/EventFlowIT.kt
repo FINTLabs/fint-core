@@ -55,7 +55,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
     private lateinit var orgStore: OrgStore
 
     private val adapterCollection get() = OrgId.from(orgId).toEventCollectionName()
-    private val sweeperCollection get() = providerProperties.orgId.toEventCollectionName()
+    private val sweeperCollection get() = providerProperties.primaryOrgId.toEventCollectionName()
     private val resourceCollection get() = "test_fintlabs_no_${domainName}_${packageName}_$resourceName"
 
     @BeforeEach
@@ -372,9 +372,9 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `the sweeper answers overdue events with an expired response`() {
-        orgStore.upsert(providerProperties.orgId.value)
-        val overdue = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
-        val pending = seedRequest(sweeperCollection, providerProperties.orgId.value)
+        orgStore.upsert(providerProperties.primaryOrgId.value)
+        val overdue = seedRequest(sweeperCollection, providerProperties.primaryOrgId.value, ttlMillis = -1_000)
+        val pending = seedRequest(sweeperCollection, providerProperties.primaryOrgId.value)
 
         eventExpiryService.expireOverdueEvents()
 
@@ -409,7 +409,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `the sweeper covers sub-org collections but never foreign orgs`() {
-        val primary = providerProperties.orgId.value
+        val primary = providerProperties.primaryOrgId.value
         val foreignOrgId = "vtfk.no"
         val foreignCollection = OrgId.from(foreignOrgId).toEventCollectionName()
         orgStore.upsert("test.$primary")
@@ -431,7 +431,7 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `the sweeper skips an org that never registered`() {
-        val overdue = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
+        val overdue = seedRequest(sweeperCollection, providerProperties.primaryOrgId.value, ttlMillis = -1_000)
 
         eventExpiryService.expireOverdueEvents()
 
@@ -441,11 +441,11 @@ class EventFlowIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `the sweeper never overwrites an answer that raced it`() {
-        orgStore.upsert(providerProperties.orgId.value)
-        val request = seedRequest(sweeperCollection, providerProperties.orgId.value, ttlMillis = -1_000)
+        orgStore.upsert(providerProperties.primaryOrgId.value)
+        val request = seedRequest(sweeperCollection, providerProperties.primaryOrgId.value, ttlMillis = -1_000)
         val adapterResponse =
             responseFor(request).apply {
-                orgId = providerProperties.orgId.value
+                orgId = providerProperties.primaryOrgId.value
                 handledAt = request.timeToLive - 1
             }
         eventStore.markAnswered(adapterResponse, sweeperCollection)
