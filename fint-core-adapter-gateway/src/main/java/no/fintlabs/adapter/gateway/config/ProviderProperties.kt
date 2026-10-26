@@ -8,7 +8,15 @@ import org.springframework.boot.context.properties.bind.Name
 data class ProviderProperties(
     @param:Name("org-id")
     private val orgIdValue: String,
+    @param:Name("extra-org-ids")
+    private val extraOrgIdValues: List<String> = emptyList(),
     val baseUrl: String = "https://api.felleskomponent.no",
 ) {
     val orgId: OrgId get() = OrgId.from(orgIdValue)
+
+    /** Other main orgs this gateway also serves, such as test orgs that have no deployment of their own. */
+    val extraOrgIds: List<OrgId> get() = extraOrgIdValues.map(OrgId::from)
+
+    /** Whether [orgId] is one of the main orgs this gateway serves, or a sub-org of one. */
+    fun serves(orgId: OrgId): Boolean = (listOf(this.orgId) + extraOrgIds).any { orgId.belongsTo(it) }
 }

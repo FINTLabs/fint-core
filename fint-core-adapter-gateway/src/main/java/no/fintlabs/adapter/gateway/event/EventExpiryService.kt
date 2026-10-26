@@ -48,7 +48,7 @@ class EventExpiryService(
         orgStore
             .findAll()
             .map { OrgId.from(it.id) }
-            .filter { it.belongsTo(providerProperties.orgId) }
+            .filter(providerProperties::serves)
             .forEach { org -> sweep(org.toEventCollectionName(), now) }
     }
 

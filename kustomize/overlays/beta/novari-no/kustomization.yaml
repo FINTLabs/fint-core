@@ -38,3 +38,12 @@ patches:
         value:
           topic: "*fint-core*"
           permission: admin
+  - target:
+      kind: Application
+      name: fint-core-adapter-gateway
+    patch: |-
+      - op: add
+        path: /spec/env/-
+        value:
+          name: FINT_PROVIDER_EXTRAORGIDS
+          value: fintlabs.no
