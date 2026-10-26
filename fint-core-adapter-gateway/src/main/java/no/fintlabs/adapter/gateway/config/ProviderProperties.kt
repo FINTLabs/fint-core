@@ -6,19 +6,17 @@ import org.springframework.boot.context.properties.bind.Name
 
 @ConfigurationProperties(prefix = "fint.provider")
 data class ProviderProperties(
-    @param:Name("org-ids")
-    private val orgIdValues: List<String>,
+    @param:Name("org-id")
+    private val orgIdValue: String,
+    @param:Name("extra-org-ids")
+    private val extraOrgIdValues: List<String> = emptyList(),
     val baseUrl: String = "https://api.felleskomponent.no",
 ) {
-    init {
-        require(orgIdValues.isNotEmpty()) { "fint.provider.org-ids must list at least one org" }
-    }
+    val orgId: OrgId get() = OrgId.from(orgIdValue)
 
-    /** The main orgs this gateway serves. Each one brings its sub-orgs with it. */
-    val orgIds: List<OrgId> get() = orgIdValues.map(OrgId::from)
+    /** Other main orgs this gateway also serves, such as test orgs that have no deployment of their own. */
+    val extraOrgIds: List<OrgId> get() = extraOrgIdValues.map(OrgId::from)
 
-    /** The org this gateway is deployed for. It names the buffer topic. */
-    val primaryOrgId: OrgId get() = orgIds.first()
-
-    fun serves(orgId: OrgId): Boolean = orgIds.any { orgId.belongsTo(it) }
+    /** Whether [orgId] is one of the main orgs this gateway serves, or a sub-org of one. */
+    fun serves(orgId: OrgId): Boolean = (listOf(this.orgId) + extraOrgIds).any { orgId.belongsTo(it) }
 }

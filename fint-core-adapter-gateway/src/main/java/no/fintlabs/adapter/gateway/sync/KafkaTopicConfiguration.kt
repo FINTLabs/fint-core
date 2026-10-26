@@ -20,7 +20,7 @@ class KafkaTopicConfiguration {
      */
     @Bean
     fun topicBufferName(properties: ProviderProperties): String =
-        "${properties.primaryOrgId.asTopicSegment}.fint-core.fint-felleskomponent-resource"
+        "${properties.orgId.asTopicSegment}.fint-core.fint-felleskomponent-resource"
 
     @Bean
     fun kafkaTopic(

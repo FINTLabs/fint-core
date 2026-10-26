@@ -24,7 +24,7 @@ class EventExpiryServiceTest {
         EventExpiryService(
             eventStore,
             orgStore,
-            ProviderProperties(orgIdValues = listOf("fintlabs.no")),
+            ProviderProperties(orgIdValue = "fintlabs.no"),
             producer,
             Clock.fixed(now, ZoneOffset.UTC),
         )

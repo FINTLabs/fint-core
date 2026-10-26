@@ -22,7 +22,7 @@ class AdapterAuthorizationTest {
     private val contractService = mockk<ContractService>()
 
     private val authorization: AdapterAuthorization =
-        AdapterAuthorization(ProviderProperties(orgIdValues = listOf(MAIN_ORG)), contractService)
+        AdapterAuthorization(ProviderProperties(orgIdValue = MAIN_ORG), contractService)
 
     @Nested
     inner class HasOrg {
@@ -73,7 +73,7 @@ class AdapterAuthorizationTest {
     @Nested
     inner class ServingMoreThanOneOrg {
         private val authorization =
-            AdapterAuthorization(ProviderProperties(orgIdValues = listOf(OTHER_MAIN_ORG, MAIN_ORG)), contractService)
+            AdapterAuthorization(ProviderProperties(orgIdValue = MAIN_ORG, extraOrgIdValues = listOf(OTHER_MAIN_ORG)), contractService)
 
         @Test
         fun `accepts every main org this gateway serves`() {
@@ -84,12 +84,12 @@ class AdapterAuthorizationTest {
         }
 
         @Test
-        fun `accepts a sub-org of a main org that is not the first in the list`() {
+        fun `accepts a sub-org of the deployment org next to an extra org`() {
             assertThat(authorization.hasOrg(adapter(assets = SUB_ORG), SUB_ORG)).isTrue()
         }
 
         @Test
-        fun `still rejects an org outside the list`() {
+        fun `still rejects an org that is neither the deployment org nor an extra org`() {
             assertThat(authorization.hasOrg(adapter(assets = "$MAIN_ORG,vtfk.no"), "vtfk.no")).isFalse()
         }
 

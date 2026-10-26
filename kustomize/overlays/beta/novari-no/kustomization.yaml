@@ -45,5 +45,5 @@ patches:
       - op: add
         path: /spec/env/-
         value:
-          name: FINT_PROVIDER_ORGIDS
-          value: novari.no,fintlabs.no
+          name: FINT_PROVIDER_EXTRAORGIDS
+          value: fintlabs.no
