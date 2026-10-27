@@ -121,16 +121,6 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `getResources with invalid filter syntax fails fast, before touching the store`() {
-        assertThrows<FilterException> {
-            resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi = 'A'")
-        }
-
-        verify(exactly = 0) { resourceStore.findPage(any(), any(), any(), any()) }
-        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
-    }
-
-    @Test
     fun `getResources with a filter that fails to evaluate throws FilterException`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         every { resourceStore.findPage(null, 11, 0, collectionName) } returns
@@ -617,15 +607,6 @@ class ResourceServiceTest {
         assertEquals(listOf(2, 1), batches.map { it.read })
         assertEquals(listOf(0, 1), batches.map { it.resources.size })
         assertEquals("C", (batches.last().resources.single() as Elevfravar).systemId?.identifikatorverdi)
-    }
-
-    @Test
-    fun `streamResources with invalid filter syntax fails before touching the store`() {
-        assertThrows<FilterException> {
-            resourceService.streamResources(resourceCoordinate, 0, null, "systemId/identifikatorverdi = 'A'")
-        }
-
-        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }
 
     @Test

@@ -2,6 +2,10 @@ package no.fintlabs.client.resource
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import no.fint.antlr.FintFilterService
+import no.fint.antlr.exception.FilterException
+import no.fint.antlr.exception.InvalidSyntaxException
+import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.admin.StatsService
@@ -61,6 +65,8 @@ class ResourceController(
     private val consumerConfig: ConsumerConfiguration,
     private val statsService: StatsService,
 ) {
+    private val filterService: FintFilterService = ODataFilterService()
+
     @GetMapping
     fun getResource(
         @PathVariable domainName: String,
@@ -76,6 +82,9 @@ class ResourceController(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): ResponseEntity<FintResourcesResponse>? {
+        // Checked once for every read path, so a bad filter is refused before the live read asks
+        // the gateway and before any store is read.
+        validateFilter(filter)
         val coordinate = ResourceCoordinate(orgId, domainName, packageName, resourceName)
 
         liveReadService
@@ -225,6 +234,12 @@ class ResourceController(
                 resourceData,
                 OperationType.UPDATE,
             ).toAcceptedResponse(domainName, packageName)
+
+    private fun validateFilter(filter: String?) {
+        if (filter != null && !filterService.validate(filter)) {
+            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
+        }
+    }
 
     private fun RequestFailed.FailureType.toHttpStatus() =
         when (this) {

@@ -1,8 +1,6 @@
 package no.fintlabs.client.resource
 
 import no.fint.antlr.FintFilterService
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.dto.FintResourcesResponse
@@ -41,8 +39,7 @@ class ResourceService(
      * at a time, through a cursor, and each batch gets its back-links and the [filter] before it
      * is handed on. The caller closes the stream to release the cursor.
      *
-     * The filter's syntax and the resource type are checked here, so a bad request fails before
-     * any of it is written.
+     * The resource type is checked here, so an unknown one fails before any of it is written.
      */
     fun streamResources(
         resourceCoordinate: ResourceCoordinate,
@@ -50,7 +47,6 @@ class ResourceService(
         sinceTimeStamp: Long?,
         filter: String?,
     ): ResourceStream {
-        validateFilter(filter)
         val resourceClass = resourceCoordinate.toResourceClass()
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
@@ -92,7 +88,6 @@ class ResourceService(
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
         require(size > 0) { "A page needs a positive size, a read without one is a full read" }
-        validateFilter(filter)
 
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
@@ -140,12 +135,6 @@ class ResourceService(
         val resource = entry.toFintResource(resourceCoordinate.toResourceClass())
         mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource))
         return resource
-    }
-
-    private fun validateFilter(filter: String?) {
-        if (filter != null && !filterService.validate(filter)) {
-            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
-        }
     }
 
     /**

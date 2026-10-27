@@ -1,9 +1,5 @@
 package no.fintlabs.client.resource.event
 
-import no.fint.antlr.FintFilterService
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
-import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.client.resource.ListOptions
 import no.novari.core.shared.model.OrgId
@@ -22,8 +18,6 @@ class LiveReadService(
     private val eventCapabilityClient: EventCapabilityClient,
     private val requestFintEventService: RequestFintEventService,
 ) {
-    private val filterService: FintFilterService = ODataFilterService()
-
     /**
      * Starts a live read of the resources matching [filter], or returns null when the cache
      * answers. A list read without a filter, or with any of the list options, never goes live.
@@ -35,7 +29,6 @@ class LiveReadService(
         prefer: String?,
     ): RequestFintEvent? {
         if (filter == null || options.given || !goesLive(coordinate, prefer)) return null
-        if (!filterService.validate(filter)) throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
         return requestFintEventService.createRead(coordinate, ReadRequest.ByFilter(filter))
     }
 

@@ -3,7 +3,6 @@ package no.fintlabs.client.resource.event
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import no.fint.antlr.exception.FilterException
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.resource.ListOptions
@@ -15,7 +14,6 @@ import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.store.PageAnchor
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
@@ -116,21 +114,6 @@ class LiveReadServiceTest {
         every { eventCapabilityClient.find(OrgId.from("fintlabs.no")) } returns null
 
         assertThat(service.startByFilter(coordinate, filter, ListOptions(), "respond-async")).isNull()
-    }
-
-    @Test
-    fun `a filter that is not valid is refused before any event exists`() {
-        givenReadableLive("elevfravar")
-
-        assertThatThrownBy {
-            service.startByFilter(
-                coordinate,
-                "systemId/identifikatorverdi = '12345'",
-                ListOptions(),
-                "respond-async",
-            )
-        }.isInstanceOf(FilterException::class.java)
-        verify(exactly = 0) { requestFintEventService.createRead(any(), any()) }
     }
 
     private fun givenReadableLive(
