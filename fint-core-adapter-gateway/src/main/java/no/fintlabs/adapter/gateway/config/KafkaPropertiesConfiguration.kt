@@ -9,16 +9,4 @@ class KafkaPropertiesConfiguration(
 ) {
     @Bean
     fun adapterKafkaProperties(): AdapterKafkaProperties = kafkaProperties.adapter
-
-    @Bean
-    fun responseProducerProperties(): ProducerProperties = kafkaProperties.event.responseProducer
-
-    @Bean
-    fun responseConsumerProperties(): ConsumerProperties = kafkaProperties.event.responseConsumer
-
-    @Bean
-    fun requestProducerProperties(): ProducerProperties = kafkaProperties.event.requestProducer
-
-    @Bean
-    fun requestConsumerProperties(): ConsumerProperties = kafkaProperties.event.requestConsumer
 }

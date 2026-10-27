@@ -1,28 +1,16 @@
 fint:
   provider:
     org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
-    buffer:
-      consumer:
-        batch-size: 100
-        concurrency: 1
     kafka:
       replicas: 2
     resource-ttl:
       max-age: P21D
       sweep-interval: PT1H
-  base-url: https://api.felleskomponent.no
 
 spring:
   application:
     name: provider
   jpa:
-    properties:
-      jdbc:
-        time_zone: UTC
-        lob:
-          non_contextual_creation: true
-      dialect: org.hibernate.dialect.PostgreSQLDialect
-      enable_lazy_load_no_trans: true
     hibernate:
       ddl-auto: validate
   flyway:
@@ -46,8 +34,6 @@ spring:
       protocol: SSL
     admin:
       modify-topic-configs: true
-    consumer:
-      group-id: provider
     producer:
       batch-size: 64KB
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -73,6 +59,4 @@ logging:
     org.apache.kafka: WARN
 server:
   tomcat:
-    threads:
-      max: 400
     max-connections: 30000

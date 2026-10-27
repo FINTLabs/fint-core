@@ -8,18 +8,10 @@ fint:
       replicas: 1
     resource-ttl:
       enabled: false
-  metamodel:
-    base-url: http://localhost:8082 # You can mock this using WireMock later if your service actually calls it
 spring:
   application:
     name: provider-test
   jpa:
-    properties:
-      jdbc:
-        time_zone: UTC
-        lob:
-          non_contextual_creation: true
-      enable_lazy_load_no_trans: true
     hibernate:
       ddl-auto: validate
   kafka:
@@ -28,7 +20,6 @@ spring:
     security:
       protocol: PLAINTEXT
     consumer:
-      group-id: provider-test-group
       auto-offset-reset: earliest
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
