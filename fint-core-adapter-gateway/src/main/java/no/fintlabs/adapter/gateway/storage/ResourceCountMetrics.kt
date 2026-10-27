@@ -41,8 +41,8 @@ class ResourceCountMetrics(
      */
     @EventListener(ApplicationReadyEvent::class)
     @Scheduled(
-        fixedDelayString = $$"${fint.provider.resource-count-metrics.interval:PT30S}",
-        initialDelayString = $$"${fint.provider.resource-count-metrics.interval:PT30S}",
+        fixedDelayString = $$"${fint.provider.resource-count-metrics.interval:PT2M}",
+        initialDelayString = $$"${fint.provider.resource-count-metrics.interval:PT2M}",
     )
     @Synchronized
     fun refresh() {
