@@ -10,6 +10,8 @@ fint:
     resource-ttl:
       max-age: P21D
       sweep-interval: PT1H
+    resource-count-metrics:
+      interval: PT15S
   base-url: https://api.felleskomponent.no
 
 spring:
