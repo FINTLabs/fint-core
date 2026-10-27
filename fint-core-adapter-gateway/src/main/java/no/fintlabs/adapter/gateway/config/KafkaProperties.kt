@@ -7,23 +7,6 @@ import java.time.Duration
 data class KafkaProperties(
     val replicas: Int = 2,
     val adapter: AdapterKafkaProperties = AdapterKafkaProperties(),
-    val event: EventKafkaProperties = EventKafkaProperties(),
-)
-
-data class EventKafkaProperties(
-    val responseProducer: ProducerProperties = ProducerProperties(),
-    val responseConsumer: ConsumerProperties = ConsumerProperties(),
-    val requestProducer: ProducerProperties = ProducerProperties(),
-    val requestConsumer: ConsumerProperties = ConsumerProperties(),
-)
-
-data class ProducerProperties(
-    val partitions: Int = 1,
-    val retentionTime: Duration = Duration.ofDays(7),
-)
-
-data class ConsumerProperties(
-    val concurrency: Int = 1,
 )
 
 data class AdapterKafkaProperties(

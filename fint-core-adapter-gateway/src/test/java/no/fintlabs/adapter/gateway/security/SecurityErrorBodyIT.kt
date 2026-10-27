@@ -1,7 +1,6 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
-import no.fintlabs.adapter.gateway.kafka.ProviderError
 import no.fintlabs.adapter.models.AdapterContract
 import no.novari.resource.server.authentication.CorePrincipal
 import org.hamcrest.Matchers.containsString
