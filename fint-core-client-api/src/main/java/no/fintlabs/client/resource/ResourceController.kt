@@ -86,7 +86,7 @@ class ResourceController(
             resourceService
                 .streamResources(coordinate, offset, sinceTimeStamp, filter)
                 .use { streamWriter.write(it, request, response) }
-            return null
+            return null // We write response in streamWriter.write
         }
 
         return resourceService
