@@ -83,7 +83,7 @@ services:
       - 27018:27018
 
   toxiproxy-init:
-    image: curlimages/curl:8.22.0
+    image: curlimages/curl:8.23.0
     networks:
       - broker-kafka
     depends_on:
