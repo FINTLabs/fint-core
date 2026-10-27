@@ -37,7 +37,9 @@ ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
 PERSONVERN_ENVS="beta"
 # Environments where core 1 serves utdanning next to the client-api, so only V4 reaches the client-api there.
 UTDANNING_GATED_ENVS="api"
-# Shared test orgs the client-api serves whole, apart from felles kodeverk and okonomi on core 1.
+# Environments where core 1 serves okonomi faktura and kodeverk, so only regnskap reaches the client-api there.
+OKONOMI_SPLIT_ENVS="api"
+# Shared test orgs the client-api serves whole, apart from felles kodeverk.
 WHOLE_ORGS="novari.no"
 
 V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
@@ -66,8 +68,12 @@ while read -r env org host id enabled; do
     always client-api /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
   fi
   always client-api /utdanning/larling/ /utdanning/ot/
-  # okonomi goes by package, not by header. Core 1 serves faktura and kodeverk, core 2 serves regnskap.
-  always core1 /okonomi/faktura/ /okonomi/kodeverk/
+  # okonomi goes by package, not by header. Where core 1 serves faktura and kodeverk, only regnskap reaches the client-api.
+  if has "$env" "$OKONOMI_SPLIT_ENVS"; then
+    always core1 /okonomi/faktura/ /okonomi/kodeverk/
+  else
+    always client-api /okonomi/faktura/ /okonomi/kodeverk/
+  fi
   always client-api /okonomi/regnskap/
   always client-api /felles/person/ /ressurs/datautstyr/
   always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/

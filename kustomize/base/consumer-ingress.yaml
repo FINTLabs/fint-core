@@ -9,20 +9,13 @@ metadata:
     app.kubernetes.io/part-of: fint-core
     fintlabs.no/team: core
     fintlabs.no/org-id: REPLACE
-# One route per domain that every environment routes the same way. Utdanning comes from a component, since only
-# api runs core 1 next to it. Every match starts with Host and x-org-id, which components/org fills in.
+# One route per domain that every environment routes the same way. Utdanning and okonomi come from components,
+# since only api runs core 1 next to them. Every match starts with Host and x-org-id, which components/org fills in.
 # Anything no route claims stays on core 1 and core 2. The policy is tested in kustomize/rules-test/test.sh.
 spec:
   entryPoints:
     - web
   routes:
-    # Okonomi faktura and kodeverk stay on core 1. Regnskap is core 2, so it comes here.
-    - kind: Rule
-      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/okonomi/regnskap`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
-      services:
-        - name: fint-core-client-api
-          namespace: REPLACE-DASHED
-          port: 8080
     # Felles kodeverk is shared by all orgs and stays on core 1.
     - kind: Rule
       match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/felles`) && !PathPrefix(`/felles/kodeverk`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'

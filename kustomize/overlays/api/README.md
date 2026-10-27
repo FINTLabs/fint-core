@@ -12,8 +12,9 @@ To move a county onto the client-api:
 2. Rename `<org>.disabled` to `<org>` and merge to `main`.
 
 The client-api routes come from `kustomize/base/consumer-ingress.yaml`, one
-per domain. Every api overlay also gets `components/utdanning-gated`, since
-core 1 still serves utdanning in api. An org whose administrasjon is on core 2
+per domain. Every api overlay also gets `components/utdanning-gated` and
+`components/okonomi-regnskap`, since core 1 still serves utdanning and okonomi
+faktura and kodeverk in api. An org whose administrasjon is on core 2
 also gets `components/administrasjon`. List `components/org` last, since it
 fills in the routes the other components add. The routing policy lives in
 `kustomize/rules-test/test.sh`, and the Ingress rules workflow checks it for
