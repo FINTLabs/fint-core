@@ -2,7 +2,6 @@ fint:
   provider:
     org-id: ${fint.org-id} # fint.org-id is sat by the FlaisApplication in environment
     buffer:
-      topic: ${fint.provider.org-id}
       consumer:
         batch-size: 100
         concurrency: 1
@@ -11,6 +10,8 @@ fint:
     resource-ttl:
       max-age: P21D
       sweep-interval: PT1H
+    resource-count-metrics:
+      interval: PT20s
   base-url: https://api.felleskomponent.no
 
 spring:

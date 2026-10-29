@@ -54,8 +54,8 @@ class AdapterAuthorization(
 
     /**
      * The org must be one the JWT carries and one this gateway serves. Both halves matter: the
-     * assets list sub-orgs one by one, and this deployment only owns its configured main org
-     * and everything under it.
+     * assets list sub-orgs one by one, and this deployment only owns its configured main orgs
+     * and everything under them.
      */
     fun hasOrg(
         authentication: Authentication,
@@ -69,7 +69,7 @@ class AdapterAuthorization(
         if (principal.assets.none { asset -> asOrgId(asset) == requested }) {
             return deny(DenialReason.ORG_NOT_IN_ASSETS)
         }
-        if (!requested.belongsTo(providerProperties.orgId)) {
+        if (!providerProperties.serves(requested)) {
             return deny(DenialReason.ORG_NOT_SERVED)
         }
         return true
@@ -106,12 +106,12 @@ class AdapterAuthorization(
     }
 
     /**
-     * The JWT assets that this gateway serves. Assets for another main org are dropped, so a
-     * gateway never reads or writes another org's data.
+     * The JWT assets that this gateway serves. Assets for a main org it does not serve are
+     * dropped, so a gateway never reads or writes another org's data.
      */
     fun servedOrgs(authentication: Authentication): List<OrgId> {
         val principal = adapterOrNull(authentication) ?: return emptyList()
-        return principal.assets.mapNotNull(::asOrgId).filter { it.belongsTo(providerProperties.orgId) }
+        return principal.assets.mapNotNull(::asOrgId).filter(providerProperties::serves)
     }
 
     /**

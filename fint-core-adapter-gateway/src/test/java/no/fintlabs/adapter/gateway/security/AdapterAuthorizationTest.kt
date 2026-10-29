@@ -71,6 +71,38 @@ class AdapterAuthorizationTest {
     }
 
     @Nested
+    inner class ServingMoreThanOneOrg {
+        private val authorization =
+            AdapterAuthorization(ProviderProperties(orgIdValue = MAIN_ORG, extraOrgIdValues = listOf(OTHER_MAIN_ORG)), contractService)
+
+        @Test
+        fun `accepts every main org this gateway serves`() {
+            val adapter = adapter(assets = "$MAIN_ORG,$OTHER_MAIN_ORG")
+
+            assertThat(authorization.hasOrg(adapter, MAIN_ORG)).isTrue()
+            assertThat(authorization.hasOrg(adapter, OTHER_MAIN_ORG)).isTrue()
+        }
+
+        @Test
+        fun `accepts a sub-org of the deployment org next to an extra org`() {
+            assertThat(authorization.hasOrg(adapter(assets = SUB_ORG), SUB_ORG)).isTrue()
+        }
+
+        @Test
+        fun `still rejects an org that is neither the deployment org nor an extra org`() {
+            assertThat(authorization.hasOrg(adapter(assets = "$MAIN_ORG,vtfk.no"), "vtfk.no")).isFalse()
+        }
+
+        @Test
+        fun `serves the assets that match any of its main orgs`() {
+            val adapter = adapter(assets = "$MAIN_ORG,$SUB_ORG,$OTHER_MAIN_ORG,vtfk.no")
+
+            assertThat(authorization.servedOrgs(adapter))
+                .containsExactly(OrgId.from(MAIN_ORG), OrgId.from(SUB_ORG), OrgId.from(OTHER_MAIN_ORG))
+        }
+    }
+
+    @Nested
     inner class IsUsername {
         @Test
         fun `accepts a matching username`() {
@@ -156,6 +188,7 @@ class AdapterAuthorizationTest {
     private companion object {
         const val MAIN_ORG = "fintlabs.no"
         const val SUB_ORG = "test.fintlabs.no"
+        const val OTHER_MAIN_ORG = "novari.no"
         const val USERNAME = "test@adapter.fintlabs.no"
     }
 }

@@ -35,7 +35,11 @@ check() {
 ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
 # Environments where personvern goes to the client-api. In api it stays on core 2 for now.
 PERSONVERN_ENVS="beta"
-# Shared test orgs the client-api serves whole, apart from felles kodeverk, okonomi on core 1 and the V4 gate.
+# Environments where core 1 serves utdanning next to the client-api, so only V4 reaches the client-api there.
+UTDANNING_GATED_ENVS="api"
+# Environments where core 1 serves okonomi faktura and kodeverk, so only regnskap reaches the client-api there.
+OKONOMI_SPLIT_ENVS="api"
+# Shared test orgs the client-api serves whole, apart from felles kodeverk.
 WHOLE_ORGS="novari.no"
 
 V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
@@ -57,11 +61,21 @@ admin=(/administrasjon/personal/ /administrasjon/organisasjon/ /administrasjon/k
 while read -r env org host id enabled; do
   echo "== $env/$org ($id @ $host)$([ "$enabled" = 0 ] && echo ', disabled')"
   whole=0; has "$id" "$WHOLE_ORGS" && whole=1
-  # core 1 serves these utdanning packages as V3. Larling and ot have no core 1.
-  gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
+  # where core 1 serves these utdanning packages as V3, only V4 reaches the client-api. Larling and ot have no core 1.
+  if has "$env" "$UTDANNING_GATED_ENVS"; then
+    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/ /utdanning/vurdering/elevvurdering/
+  else
+    always client-api /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
+  fi
   always client-api /utdanning/larling/ /utdanning/ot/
-  # okonomi goes by package, not by header. Core 1 serves faktura and kodeverk, core 2 serves regnskap.
-  always core1 /okonomi/faktura/ /okonomi/kodeverk/
+  # these vurdering resources never reach core 1, whatever the headers
+  always client-api /utdanning/vurdering/karakterverdi/ /utdanning/vurdering/elevfravar/ /utdanning/vurdering/fravarsregistrering/
+  # okonomi goes by package, not by header. Where core 1 serves faktura and kodeverk, only regnskap reaches the client-api.
+  if has "$env" "$OKONOMI_SPLIT_ENVS"; then
+    always core1 /okonomi/faktura/ /okonomi/kodeverk/
+  else
+    always client-api /okonomi/faktura/ /okonomi/kodeverk/
+  fi
   always client-api /okonomi/regnskap/
   always client-api /felles/person/ /ressurs/datautstyr/
   always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
@@ -80,7 +94,8 @@ while read -r env org host id enabled; do
   if [ $whole = 1 ]; then always client-api /arkiv/noark/ /profilbilde/; else always core1 /arkiv/noark/ /profilbilde/; fi
   # a sub-org follows its parent. In api (no shared catch-all) a look-alike org does not.
   check client-api "$host" /utdanning/utdanningsprogram/ "sub.$id" "x-fint-model-version: V4"
-  check core1 "$host" /utdanning/utdanningsprogram/ "sub.$id"
+  if has "$env" "$UTDANNING_GATED_ENVS"; then want=core1; else want=client-api; fi
+  check "$want" "$host" /utdanning/utdanningsprogram/ "sub.$id"
   [ "$env" = api ] && check core1 "$host" /utdanning/utdanningsprogram/ "not$id" "x-fint-model-version: V4"
 done < targets.txt
 

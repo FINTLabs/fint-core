@@ -4,4 +4,6 @@ resources:
   - ../../../base
   - org-values.yaml
 components:
+  - ../../../components/utdanning-gated
+  - ../../../components/okonomi-regnskap
   - ../../../components/org

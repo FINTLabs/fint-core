@@ -81,12 +81,12 @@ class ResourceTtlService(
         return orgStore
             .findAll()
             .map { OrgId.from(it.id) }
-            .filter { it.belongsTo(providerProperties.orgId) }
+            .filter(providerProperties::serves)
             .flatMap { org -> FintModel.refs.map { ResourceCoordinate(org.value, it.domainName, it.packageName, it.resourceName) } }
             .filter { it.toCollectionName() in existing }
     }
 
-    private fun ResourceCoordinate.belongsToThisGateway(): Boolean = OrgId.from(orgId).belongsTo(providerProperties.orgId)
+    private fun ResourceCoordinate.belongsToThisGateway(): Boolean = providerProperties.serves(OrgId.from(orgId))
 
     private fun wipe(status: FullSyncStatus) {
         val collectionName = status.coordinate.toCollectionName()
