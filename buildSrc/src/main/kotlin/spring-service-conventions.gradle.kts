@@ -26,6 +26,11 @@ java {
     }
 }
 
+// Dependabot resolves with JDK 21. This makes it use 25.
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(25)
+}
+
 configurations {
     compileOnly {
         extendsFrom(configurations.annotationProcessor.get())
