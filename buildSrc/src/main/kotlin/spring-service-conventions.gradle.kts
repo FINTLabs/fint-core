@@ -33,6 +33,9 @@ dependencies {
         implementation("at.yawk.lz4:lz4-java:1.11.4") {
             because("Versions before 1.11.4 contain a known vulnerability")
         }
+        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+            because("Versions before 1.1.10.9 contain a known vulnerability")
+        }
     }
 
     implementation("org.springframework.boot:spring-boot-starter-web")
