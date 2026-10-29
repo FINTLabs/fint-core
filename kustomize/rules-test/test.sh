@@ -63,11 +63,13 @@ while read -r env org host id enabled; do
   whole=0; has "$id" "$WHOLE_ORGS" && whole=1
   # where core 1 serves these utdanning packages as V3, only V4 reaches the client-api. Larling and ot have no core 1.
   if has "$env" "$UTDANNING_GATED_ENVS"; then
-    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
+    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/ /utdanning/vurdering/elevvurdering/
   else
     always client-api /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
   fi
   always client-api /utdanning/larling/ /utdanning/ot/
+  # these vurdering resources never reach core 1, whatever the headers
+  always client-api /utdanning/vurdering/karakterverdi/ /utdanning/vurdering/elevfravar/ /utdanning/vurdering/fravarsregistrering/
   # okonomi goes by package, not by header. Where core 1 serves faktura and kodeverk, only regnskap reaches the client-api.
   if has "$env" "$OKONOMI_SPLIT_ENVS"; then
     always core1 /okonomi/faktura/ /okonomi/kodeverk/
