@@ -10,6 +10,8 @@ fint:
     base-url: http://localhost:8082
 
 spring:
+  main:
+    banner-mode: console
   jpa:
     properties:
       jdbc:
@@ -43,6 +45,9 @@ management:
         include: health,info,prometheus
 
 logging:
+  structured:
+    format:
+      console: ""
   level:
     root: INFO
     "no.fintlabs.adapter.gateway.sync.BufferReader": DEBUG
