@@ -6,4 +6,5 @@ resources:
 components:
   - ../../../components/utdanning-gated
   - ../../../components/okonomi-regnskap
+  - ../../../components/personvern-samtykke
   - ../../../components/org

@@ -14,8 +14,9 @@ To move a county onto the client-api:
 The client-api routes come from `kustomize/base/consumer-ingress.yaml`, one
 per domain. Every api overlay also gets `components/utdanning-gated` and
 `components/okonomi-regnskap`, since core 1 still serves utdanning and okonomi
-faktura and kodeverk in api. An org whose administrasjon is on core 2
-also gets `components/administrasjon`. List `components/org` last, since it
-fills in the routes the other components add. The routing policy lives in
-`kustomize/rules-test/test.sh`, and the Ingress rules workflow checks it for
-every overlay. [docs/routing.md](../../../docs/routing.md) explains the rules.
+faktura and kodeverk in api. It also gets `components/personvern-samtykke`,
+since personvern kodeverk is not on the client-api in api yet. An org whose
+administrasjon is on core 2 also gets `components/administrasjon`. List
+`components/org` last, since it fills in the routes the other components add.
+The routing policy lives in `kustomize/rules-test/test.sh`, and the Ingress
+rules workflow checks it for every overlay. [docs/routing.md](../../../docs/routing.md) explains the rules.
