@@ -6,5 +6,4 @@ resources:
 components:
   - ../../../components/utdanning
   - ../../../components/okonomi
-  - ../../../components/personvern
   - ../../../components/org

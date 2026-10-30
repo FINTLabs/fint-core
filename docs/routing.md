@@ -16,9 +16,7 @@ or in fint-infra-tools.
 | `/okonomi/faktura`, `/okonomi/kodeverk` | core 1 | client-api | client-api |
 | `/felles` except `/felles/kodeverk` | client-api | client-api | client-api |
 | `/felles/kodeverk` | core 1 | core 1 | client-api |
-| `/ressurs` | client-api | client-api | client-api |
-| `/personvern/samtykke` | client-api | client-api | client-api |
-| `/personvern/kodeverk` | none | client-api | client-api |
+| `/ressurs`, `/personvern` | client-api | client-api | client-api |
 | `/administrasjon` | client-api for rogfk, telemark, trondelag and vestfold, otherwise core 1 | client-api for rogfk, telemark, trondelag and vestfold, otherwise core 1 | client-api |
 | `/arkiv`, `/profilbilde` | core 1 | core 1 | client-api |
 | `/{domain}/{package}/provider` | never the client-api | never the client-api | never the client-api |
