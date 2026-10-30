@@ -33,8 +33,6 @@ check() {
 # the client-api once enabled, and a disabled one is not checked. Every other
 # org must never get administrasjon on the client-api.
 ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
-# Environments where personvern goes to the client-api. In api it stays on core 2 for now.
-PERSONVERN_ENVS="beta"
 # Environments where core 1 serves utdanning next to the client-api, so only V4 reaches the client-api there.
 UTDANNING_GATED_ENVS="api"
 # Environments where core 1 serves okonomi faktura and kodeverk, so only regnskap reaches the client-api there.
@@ -77,13 +75,8 @@ while read -r env org host id enabled; do
     always client-api /okonomi/faktura/ /okonomi/kodeverk/
   fi
   always client-api /okonomi/regnskap/
-  always client-api /felles/person/ /ressurs/datautstyr/
+  always client-api /felles/person/ /ressurs/datautstyr/ /personvern/samtykke/ /personvern/kodeverk/
   always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
-  if [ $whole = 1 ] || has "$env" "$PERSONVERN_ENVS"; then
-    always client-api /personvern/samtykke/ /personvern/kodeverk/
-  else
-    always core1 /personvern/samtykke/ /personvern/kodeverk/
-  fi
   if [ $whole = 1 ] || { has "$id" "$ADMIN_ORGS" && [ "$enabled" = 1 ]; }; then
     always client-api "${admin[@]}"
   elif ! has "$id" "$ADMIN_ORGS"; then
