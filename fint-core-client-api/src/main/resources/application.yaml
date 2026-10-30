@@ -12,6 +12,8 @@ fint:
       timeout: 2s
 
 spring:
+  main:
+    banner-mode: "off"
   application:
     name: fint-core-client-api
   config:
@@ -38,5 +40,12 @@ management:
         include: prometheus,health
 
 logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      exclude: level_value
+      add:
+        context: default
   level:
     org.apache.kafka: WARN
