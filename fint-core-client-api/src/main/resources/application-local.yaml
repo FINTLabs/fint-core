@@ -15,13 +15,9 @@ spring:
     bootstrap-servers: localhost:9092
     security:
       protocol: PLAINTEXT
-    consumer:
-      group-id: fint-core-client-api
 logging:
   structured:
     format:
       console: ""
   level:
     org.apache.kafka: OFF
-    no.fintlabs.cache: DEBUG
-    no.fintlabs.resource.server: DEBUG

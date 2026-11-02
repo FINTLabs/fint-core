@@ -6,20 +6,11 @@ fint:
   provider:
     kafka:
       replicas: 1
-  metamodel:
-    base-url: http://localhost:8082
 
 spring:
   main:
     banner-mode: console
   jpa:
-    properties:
-      jdbc:
-        time_zone: UTC
-        lob:
-          non_contextual_creation: true
-      dialect: org.hibernate.dialect.PostgreSQLDialect
-      enable_lazy_load_no_trans: true
     hibernate:
       ddl-auto: validate
   datasource:
@@ -34,7 +25,6 @@ spring:
     security:
       protocol: PLAINTEXT
     consumer:
-      group-id: provider
       properties:
         max.poll.records: 1500
 
