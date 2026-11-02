@@ -8,6 +8,8 @@ fint:
       replicas: 1
 
 spring:
+  main:
+    banner-mode: console
   jpa:
     hibernate:
       ddl-auto: validate
@@ -33,6 +35,9 @@ management:
         include: health,info,prometheus
 
 logging:
+  structured:
+    format:
+      console: ""
   level:
     root: INFO
     "no.fintlabs.adapter.gateway.sync.BufferReader": DEBUG

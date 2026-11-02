@@ -18,4 +18,4 @@ faktura and kodeverk in api. An org whose administrasjon is on core 2
 also gets `components/administrasjon`. List `components/org` last, since it
 fills in the routes the other components add. The routing policy lives in
 `kustomize/rules-test/test.sh`, and the Ingress rules workflow checks it for
-every overlay.
+every overlay. [docs/routing.md](../../../docs/routing.md) explains the rules.

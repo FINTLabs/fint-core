@@ -6,6 +6,8 @@ fint:
     org-id: fintlabs.no
 
 spring:
+  main:
+    banner-mode: console
   threads:
     virtual:
       enabled: true
@@ -14,5 +16,8 @@ spring:
     security:
       protocol: PLAINTEXT
 logging:
+  structured:
+    format:
+      console: ""
   level:
     org.apache.kafka: OFF

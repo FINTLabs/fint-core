@@ -46,4 +46,4 @@ patches:
         path: /spec/env/-
         value:
           name: FINT_PROVIDER_EXTRAORGIDS
-          value: fintlabs.no
+          value: fintlabs.no,sdworx.com

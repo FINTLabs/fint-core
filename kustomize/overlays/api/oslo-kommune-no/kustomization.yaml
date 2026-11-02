@@ -7,3 +7,16 @@ components:
   - ../../../components/utdanning-gated
   - ../../../components/okonomi-regnskap
   - ../../../components/org
+patches:
+  - target:
+      group: fintlabs.no
+      version: v1alpha1
+      kind: Application
+      name: fint-core-client-api
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/memory
+        value: 8Gi
+      - op: replace
+        path: /spec/resources/limits/memory
+        value: 8.5Gi

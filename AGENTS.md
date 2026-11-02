@@ -40,5 +40,8 @@ Recent commits use short, lowercase type prefixes such as `feat:`, `fix:`, `refa
 We provide HATEOAS linking in the responses from our client-api. However we only receive links one way when recieving the data. We have to set the backlinks when the end-user queries the API.
 For example, and we can receive an Elev and an Elevforhold. The Elevforhold comes with a link to the Elev, but we have to create the link back to Elevforhold if an Elevforhold is queried.
 
+## Routing
+The Traefik rules for the client-api live in `kustomize/` and are explained in `docs/routing.md`. Any change to an IngressRoute, a component or `kustomize/rules-test/test.sh` must update `docs/routing.md` in the same change.
+
 ## Release
 Changes to develop automatically releases to beta. Changes to main automatically release to production (Which we call API).

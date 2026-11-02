@@ -29,3 +29,9 @@ spec:
         - name: fint-core-client-api
           namespace: REPLACE-DASHED
           port: 8080
+    - kind: Rule
+      match: 'Host(`REPLACE`) && HeadersRegexp(`x-org-id`, `REPLACE`) && PathPrefix(`/personvern`) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
+      services:
+        - name: fint-core-client-api
+          namespace: REPLACE-DASHED
+          port: 8080

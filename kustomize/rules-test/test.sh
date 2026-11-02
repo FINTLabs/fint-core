@@ -33,8 +33,6 @@ check() {
 # the client-api once enabled, and a disabled one is not checked. Every other
 # org must never get administrasjon on the client-api.
 ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
-# Environments where personvern goes to the client-api. In api it stays on core 2 for now.
-PERSONVERN_ENVS="beta"
 # Environments where core 1 serves utdanning next to the client-api, so only V4 reaches the client-api there.
 UTDANNING_GATED_ENVS="api"
 # Environments where core 1 serves okonomi faktura and kodeverk, so only regnskap reaches the client-api there.
@@ -63,11 +61,13 @@ while read -r env org host id enabled; do
   whole=0; has "$id" "$WHOLE_ORGS" && whole=1
   # where core 1 serves these utdanning packages as V3, only V4 reaches the client-api. Larling and ot have no core 1.
   if has "$env" "$UTDANNING_GATED_ENVS"; then
-    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
+    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/ /utdanning/vurdering/elevvurdering/
   else
     always client-api /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
   fi
   always client-api /utdanning/larling/ /utdanning/ot/
+  # these vurdering resources never reach core 1, whatever the headers
+  always client-api /utdanning/vurdering/karakterverdi/ /utdanning/vurdering/elevfravar/ /utdanning/vurdering/fravarsregistrering/
   # okonomi goes by package, not by header. Where core 1 serves faktura and kodeverk, only regnskap reaches the client-api.
   if has "$env" "$OKONOMI_SPLIT_ENVS"; then
     always core1 /okonomi/faktura/ /okonomi/kodeverk/
@@ -75,13 +75,8 @@ while read -r env org host id enabled; do
     always client-api /okonomi/faktura/ /okonomi/kodeverk/
   fi
   always client-api /okonomi/regnskap/
-  always client-api /felles/person/ /ressurs/datautstyr/
+  always client-api /felles/person/ /ressurs/datautstyr/ /personvern/samtykke/ /personvern/kodeverk/
   always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
-  if [ $whole = 1 ] || has "$env" "$PERSONVERN_ENVS"; then
-    always client-api /personvern/samtykke/ /personvern/kodeverk/
-  else
-    always core1 /personvern/samtykke/ /personvern/kodeverk/
-  fi
   if [ $whole = 1 ] || { has "$id" "$ADMIN_ORGS" && [ "$enabled" = 1 ]; }; then
     always client-api "${admin[@]}"
   elif ! has "$id" "$ADMIN_ORGS"; then
