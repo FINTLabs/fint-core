@@ -3,6 +3,8 @@ package no.fintlabs.adapter.gateway.event
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.response.ResponseFintEventProducer
 import no.fintlabs.adapter.models.event.RequestFintEvent
@@ -19,6 +21,7 @@ class EventExpiryServiceTest {
     private val eventStore = mockk<EventStore>()
     private val orgStore = mockk<OrgStore>()
     private val producer = mockk<ResponseFintEventProducer>(relaxed = true)
+    private val contractService = mockk<ContractService>(relaxed = true)
     private val now = Instant.parse("2026-10-07T08:12:00Z")
     private val service =
         EventExpiryService(
@@ -27,6 +30,8 @@ class EventExpiryServiceTest {
             ProviderProperties(orgIdValue = "fintlabs.no"),
             producer,
             Clock.fixed(now, ZoneOffset.UTC),
+            contractService,
+            SimpleMeterRegistry(),
         )
 
     @Test
