@@ -497,11 +497,19 @@ class ResourceStore(
                 .on("_id", Sort.Direction.ASC)
                 .named(CREATED_AT_ID_INDEX),
         )
+
+        template.indexOps(collectionName).createIndex(
+            Index()
+                .on("identifiers.field", Sort.Direction.ASC)
+                .on("identifiers.value", Sort.Direction.ASC)
+                .named(IDENTIFIERS_INDEX),
+        )
     }
 
     companion object {
         const val CREATED_AT_ID_INDEX = "created_at_id"
         const val LAST_MODIFIED_INDEX = "last_modified"
         const val LAST_DELIVERED_INDEX = "last_delivered"
+        const val IDENTIFIERS_INDEX = "identifiers"
     }
 }
