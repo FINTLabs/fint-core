@@ -58,7 +58,7 @@ class ResourceService(
         if (size <= 0) {
             val entries = resourceStore.findAll(since, collectionName)
             val allResources = entries.toFintResources(resourceCoordinate)
-            mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = since == null)
+            mergeRelationEdges(resourceCoordinate, entries, allResources, wholeCollection = since == null)
             val resources = filter?.let { filterResources(allResources, it) } ?: allResources
             return createFintResourcesResponse(
                 baseUrl,
@@ -75,7 +75,9 @@ class ResourceService(
         val page =
             readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
         val allResources = page.entries.toFintResources(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, page.entries, allResources, fullDump = false)
+        // Rows read decide this, not totalItems, since the count is cached and can be out of date.
+        val wholeCollection = since == null && cursor == null && offset == 0L && !page.hasNext
+        mergeRelationEdges(resourceCoordinate, page.entries, allResources, wholeCollection)
         val resources = filter?.let { filterResources(allResources, it) } ?: allResources
 
         return createFintResourcesResponse(
@@ -113,7 +115,7 @@ class ResourceService(
         val collectionName = resourceCoordinate.toCollectionName()
         val entry = resourceStore.findByIdentifier(idField, idValue, collectionName) ?: return null
         val resource = entry.toFintResource(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), fullDump = false)
+        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), wholeCollection = false)
         return resource
     }
 
@@ -145,23 +147,23 @@ class ResourceService(
 
     /**
      * Attaches the back-links autorelation supplies onto the resources of a response, before the
-     * response form renders `_links`: one query fetches the relation edges pointing at any of the
+     * response form renders `_links`. One query fetches the relation edges pointing at any of the
      * response's identifiers, and each edge becomes an ordinary id-based link on the resource it
-     * points at, for example `elevforhold` on an Elev. A full dump covers the whole collection,
-     * so its identifier filter would narrow nothing and only bloat the query; there the read
+     * points at, for example `elevforhold` on an Elev. When the response holds the whole
+     * collection an identifier filter would narrow nothing and only bloat the query. That read
      * fetches every edge for the type in one range scan and lets the in-memory join route them.
      */
     private fun mergeRelationEdges(
         resourceCoordinate: ResourceCoordinate,
         entries: List<ResourceEntry>,
         resources: List<FintResource>,
-        fullDump: Boolean,
+        wholeCollection: Boolean,
     ) {
         // TODO: the fetch-everything branch can be removed once the API forces pagination
         if (!consumerConfiguration.autorelation.enabled || entries.isEmpty()) return
 
         val edges =
-            if (fullDump) {
+            if (wholeCollection) {
                 relationEdgeStore.findAllByTargetType(
                     resourceCoordinate.toEdgeCollectionName(),
                     resourceCoordinate.toResourceUri(),

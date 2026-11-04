@@ -7,6 +7,7 @@ import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidArgumentException
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -178,10 +179,10 @@ class ResourceServiceTest {
                     identifiers = listOf(IdentifierRef("systemid", "B")),
                 ),
             )
-        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
-        every { resourceStore.count(null, collectionName) } returns 2
+        every { resourceStore.findPage(null, 11, 1, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 3
 
-        resourceService.getResources(resourceCoordinate, 10, 0, null, "systemId/identifikatorverdi eq 'B'")
+        resourceService.getResources(resourceCoordinate, 10, 1, null, "systemId/identifikatorverdi eq 'B'")
 
         verify(exactly = 1) {
             relationEdgeStore.findByTargets(
@@ -208,8 +209,8 @@ class ResourceServiceTest {
                     identifiers = listOf(IdentifierRef("systemid", "B")),
                 ),
             )
-        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
-        every { resourceStore.count(null, collectionName) } returns 2
+        every { resourceStore.findPage(null, 11, 1, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 3
         every {
             relationEdgeStore.findByTargets(any(), any(), any())
         } returns
@@ -239,7 +240,7 @@ class ResourceServiceTest {
             resourceService.getResources(
                 resourceCoordinate,
                 10,
-                0,
+                1,
                 null,
                 "links/fravarsregistrering/any(l:l/idValue eq 'FR-9')",
             )
@@ -467,16 +468,130 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `an explicit page above 1000 still queries edges by identifier`() {
+    fun `a page that leaves entries behind queries edges for its own identifiers`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val entries = (1..1200).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
+        val entries = (1..1201).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
         every { resourceStore.findPage(null, 1201, 0, collectionName) } returns entries
-        every { resourceStore.count(null, collectionName) } returns 1200
+        every { resourceStore.count(null, collectionName) } returns 2000
 
         resourceService.getResources(resourceCoordinate, 1200, 0, null, null)
 
+        verify(exactly = 1) {
+            relationEdgeStore.findByTargets(any(), any(), entries.dropLast(1).flatMap { it.identifiers })
+        }
+        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `a first page that holds the whole collection fetches all edges for the type`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 64001, 0, collectionName) } returns
+            listOf(resourceEntry("r-1", identifiers = listOf(IdentifierRef("systemid", "r-1"))))
+        every { resourceStore.count(null, collectionName) } returns 1
+
+        resourceService.getResources(resourceCoordinate, 64000, 0, null, null)
+
+        verify(exactly = 1) { relationEdgeStore.findAllByTargetType(any(), any()) }
+        verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
+    }
+
+    @Test
+    fun `sinceTimeStamp 0 counts as no filter when deciding how to fetch edges`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 64001, 0, collectionName) } returns
+            listOf(resourceEntry("r-1", identifiers = listOf(IdentifierRef("systemid", "r-1"))))
+        every { resourceStore.count(null, collectionName) } returns 1
+
+        resourceService.getResources(resourceCoordinate, 64000, 0, 0L, null)
+
+        verify(exactly = 1) { relationEdgeStore.findAllByTargetType(any(), any()) }
+        verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a stale count does not make a partial first page look like the whole collection`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 3, 0, collectionName) } returns
+            listOf("A", "B", "C").map { resourceEntry(it, identifiers = listOf(IdentifierRef("systemid", it))) }
+        every { resourceStore.count(null, collectionName) } returns 2
+
+        resourceService.getResources(resourceCoordinate, 2, 0, null, null)
+
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
         verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `a read with a real sinceTimeStamp queries edges by identifier`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val since = Instant.ofEpochMilli(1723456789L)
+        every { resourceStore.count(since, collectionName) } returns 1
+        every { resourceStore.findPage(any(), 11, 0, collectionName) } returns
+            listOf(resourceEntry("r-1", identifiers = listOf(IdentifierRef("systemid", "r-1"))))
+
+        resourceService.getResources(resourceCoordinate, 10, 0, since.toEpochMilli(), null)
+
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `the last page behind an offset queries edges by identifier`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.count(null, collectionName) } returns 3
+        every { resourceStore.findPage(null, 11, 2, collectionName) } returns
+            listOf(resourceEntry("r-3", identifiers = listOf(IdentifierRef("systemid", "r-3"))))
+
+        resourceService.getResources(resourceCoordinate, 10, 2, null, null)
+
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `the last page behind a cursor queries edges by identifier`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val cursor = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "B"))
+        every { resourceStore.count(null, collectionName) } returns 3
+        every { resourceStore.findPageAfter(cursor.anchor, null, 11, collectionName) } returns
+            listOf(resourceEntry("C", identifiers = listOf(IdentifierRef("systemid", "C"))))
+
+        resourceService.getResources(resourceCoordinate, 10, 0, null, null, cursor)
+
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
+    }
+
+    @Test
+    fun `both ways of fetching edges give the same links`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf("A", "B").map {
+                resourceEntry(
+                    it,
+                    data = Document("systemId", Document("identifikatorverdi", it)),
+                    identifiers = listOf(IdentifierRef("systemid", it)),
+                )
+            }
+        val edgeToA = fravarsregistreringEdge(targetIdValue = "A")
+        every { relationEdgeStore.findAllByTargetType(any(), any()) } returns
+            listOf(edgeToA, fravarsregistreringEdge(targetIdValue = "gone"))
+        every { relationEdgeStore.findByTargets(any(), any(), any()) } returns listOf(edgeToA)
+        every { resourceStore.count(null, collectionName) } returns 3
+        every { resourceStore.findPage(null, 11, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 11, 1, collectionName) } returns entries
+
+        val wholeCollection = resourceService.getResources(resourceCoordinate, 10, 0, null, null)
+        val page = resourceService.getResources(resourceCoordinate, 10, 1, null, null)
+
+        verify(exactly = 1) { relationEdgeStore.findAllByTargetType(any(), any()) }
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        val linksOf = { response: FintResourcesResponse -> response.embedded.entries.map { (it as Elevfravar).links } }
+        assertEquals(linksOf(page), linksOf(wholeCollection))
+        assertEquals(
+            listOf("FR-9"),
+            linksOf(wholeCollection).first()["fravarsregistrering"]?.map { it.idValue },
+        )
     }
 
     @Test
@@ -595,6 +710,27 @@ class ResourceServiceTest {
             baseUrl = "https://api.felleskomponent.no",
             orgIdValue = "fintlabs.no",
             autorelation = AutorelationConfig(enabled = autorelationEnabled),
+        )
+
+    private fun fravarsregistreringEdge(targetIdValue: String) =
+        RelationEdge(
+            id =
+                relationEdgeId(
+                    sourceType = "utdanning/vurdering/fravarsregistrering",
+                    sourceId = "FR-9",
+                    relationName = "elevfravar",
+                    targetType = "utdanning/vurdering/elevfravar",
+                    targetIdField = "systemid",
+                    targetIdValue = targetIdValue,
+                ),
+            sourceType = "utdanning/vurdering/fravarsregistrering",
+            sourceId = "FR-9",
+            sourceIdField = "systemid",
+            sourceIdValue = "FR-9",
+            inverseName = "fravarsregistrering",
+            targetType = "utdanning/vurdering/elevfravar",
+            targetIdField = "systemid",
+            targetIdValue = targetIdValue,
         )
 
     private fun cursorOf(href: String?) = cursorCodec.decode(href!!.substringAfter("cursor="))
