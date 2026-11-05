@@ -1,12 +1,12 @@
 package no.fintlabs.adapter.gateway.event
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.response.ResponseFintEventProducer
+import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.EventStore
