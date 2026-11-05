@@ -13,6 +13,13 @@ metadata:
     fintlabs.no/org-id: REPLACE
 spec:
   port: 8080
+  startupProbe:
+    httpGet:
+      path: /actuator/health/liveness
+      port: 8080
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 30
   orgId: REPLACE
   image: ghcr.io/fintlabs/fint-core-adapter-gateway-db:REPLACE
   onePassword:
