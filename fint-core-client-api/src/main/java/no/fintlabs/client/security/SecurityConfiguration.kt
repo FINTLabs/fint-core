@@ -132,6 +132,7 @@ class SecurityConfiguration(
         private val OPEN_PATHS =
             arrayOf(
                 "/actuator/health",
+                "/actuator/health/liveness",
                 "/actuator/prometheus",
             )
     }
