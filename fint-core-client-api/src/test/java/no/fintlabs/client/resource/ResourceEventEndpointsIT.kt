@@ -6,6 +6,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.exception.resource.InvalidResourceBodyException
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
@@ -39,6 +40,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.bean.override.mockito.MockitoBean
+import tools.jackson.databind.json.JsonMapper
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -68,6 +70,7 @@ class ResourceEventEndpointsIT {
     @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
+        ResourceExceptionHandler::class,
         ResourceStreamWriter::class,
         OpaFieldPruner::class,
         JacksonConfiguration::class,
@@ -94,6 +97,7 @@ class ResourceEventEndpointsIT {
     private var port = 0
 
     private val client = HttpClient.newHttpClient()
+    private val mapper = JsonMapper.builder().build()
     private val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "elev", "elev")
     private val statusUrlBase = "https://api.felleskomponent.no/utdanning/elev/elev/status"
 
@@ -121,6 +125,23 @@ class ResourceEventEndpointsIT {
             "https://api.felleskomponent.no/utdanning/vurdering/elevfravar/status/corr-fravar",
             locationOf(response),
         )
+    }
+
+    @Test
+    fun `posting a body that does not fit the model is a bad request with the same body as one that is not json`() {
+        given(requestFintEventService.createAndPublish(coordinate, mapOf("systemId" to "not-an-identifikator"), false))
+            .willThrow(InvalidResourceBodyException("elev", IllegalStateException("systemId is not an Identifikator")))
+
+        val notFitting = post("/utdanning/elev/elev", """{"systemId":"not-an-identifikator"}""")
+        val notJson = post("/utdanning/elev/elev", """{"systemId":""")
+
+        assertEquals(400, notFitting.statusCode())
+        assertEquals(400, notJson.statusCode())
+        val body = mapper.readTree(notFitting.body())
+        assertEquals(400, body.get("status").asInt())
+        assertEquals("Bad Request", body.get("error").asString())
+        assertEquals("/utdanning/elev/elev", body.get("path").asString())
+        assertEquals(mapper.readTree(notJson.body()).propertyNames().toSet(), body.propertyNames().toSet())
     }
 
     @Test

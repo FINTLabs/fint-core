@@ -48,19 +48,7 @@ abstract class GatewayIntegrationTestBase {
 
     @BeforeEach
     fun baseSetup() {
-        val jwt =
-            Jwt
-                .withTokenValue("mock-token-value")
-                .header("alg", "none")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(3600))
-                .claim("cn", username)
-                .claim("fintAssetIDs", orgId)
-                .claim("scope", listOf("fint-adapter"))
-                .claim("Roles", listOf("FINT_Adapter_${domainName}_$packageName"))
-                .build()
-
-        mockPrincipal = CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_ADAPTER")))
+        mockPrincipal = principal()
 
         mockMvc =
             MockMvcBuilders
@@ -68,6 +56,25 @@ abstract class GatewayIntegrationTestBase {
                 .addFilters<DefaultMockMvcBuilder>(trailingSlashFilter)
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
+    }
+
+    protected fun principal(
+        username: String = this.username,
+        assets: String = orgId,
+    ): CorePrincipal {
+        val jwt =
+            Jwt
+                .withTokenValue("mock-token-value")
+                .header("alg", "none")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .claim("cn", username)
+                .claim("fintAssetIDs", assets)
+                .claim("scope", listOf("fint-adapter"))
+                .claim("Roles", listOf("FINT_Adapter_${domainName}_$packageName"))
+                .build()
+
+        return CorePrincipal(jwt, listOf(SimpleGrantedAuthority("ROLE_ADAPTER")))
     }
 
     protected fun adapterContract(): AdapterContract {

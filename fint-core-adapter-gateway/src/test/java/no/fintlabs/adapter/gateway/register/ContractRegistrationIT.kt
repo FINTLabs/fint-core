@@ -98,6 +98,48 @@ class ContractRegistrationIT {
     }
 
     @Test
+    fun `a contract with a null heartbeat interval is stored with 0`() {
+        postRegister(contract(heartbeat = null))
+
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
+
+        assertThat(stored.heartbeatIntervalInMinutes).isEqualTo(0)
+    }
+
+    @Test
+    fun `a contract that provider-gateway accepted is registered`() {
+        val json =
+            """
+            {
+              "orgId": "$orgId",
+              "username": "$username",
+              "heartbeatIntervalInMinutes": 10,
+              "time": null,
+              "eventCapabilities": null,
+              "capabilities": [
+                {"domainName": "utdanning", "packageName": "elev", "resourceName": "elev", "fullSyncIntervalInDays": 7},
+                {"domainName": "utdanning", "packageName": "elev", "resourceName": "Elev", "fullSyncIntervalInDays": 2}
+              ]
+            }
+            """.trimIndent()
+
+        mockMvc
+            .perform(
+                post("/provider/register")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json)
+                    .with(authentication(principal)),
+            ).andExpect(status().isOk)
+
+        val stored = contractJpaRepository.findByUserNameAndOrgId(username, orgId)!!
+        assertThat(stored.adapterId).isEqualTo(username)
+        assertThat(stored.heartbeatIntervalInMinutes).isEqualTo(10)
+        assertThat(stored.capabilityEntityset.map { it.resourceName to it.fullSyncIntervalInDays })
+            .containsExactly("Elev" to 2)
+        assertThat(stored.eventCapabilityEntityset).isEmpty()
+    }
+
+    @Test
     fun `re-registering with a different capability set replaces the old capabilities`() {
         postRegister(contract(capabilities = setOf(capability(resource = "elev"))))
         postRegister(
@@ -222,14 +264,14 @@ class ContractRegistrationIT {
                     .content(
                         objectMapper.writeValueAsBytes(
                             contract(
-                                heartbeat = 10,
+                                capabilities = setOf(capability(resource = "elev").apply { fullSyncIntervalInDays = 0 }),
                                 eventCapabilities = setOf(eventCapability("vurdering", "finnesikke", OperationType.READ)),
                             ),
                         ),
                     ).with(authentication(principal)),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.detail").value("The request body is not valid"))
-            .andExpect(jsonPath("$.errors[?(@.field == 'heartbeatIntervalInMinutes')]").exists())
+            .andExpect(jsonPath("$.errors[?(@.field == 'capabilities[].fullSyncIntervalInDays')]").exists())
             .andExpect(
                 jsonPath(
                     "$.errors[?(@.field == 'eventCapabilities[]')].message",
@@ -269,7 +311,7 @@ class ContractRegistrationIT {
 
     private fun contract(
         orgId: String = this.orgId,
-        heartbeat: Int = 5,
+        heartbeat: Int? = 5,
         capabilities: Set<AdapterCapability> = setOf(capability(resource = "elev")),
         eventCapabilities: Set<EventCapability> = emptySet(),
     ): AdapterContract =

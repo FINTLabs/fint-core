@@ -3,6 +3,7 @@ package no.fintlabs.client.resource
 import no.fint.antlr.FintFilterService
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.dto.fullReadSelfLink
@@ -29,6 +30,7 @@ class ResourceService(
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
     private val cursorCodec: PageCursorCodec,
+    private val edgeLookupMetrics: RelationEdgeLookupMetrics,
 ) {
     private val storageMapper = FintJson.storageMapper()
     private val filterService: FintFilterService = ODataFilterService()
@@ -58,7 +60,10 @@ class ResourceService(
                 .asSequence()
                 .chunked(batchSize)
                 .map { batch ->
-                    ResourceBatch(batch.size, batch.toResponseResources(resourceCoordinate, resourceClass, filter))
+                    ResourceBatch(
+                        batch.size,
+                        batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
+                    )
                 }
 
         return ResourceStream(
@@ -96,7 +101,7 @@ class ResourceService(
         val totalItems = resourceStore.count(since, collectionName)
         val page =
             readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
-        val resources = page.entries.toResponseResources(resourceCoordinate, resourceClass, filter)
+        val resources = page.entries.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.PAGE)
 
         return createFintResourcesResponse(
             baseUrl = consumerConfiguration.baseUrl,
@@ -133,7 +138,7 @@ class ResourceService(
         val collectionName = resourceCoordinate.toCollectionName()
         val entry = resourceStore.findByIdentifier(idField, idValue, collectionName) ?: return null
         val resource = entry.toFintResource(resourceCoordinate.toResourceClass())
-        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource))
+        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), Lookup.PAGE)
         return resource
     }
 
@@ -173,9 +178,10 @@ class ResourceService(
         resourceCoordinate: ResourceCoordinate,
         resourceClass: Class<out FintResource>,
         filter: String?,
+        lookup: Lookup,
     ): List<FintResource> {
         val resources = map { it.toFintResource(resourceClass) }
-        mergeRelationEdges(resourceCoordinate, this, resources)
+        mergeRelationEdges(resourceCoordinate, this, resources, lookup)
         return filter?.let { filterResources(resources, it) } ?: resources
     }
 
@@ -189,15 +195,19 @@ class ResourceService(
         resourceCoordinate: ResourceCoordinate,
         entries: List<ResourceEntry>,
         resources: List<FintResource>,
+        lookup: Lookup,
     ) {
         if (!consumerConfiguration.autorelation.enabled || entries.isEmpty()) return
 
+        val identifiers = entries.flatMap { it.identifiers }
         val edges =
-            relationEdgeStore.findByTargets(
-                resourceCoordinate.toEdgeCollectionName(),
-                resourceCoordinate.toResourceUri(),
-                entries.flatMap { it.identifiers },
-            )
+            edgeLookupMetrics.record(resourceCoordinate, lookup, entries.size, identifiers.size) {
+                relationEdgeStore.findByTargets(
+                    resourceCoordinate.toEdgeCollectionName(),
+                    resourceCoordinate.toResourceUri(),
+                    identifiers,
+                )
+            }
 
         edges.mergeInto(entries.zip(resources))
     }

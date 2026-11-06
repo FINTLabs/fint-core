@@ -7,6 +7,7 @@ import no.fintlabs.adapter.gateway.register.ContractLookup
 import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.gateway.register.EventCapabilities
 import no.fintlabs.adapter.gateway.register.RegisteredContract
+import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.resourceRefOf
 import no.novari.fint.core.model.FintResourceRef
@@ -70,6 +71,38 @@ class AdapterAuthorizationTest {
     }
 
     @Nested
+    inner class ServingMoreThanOneOrg {
+        private val authorization =
+            AdapterAuthorization(ProviderProperties(orgIdValue = MAIN_ORG, extraOrgIdValues = listOf(OTHER_MAIN_ORG)), contractService)
+
+        @Test
+        fun `accepts every main org this gateway serves`() {
+            val adapter = adapter(assets = "$MAIN_ORG,$OTHER_MAIN_ORG")
+
+            assertThat(authorization.hasOrg(adapter, MAIN_ORG)).isTrue()
+            assertThat(authorization.hasOrg(adapter, OTHER_MAIN_ORG)).isTrue()
+        }
+
+        @Test
+        fun `accepts a sub-org of the deployment org next to an extra org`() {
+            assertThat(authorization.hasOrg(adapter(assets = SUB_ORG), SUB_ORG)).isTrue()
+        }
+
+        @Test
+        fun `still rejects an org that is neither the deployment org nor an extra org`() {
+            assertThat(authorization.hasOrg(adapter(assets = "$MAIN_ORG,vtfk.no"), "vtfk.no")).isFalse()
+        }
+
+        @Test
+        fun `serves the assets that match any of its main orgs`() {
+            val adapter = adapter(assets = "$MAIN_ORG,$SUB_ORG,$OTHER_MAIN_ORG,vtfk.no")
+
+            assertThat(authorization.servedOrgs(adapter))
+                .containsExactly(OrgId.from(MAIN_ORG), OrgId.from(SUB_ORG), OrgId.from(OTHER_MAIN_ORG))
+        }
+    }
+
+    @Nested
     inner class IsUsername {
         @Test
         fun `accepts a matching username`() {
@@ -112,19 +145,21 @@ class AdapterAuthorizationTest {
     }
 
     @Nested
-    inner class CanAnswerFor {
+    inner class EventCapabilitiesFor {
         @Test
-        fun `accepts when a contract exists for the org even without a matching capability`() {
-            givenContract()
+        fun `reads what the contract lists`() {
+            val readsElev = EventCapabilities(mapOf(resourceRefOf("utdanning", "elev", "elev") to setOf(OperationType.READ)))
+            every { contractService.lookup(any(), any()) } returns
+                ContractLookup.Found(RegisteredContract(OrgId.from(MAIN_ORG), emptySet(), readsElev))
 
-            assertThat(authorization.canAnswerFor(adapter(), MAIN_ORG)).isTrue()
+            assertThat(authorization.eventCapabilitiesFor(adapter(), OrgId.from(MAIN_ORG))).isEqualTo(readsElev)
         }
 
         @Test
-        fun `rejects when the adapter has no contract for the org`() {
+        fun `an org without a contract is served everything except READ`() {
             every { contractService.lookup(any(), any()) } returns ContractLookup.Absent
 
-            assertThat(authorization.canAnswerFor(adapter(), MAIN_ORG)).isFalse()
+            assertThat(authorization.eventCapabilitiesFor(adapter(), OrgId.from(MAIN_ORG))).isEqualTo(EventCapabilities.NONE)
         }
     }
 
@@ -153,6 +188,7 @@ class AdapterAuthorizationTest {
     private companion object {
         const val MAIN_ORG = "fintlabs.no"
         const val SUB_ORG = "test.fintlabs.no"
+        const val OTHER_MAIN_ORG = "novari.no"
         const val USERNAME = "test@adapter.fintlabs.no"
     }
 }

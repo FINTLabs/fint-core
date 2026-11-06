@@ -136,13 +136,15 @@ class LiveReadFlowIT : GatewayIntegrationTestBase() {
     }
 
     @Test
-    fun `an answer that names another operation than the request is refused and nothing is written`() {
+    fun `an answer that names another operation than the request is accepted and the request decides`() {
         registerAdapter()
         val validate = seed(OperationType.VALIDATE, resourceName)
 
-        answer(writeAnswerFor(validate, OperationType.CREATE)).andExpect(status().isBadRequest)
+        answer(writeAnswerFor(validate, OperationType.CREATE)).andExpect(status().isOk)
 
-        assertThat(eventStore.findByCorrId(validate.corrId, eventCollection)?.status).isEqualTo(EventState.PENDING)
+        val stored = eventStore.findByCorrId(validate.corrId, eventCollection)
+        assertThat(stored?.status).isEqualTo(EventState.ANSWERED)
+        assertThat(stored?.response?.operationType).isEqualTo(OperationType.VALIDATE)
         assertThat(resourceStore.findByResourceId("123", resourceCollection)).isNull()
     }
 

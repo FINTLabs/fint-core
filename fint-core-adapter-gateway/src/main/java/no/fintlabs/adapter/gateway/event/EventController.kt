@@ -1,11 +1,13 @@
 package no.fintlabs.adapter.gateway.event
 
+import jakarta.validation.Valid
 import no.fintlabs.adapter.gateway.ProviderApi
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
 import no.fintlabs.adapter.gateway.event.response.ResponseEventService
 import no.fintlabs.adapter.gateway.security.EventAuthorization
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
+import no.novari.core.shared.event.EventScope
 import no.novari.resource.server.authentication.CorePrincipal
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
@@ -25,10 +27,8 @@ class EventController(
     private val eventAuthorization: EventAuthorization,
 ) {
     /**
-     * Serves pending events only for the packages the adapter holds a role for, the orgs it
-     * has a contract for, and the operations that contract covers, so it never receives an
-     * event it would be refused to answer. The role is checked before the contract, because a
-     * missing role is not fixed by registering.
+     * Pending events for every org in the token, filtered by the path. No role or contract is
+     * needed; a contract narrows a listed resource and opens READ.
      */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
@@ -38,20 +38,20 @@ class EventController(
         @PathVariable(required = false) resourceName: String?,
         @RequestParam(defaultValue = "0") size: Int,
     ): ResponseEntity<List<RequestFintEvent>> {
-        val scopes = eventAuthorization.readableScopes(corePrincipal, domainName, packageName, resourceName)
-        val contracts = eventAuthorization.readableContracts(corePrincipal)
-        return ResponseEntity.ok(requestEventService.getEvents(contracts, scopes, size))
+        val orgs = eventAuthorization.readableOrgs(corePrincipal)
+        val scope = EventScope.of(domainName, packageName, resourceName)
+        return ResponseEntity.ok(requestEventService.getEvents(orgs, scope, size))
     }
 
     /**
-     * The org check runs here because the body carries the orgId. The role and contract checks
-     * cannot: the response body does not say which resource or operation it answers, so those
-     * are checked against the stored request inside [ResponseEventService].
+     * The org check runs here, on the body's orgId. Which resource and operation the answer is for
+     * is only known from the stored request, so that is checked in [ResponseEventService].
+     * Validation runs before the org check, so a missing field is a 400, not a 403.
      */
     @PostMapping
-    @PreAuthorize("@adapterAuth.canAnswerFor(authentication, #responseFintEvent.orgId)")
+    @PreAuthorize("@adapterAuth.hasOrg(authentication, #responseFintEvent.orgId)")
     fun postEvent(
-        @RequestBody responseFintEvent: ResponseFintEvent,
+        @Valid @RequestBody responseFintEvent: ResponseFintEvent,
     ): ResponseEntity<Void> {
         responseEventService.handleEvent(responseFintEvent)
         return ResponseEntity.ok().build()

@@ -9,9 +9,6 @@ spring:
   threads:
     virtual:
       enabled: true
-  kafka:
-    consumer:
-      group-id: fint-core-client-api-${fint.org-id}
 
 management:
   endpoints:

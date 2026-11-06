@@ -4,6 +4,7 @@ import no.fintlabs.adapter.models.event.EventIdentifikator
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.EventProperties
+import no.fintlabs.client.exception.resource.InvalidResourceBodyException
 import no.fintlabs.client.kafka.event.RequestFintEventProducer
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.toEventCollectionName
@@ -11,6 +12,7 @@ import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
 import org.springframework.stereotype.Service
+import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
 import java.time.Clock
 import java.time.Instant
@@ -97,8 +99,13 @@ class RequestFintEventService(
             value = resourceData?.let { toAdapterJson(it) }
         }
 
-    private fun ResourceCoordinate.toAdapterJson(resourceData: Any): String =
-        responseMapper.writeValueAsString(
-            storageMapper.convertValue(resourceData, toResourceClass()),
-        )
+    private fun ResourceCoordinate.toAdapterJson(resourceData: Any): String {
+        val resource =
+            try {
+                storageMapper.convertValue(resourceData, toResourceClass())
+            } catch (e: JacksonException) {
+                throw InvalidResourceBodyException(resourceName, e)
+            }
+        return responseMapper.writeValueAsString(resource)
+    }
 }

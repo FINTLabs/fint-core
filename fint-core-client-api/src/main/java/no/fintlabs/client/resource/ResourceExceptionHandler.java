@@ -3,7 +3,6 @@ package no.fintlabs.client.resource;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import no.fint.antlr.exception.FilterException;
-import no.fintlabs.client.exception.resource.IdentificatorNotFoundException;
 import no.fintlabs.client.exception.resource.ResourceNotFoundException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -30,11 +29,6 @@ public class ResourceExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<?> resourceNotFound(ResourceNotFoundException ex) {
         log.debug(ex.getMessage());
-        return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler(IdentificatorNotFoundException.class)
-    public ResponseEntity<?> identificatorNotFound(IdentificatorNotFoundException ex) {
         return ResponseEntity.notFound().build();
     }
 

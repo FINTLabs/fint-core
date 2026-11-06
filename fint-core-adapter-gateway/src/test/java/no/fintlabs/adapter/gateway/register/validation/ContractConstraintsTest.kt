@@ -90,7 +90,7 @@ class ContractConstraintsTest {
     }
 
     @Test
-    fun `a resource listed twice among the sync capabilities is refused`() {
+    fun `a resource listed twice among the sync capabilities is valid, since registration keeps it once`() {
         val contract =
             contract(
                 capabilities =
@@ -100,15 +100,28 @@ class ContractConstraintsTest {
                     ),
             )
 
-        assertThat(violations(contract))
-            .containsExactly("capabilities" to "lists /utdanning/elev/elev more than once")
+        assertThat(violations(contract)).isEmpty()
     }
 
     @Test
-    fun `a heartbeat outside one to five minutes is refused`() {
-        assertThat(violations(contract(heartbeat = 0)))
-            .extracting<String> { it.first }
-            .containsExactly("heartbeatIntervalInMinutes")
+    fun `a sync capability without a delta sync interval is valid`() {
+        val contract = contract(capabilities = setOf(capability("elev", "elev", deltaSyncInterval = null)))
+
+        assertThat(violations(contract)).isEmpty()
+    }
+
+    @Test
+    fun `any heartbeat interval is valid, as on provider-gateway`() {
+        listOf(null, 0, 1, 10).forEach { heartbeat ->
+            assertThat(violations(contract(heartbeat = heartbeat))).isEmpty()
+        }
+    }
+
+    @Test
+    fun `a missing or blank adapter id is valid, since registration puts the username in`() {
+        listOf(null, "", " ").forEach { adapterId ->
+            assertThat(violations(contract(adapterId = adapterId))).isEmpty()
+        }
     }
 
     private fun violations(contract: AdapterContract): List<Pair<String, String>> =
@@ -118,12 +131,13 @@ class ContractConstraintsTest {
             .sortedBy { it.first }
 
     private fun contract(
-        heartbeat: Int = 5,
+        adapterId: String? = "https://test.com/fintlabs.no/utdanning",
+        heartbeat: Int? = 5,
         capabilities: Set<AdapterCapability> = emptySet(),
         eventCapabilities: Set<EventCapability> = emptySet(),
     ): AdapterContract =
         AdapterContract().apply {
-            this.adapterId = "https://test.com/fintlabs.no/utdanning"
+            this.adapterId = adapterId
             this.orgId = "fintlabs.no"
             this.username = "test@adapter.fintlabs.no"
             this.heartbeatIntervalInMinutes = heartbeat
@@ -135,13 +149,14 @@ class ContractConstraintsTest {
         pkg: String,
         resource: String,
         fullSyncIntervalInDays: Int = 1,
+        deltaSyncInterval: AdapterCapability.DeltaSyncInterval? = AdapterCapability.DeltaSyncInterval.IMMEDIATE,
     ): AdapterCapability =
         AdapterCapability().apply {
             this.domainName = "utdanning"
             this.packageName = pkg
             this.resourceName = resource
             this.fullSyncIntervalInDays = fullSyncIntervalInDays
-            this.deltaSyncInterval = AdapterCapability.DeltaSyncInterval.IMMEDIATE
+            this.deltaSyncInterval = deltaSyncInterval
         }
 
     private fun eventCapability(

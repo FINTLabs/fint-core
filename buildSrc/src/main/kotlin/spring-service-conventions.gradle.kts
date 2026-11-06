@@ -8,6 +8,10 @@ plugins {
     java
 }
 
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 // Remove/check pins below when spring boot is updated from 4.1.1!
 extra["tomcat.version"] = "11.0.25"
 extra["jackson-2-bom.version"] = "2.21.7"
@@ -22,6 +26,11 @@ java {
     }
 }
 
+// Dependabot resolves with JDK 21. This makes it use 25.
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(25)
+}
+
 configurations {
     compileOnly {
         extendsFrom(configurations.annotationProcessor.get())
@@ -32,6 +41,9 @@ dependencies {
     constraints {
         implementation("at.yawk.lz4:lz4-java:1.11.4") {
             because("Versions before 1.11.4 contain a known vulnerability")
+        }
+        implementation("org.xerial.snappy:snappy-java:1.1.10.9") {
+            because("Versions before 1.1.10.9 contain a known vulnerability")
         }
     }
 
@@ -44,14 +56,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.3")
-    implementation("no.fintlabs:fint-core-infra-models:3.4.0")
+    implementation("no.fintlabs:fint-core-infra-models:3.4.3")
 
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
-    implementation("no.novari:fint-core-information-model:0.7.0")
+    implementation("no.novari:fint-core-information-model:0.8.0")
 }
 
 testing {

@@ -9,6 +9,7 @@ import io.mockk.verify
 import no.fintlabs.adapter.models.AdapterCapability
 import no.fintlabs.adapter.models.AdapterContract
 import no.fintlabs.adapter.operation.OperationType
+import no.novari.core.shared.org.OrgStore
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -18,8 +19,9 @@ import java.time.ZoneOffset
 class ContractRepublisherTest {
     private val repository: ContractJpaRepository = mockk()
     private val producer: AdapterContractProducer = mockk()
+    private val orgStore: OrgStore = mockk(relaxed = true)
     private val clock = Clock.fixed(Instant.parse("2026-10-07T12:00:00Z"), ZoneOffset.UTC)
-    private val republisher = ContractRepublisher(repository, producer, clock)
+    private val republisher = ContractRepublisher(repository, producer, orgStore, clock)
 
     @Test
     fun `every stored contract is published with its capabilities`() {
@@ -85,13 +87,29 @@ class ContractRepublisherTest {
         republisher.republishContracts()
 
         verify(exactly = 0) { producer.send(any()) }
+        verify(exactly = 0) { orgStore.upsert(any()) }
     }
 
-    private fun contract(deltaSyncInterval: String): ContractEntity {
+    @Test
+    fun `the org of every stored contract is registered, once per org`() {
+        every { repository.findAllWithCapabilities() } returns
+            listOf(contract("IMMEDIATE"), contract("IMMEDIATE"), contract("IMMEDIATE", orgId = "bfk.no"))
+        every { producer.send(any()) } just runs
+
+        republisher.republishContracts()
+
+        verify(exactly = 1) { orgStore.upsert("afk.no") }
+        verify(exactly = 1) { orgStore.upsert("bfk.no") }
+    }
+
+    private fun contract(
+        deltaSyncInterval: String,
+        orgId: String = "afk.no",
+    ): ContractEntity {
         val contract =
             ContractEntity().apply {
-                userName = "adapter@afk.no"
-                orgId = "afk.no"
+                userName = "adapter@$orgId"
+                this.orgId = orgId
                 adapterId = "adapter-1"
                 heartbeatIntervalInMinutes = 1
             }

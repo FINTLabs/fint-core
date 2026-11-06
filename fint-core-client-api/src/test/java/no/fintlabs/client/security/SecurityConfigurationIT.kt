@@ -1,10 +1,12 @@
 package no.fintlabs.client.security
 
+import no.fintlabs.client.config.TrailingSlashConfiguration
 import no.fintlabs.client.resource.ResourceExceptionHandler
 import no.fintlabs.client.security.opa.OpaClient
 import no.fintlabs.client.security.opa.OpaProperties
 import no.fintlabs.client.security.opa.OpaService
 import no.novari.resource.server.authentication.CorePrincipal
+import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -13,6 +15,8 @@ import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.web.servlet.DelegatingFilterProxyRegistrationBean
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.security.oauth2.jwt.Jwt
@@ -31,6 +35,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.web.filter.UrlHandlerFilter
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -42,11 +47,15 @@ class SecurityConfigurationIT {
 
     private lateinit var mockMvc: MockMvc
 
+    @Autowired
+    private lateinit var trailingSlashFilter: FilterRegistrationBean<UrlHandlerFilter>
+
     @BeforeEach
     fun setup() {
         mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(context)
+                .addFilters<DefaultMockMvcBuilder>(trailingSlashFilter.filter!!)
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
     }
@@ -156,6 +165,33 @@ class SecurityConfigurationIT {
             ).andExpect(status().isForbidden)
     }
 
+    @Test
+    fun `the trailing slash filter runs before security`() {
+        val security = context.getBean(DelegatingFilterProxyRegistrationBean::class.java)
+
+        assertThat(trailingSlashFilter.order).isLessThan(security.order)
+    }
+
+    @Test
+    fun `a resource path with a trailing slash is served like the path without it`() {
+        mockMvc
+            .perform(
+                get("/utdanning/vurdering/elevfravar/")
+                    .header("x-org-id", "fintlabs.no")
+                    .with(authentication(client(roles = listOf("FINT_Client_utdanning_vurdering")))),
+            ).andExpect(status().isOk)
+            .andExpect(content().string("utdanning/vurdering/elevfravar"))
+    }
+
+    @Test
+    fun `endpoints overview with a trailing slash enforces the same component check`() {
+        mockMvc
+            .perform(
+                get("/utdanning/vurdering/")
+                    .with(authentication(client(roles = listOf("FINT_Client_administrasjon_personal")))),
+            ).andExpect(status().isForbidden)
+    }
+
     private fun resourceRequest(orgId: String) = get("/utdanning/vurdering/elevfravar").header("x-org-id", orgId)
 
     private fun client(
@@ -186,6 +222,7 @@ class SecurityConfigurationIT {
         OpaClient::class,
         OpaService::class,
         Endpoints::class,
+        TrailingSlashConfiguration::class,
     )
     class SliceApplication
 

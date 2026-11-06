@@ -1,5 +1,6 @@
 package no.fintlabs.client.resource
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -49,6 +50,7 @@ class ResourceServiceTest {
             resourceStore = resourceStore,
             relationEdgeStore = relationEdgeStore,
             cursorCodec = cursorCodec,
+            edgeLookupMetrics = RelationEdgeLookupMetrics(SimpleMeterRegistry()),
         )
 
     val resourceCoordinate =
@@ -365,6 +367,7 @@ class ResourceServiceTest {
                 resourceStore = resourceStore,
                 relationEdgeStore = relationEdgeStore,
                 cursorCodec = cursorCodec,
+                edgeLookupMetrics = RelationEdgeLookupMetrics(SimpleMeterRegistry()),
             )
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entry =
@@ -624,6 +627,7 @@ class ResourceServiceTest {
             resourceStore = resourceStore,
             relationEdgeStore = relationEdgeStore,
             cursorCodec = cursorCodec,
+            edgeLookupMetrics = RelationEdgeLookupMetrics(SimpleMeterRegistry()),
         )
 
     private fun consumerConfiguration(

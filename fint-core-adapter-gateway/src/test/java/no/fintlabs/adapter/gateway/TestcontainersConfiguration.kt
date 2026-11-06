@@ -10,7 +10,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 class TestcontainersConfiguration {
     @Bean
     @ServiceConnection
-    fun postgresContainer(): PostgreSQLContainer = PostgreSQLContainer("postgres:18.3")
+    fun postgresContainer(): PostgreSQLContainer = PostgreSQLContainer("postgres:18.6")
 
     @Bean
     @ServiceConnection
