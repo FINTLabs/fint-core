@@ -5,9 +5,12 @@ import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
+import no.fintlabs.client.security.OpaFieldPruner
+import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.Person
@@ -53,8 +56,14 @@ class CommonResourceLinksIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class)
-    @Import(ResourceController::class, JacksonConfiguration::class, TomcatConfiguration::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
+    @Import(
+        ResourceController::class,
+        ResourceStreamWriter::class,
+        OpaFieldPruner::class,
+        JacksonConfiguration::class,
+        TomcatConfiguration::class,
+    )
     open class SliceApplication
 
     @MockitoBean
@@ -141,14 +150,13 @@ class CommonResourceLinksIT {
     @Test
     fun `every entry of a common resource collection self-links under the requested component`() {
         given(
-            resourceService.getResources(
+            resourceService.streamResources(
                 ResourceCoordinate("fintlabs.no", "utdanning", "elev", "person"),
-                0,
                 0,
                 0,
                 null,
             ),
-        ).willReturn(createFintResourcesResponse(baseUrl, "utdanning/elev/person", listOf(person), 0, 0, 1))
+        ).willReturn(ResourceStream.of(0, fullReadSelfLink(baseUrl, "utdanning/elev/person"), listOf(person)))
 
         val entry =
             get("/utdanning/elev/person")

@@ -1,13 +1,12 @@
 package no.fintlabs.client.resource
 
 import no.fint.antlr.FintFilterService
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -23,6 +22,7 @@ import no.novari.core.shared.store.SinceFilter
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
+import kotlin.streams.asSequence
 
 @Service
 class ResourceService(
@@ -36,9 +36,53 @@ class ResourceService(
     private val filterService: FintFilterService = ODataFilterService()
 
     /**
-     * Serves a list read. A `size` above zero gives one page, otherwise everything. A positive
-     * `sinceTimeStamp` keeps only resources modified at or after it. A page with a [cursor] starts
-     * where the cursor points; without one it skips [offset] entries.
+     * Opens a full read: every resource of the collection, or every one modified at or after a
+     * positive [sinceTimeStamp]. Nothing is read yet. Its batches read the store a batch
+     * at a time, through a cursor, and each batch gets its back-links and the [filter] before it
+     * is handed on. The caller closes the stream to release the cursor.
+     *
+     * The resource type is checked here, so an unknown one fails before any of it is written.
+     */
+    fun streamResources(
+        resourceCoordinate: ResourceCoordinate,
+        offset: Long,
+        sinceTimeStamp: Long?,
+        filter: String?,
+    ): ResourceStream {
+        val resourceClass = resourceCoordinate.toResourceClass()
+        val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
+        val collectionName = resourceCoordinate.toCollectionName()
+        val batchSize = consumerConfiguration.listRead.batchSize
+
+        val entries = resourceStore.streamAll(since, batchSize, collectionName)
+        val batches =
+            entries
+                .asSequence()
+                .chunked(batchSize)
+                .map { batch ->
+                    ResourceBatch(
+                        batch.size,
+                        batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
+                    )
+                }
+
+        return ResourceStream(
+            offset = offset,
+            selfLink =
+                fullReadSelfLink(
+                    consumerConfiguration.baseUrl,
+                    resourceCoordinate.toResourceUri(),
+                    since.toTimeStamp(),
+                ),
+            batches = batches,
+            onClose = entries::close,
+        )
+    }
+
+    /**
+     * Serves one page of [size] entries. A positive [sinceTimeStamp] keeps only resources
+     * modified at or after it. A page with a [cursor] starts where the cursor points; without
+     * one it skips [offset] entries. A read without a size is a full read, see [streamResources].
      */
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
@@ -48,41 +92,20 @@ class ResourceService(
         filter: String?,
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
-        if (filter != null && !filterService.validate(filter)) {
-            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
-        }
+        require(size > 0) { "A page needs a positive size, a read without one is a full read" }
 
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
-        val baseUrl = consumerConfiguration.baseUrl
-        val resourceUri = resourceCoordinate.toResourceUri()
-
-        if (size <= 0) {
-            val entries = resourceStore.findAll(since, collectionName)
-            val allResources = entries.toFintResources(resourceCoordinate)
-            mergeRelationEdges(resourceCoordinate, entries, allResources, fullDump = since == null)
-            val resources = filter?.let { filterResources(allResources, it) } ?: allResources
-            return createFintResourcesResponse(
-                baseUrl,
-                resourceUri,
-                resources,
-                offset,
-                size,
-                entries.size,
-                since.toTimeStamp(),
-            )
-        }
+        val resourceClass = resourceCoordinate.toResourceClass()
 
         val totalItems = resourceStore.count(since, collectionName)
         val page =
             readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
-        val allResources = page.entries.toFintResources(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, page.entries, allResources, fullDump = false)
-        val resources = filter?.let { filterResources(allResources, it) } ?: allResources
+        val resources = page.entries.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.PAGE)
 
         return createFintResourcesResponse(
-            baseUrl = baseUrl,
-            resourceUri = resourceUri,
+            baseUrl = consumerConfiguration.baseUrl,
+            resourceUri = resourceCoordinate.toResourceUri(),
             entries = resources,
             offset = offset,
             size = size,
@@ -114,8 +137,8 @@ class ResourceService(
     ): FintResource? {
         val collectionName = resourceCoordinate.toCollectionName()
         val entry = resourceStore.findByIdentifier(idField, idValue, collectionName) ?: return null
-        val resource = entry.toFintResource(resourceCoordinate)
-        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), fullDump = false)
+        val resource = entry.toFintResource(resourceCoordinate.toResourceClass())
+        mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), Lookup.PAGE)
         return resource
     }
 
@@ -146,39 +169,44 @@ class ResourceService(
     }
 
     /**
+     * Turns stored entries into the resources a response carries: converted to the model,
+     * with their back-links merged in, and narrowed by the [filter]. The filter runs last so
+     * it can see the back-links too. The edges are fetched for every entry of the batch, not
+     * only the survivors, since the filter needs them to decide.
+     */
+    private fun List<ResourceEntry>.toResponseResources(
+        resourceCoordinate: ResourceCoordinate,
+        resourceClass: Class<out FintResource>,
+        filter: String?,
+        lookup: Lookup,
+    ): List<FintResource> {
+        val resources = map { it.toFintResource(resourceClass) }
+        mergeRelationEdges(resourceCoordinate, this, resources, lookup)
+        return filter?.let { filterResources(resources, it) } ?: resources
+    }
+
+    /**
      * Attaches the back-links autorelation supplies onto the resources of a response, before the
      * response form renders `_links`: one query fetches the relation edges pointing at any of the
      * response's identifiers, and each edge becomes an ordinary id-based link on the resource it
-     * points at, for example `elevforhold` on an Elev. A full dump covers the whole collection,
-     * so its identifier filter would narrow nothing and only bloat the query; there the read
-     * fetches every edge for the type in one range scan and lets the in-memory join route them.
+     * points at, for example `elevforhold` on an Elev.
      */
     private fun mergeRelationEdges(
         resourceCoordinate: ResourceCoordinate,
         entries: List<ResourceEntry>,
         resources: List<FintResource>,
-        fullDump: Boolean,
+        lookup: Lookup,
     ) {
-        // TODO: the fetch-everything branch can be removed once the API forces pagination
         if (!consumerConfiguration.autorelation.enabled || entries.isEmpty()) return
 
+        val identifiers = entries.flatMap { it.identifiers }
         val edges =
-            if (fullDump) {
-                edgeLookupMetrics.record(resourceCoordinate, Lookup.FULL, entries.size, identifiers = 0) {
-                    relationEdgeStore.findAllByTargetType(
-                        resourceCoordinate.toEdgeCollectionName(),
-                        resourceCoordinate.toResourceUri(),
-                    )
-                }
-            } else {
-                val identifiers = entries.flatMap { it.identifiers }
-                edgeLookupMetrics.record(resourceCoordinate, Lookup.PAGE, entries.size, identifiers.size) {
-                    relationEdgeStore.findByTargets(
-                        resourceCoordinate.toEdgeCollectionName(),
-                        resourceCoordinate.toResourceUri(),
-                        identifiers,
-                    )
-                }
+            edgeLookupMetrics.record(resourceCoordinate, lookup, entries.size, identifiers.size) {
+                relationEdgeStore.findByTargets(
+                    resourceCoordinate.toEdgeCollectionName(),
+                    resourceCoordinate.toResourceUri(),
+                    identifiers,
+                )
             }
 
         edges.mergeInto(entries.zip(resources))
@@ -193,11 +221,8 @@ class ResourceService(
         filter: String,
     ): List<FintResource> = filterService.from(resources.stream(), filter).toList()
 
-    private fun ResourceEntry.toFintResource(resourceCoordinate: ResourceCoordinate): FintResource =
-        storageMapper.convertValue(data, resourceCoordinate.toResourceClass())
-
-    private fun List<ResourceEntry>.toFintResources(resourceCoordinate: ResourceCoordinate): List<FintResource> =
-        map { it.toFintResource(resourceCoordinate) }
+    private fun ResourceEntry.toFintResource(resourceClass: Class<out FintResource>): FintResource =
+        storageMapper.convertValue(data, resourceClass)
 
     private fun Instant?.toTimeStamp(): Long = this?.toEpochMilli() ?: 0
 }

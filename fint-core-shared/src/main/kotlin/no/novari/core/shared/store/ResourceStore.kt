@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
+import java.util.stream.Stream
 
 @Service
 class ResourceStore(
@@ -219,6 +220,22 @@ class ResourceStore(
         since: Instant?,
         collectionName: String,
     ): List<ResourceEntry> = template.find<ResourceEntry>(orderedQuery(since, Sort.Direction.ASC), collectionName)
+
+    /**
+     * The same read as [findAll], but through a cursor that fetches [batchSize] entries at a time,
+     * so a caller can hand the entries on as they arrive instead of holding the whole collection.
+     * The cursor stays open until the stream is closed, so the caller must close it.
+     */
+    fun streamAll(
+        since: Instant?,
+        batchSize: Int,
+        collectionName: String,
+    ): Stream<ResourceEntry> =
+        template.stream(
+            orderedQuery(since, Sort.Direction.ASC).cursorBatchSize(batchSize),
+            ResourceEntry::class.java,
+            collectionName,
+        )
 
     /**
      * Reads one page by skipping [offset] entries. Every skipped entry costs a document read, so a
