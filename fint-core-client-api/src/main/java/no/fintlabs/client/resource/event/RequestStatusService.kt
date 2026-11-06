@@ -5,6 +5,8 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.RelationEdgeLookupMetrics
+import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.RequestFailed.FailureType
 import no.novari.core.shared.event.EventState
@@ -30,6 +32,7 @@ class RequestStatusService(
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
     private val consumerConfiguration: ConsumerConfiguration,
+    private val edgeLookupMetrics: RelationEdgeLookupMetrics,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val storageMapper = FintJson.storageMapper()
@@ -125,12 +128,15 @@ class RequestStatusService(
     ) {
         if (!consumerConfiguration.autorelation.enabled || resources.isEmpty()) return
 
-        relationEdgeStore
-            .findByTargets(
-                coordinate.toEdgeCollectionName(),
-                coordinate.toResourceUri(),
-                resources.flatMap { it.toIdentifierRefs() },
-            ).mergeIntoResources(resources)
+        val identifiers = resources.flatMap { it.toIdentifierRefs() }
+        edgeLookupMetrics
+            .record(coordinate, Lookup.LIVE_READ, resources.size, identifiers.size) {
+                relationEdgeStore.findByTargets(
+                    coordinate.toEdgeCollectionName(),
+                    coordinate.toResourceUri(),
+                    identifiers,
+                )
+            }.mergeIntoResources(resources)
     }
 
     /**

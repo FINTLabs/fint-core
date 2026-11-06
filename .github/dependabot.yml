@@ -3,8 +3,14 @@
 # Please see the documentation for all configuration options:
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
+registries:
+  fintlabs:
+    type: maven-repository
+    url: https://repo.fintlabs.no/releases
 updates:
   - package-ecosystem: "gradle"
+    registries:
+      - fintlabs
     target-branch: "develop"
     directories:
       - "/"

@@ -383,6 +383,34 @@ class ResourceStoreIT {
         assertThat(store.getLastUpdated(coordinate)).isNull()
     }
 
+    @Test
+    fun `findByIdentifier matches field and value on the same identifier`() {
+        store.saveAll(listOf(Save("1", collection, elevWithNumber("1"), base)))
+
+        assertThat(store.findByIdentifier("elevnummer", "E-1", collection)?.id).isEqualTo("1")
+        assertThat(store.findByIdentifier("systemid", "E-1", collection)).isNull()
+    }
+
+    @Test
+    fun `findByIdentifier reads through the identifiers index`() {
+        store.saveAll((1..50).map { Save("$it", collection, elevWithNumber("$it"), base) })
+
+        val filter =
+            Document(
+                "identifiers",
+                Document("\$elemMatch", Document("field", "elevnummer").append("value", "E-25")),
+            )
+        val plan =
+            template
+                .getCollection(collection)
+                .find(filter)
+                .limit(1)
+                .explain()
+                .toJson()
+
+        assertThat(plan).contains("\"indexName\": \"${ResourceStore.IDENTIFIERS_INDEX}\"")
+    }
+
     private fun storedHash(id: String): Binary? =
         template.findById(id, Document::class.java, collection)?.get("contentHash", Binary::class.java)
 

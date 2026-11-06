@@ -200,6 +200,42 @@ docker compose up -d
 
 ---
 
+## Dependency locking
+
+Each module has a `gradle.lockfile` in version control. The `buildSrc` directory
+has a separate lock file. Each lock file records dependency versions.
+
+The shared convention plugin enables dependency locking for all modules.
+
+After you change dependency versions, do these steps.
+If you change shared dependencies, update the lock files for all modules.
+
+1. Open a terminal in the repository root directory.
+
+2. Run these commands to update the lock files.
+
+   ```bash
+   ./gradlew -p buildSrc dependencies --write-locks
+   ./gradlew \
+     :fint-core-shared:dependencies \
+     :fint-core-client-api:dependencies \
+     :fint-core-adapter-gateway:dependencies \
+     --write-locks
+   ./gradlew check --write-locks
+   ```
+
+3. Examine the changes in the lock files.
+
+4. Run the checks with the updated lock files.
+
+   ```bash
+   ./gradlew check 
+   ```
+
+5. Commit the lock files with the dependency changes.
+
+---
+
 ## Building Docker images
 
 Each service has its own `Dockerfile`, but the build **context must be the repo

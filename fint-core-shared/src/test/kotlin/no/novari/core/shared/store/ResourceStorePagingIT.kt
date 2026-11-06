@@ -143,6 +143,22 @@ class ResourceStorePagingIT {
         matches: Long,
     ) = SinceFilter(since(timestamp), matches)
 
+    @Test
+    fun `streamAll yields every entry in createdAt order and closes its cursor`() {
+        val stream = store.streamAll(null, 2, collection)
+
+        val ids = stream.use { it.map { entry -> entry.id }.toList() }
+
+        assertThat(ids).containsExactly("A", "B", "C", "D", "E")
+    }
+
+    @Test
+    fun `streamAll with a timestamp keeps the entries modified from it onward`() {
+        val ids = store.streamAll(since(30), 2, collection).use { it.map { entry -> entry.id }.toList() }
+
+        assertThat(ids).containsExactly("C", "D", "E")
+    }
+
     private fun ids(entries: List<ResourceEntry>) = entries.map { it.id }
 
     private fun save(

@@ -2,16 +2,11 @@ package no.fintlabs.adapter.gateway
 
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
-import org.testcontainers.containers.GenericContainer
 import org.testcontainers.kafka.ConfluentKafkaContainer
 import org.testcontainers.utility.DockerImageName
 
 /**
- * Starts a single [ConfluentKafkaContainer] per JVM, wires Spring's bootstrap-servers to it, and
- * turns on `fint.consumer.kafka.bootstrap-topics` so `TopicBootstrapper` pre-creates the topics
- * a consumer configured via `fint.consumer.{org-id,domain,package}` needs.
- *
- * Subclasses supply those three properties (usually via `@TestPropertySource`).
+ * Starts a single [ConfluentKafkaContainer] per JVM and wires Spring's bootstrap-servers to it.
  */
 abstract class KafkaContainerBaseIT {
     companion object {
@@ -26,7 +21,6 @@ abstract class KafkaContainerBaseIT {
         fun kafkaProperties(registry: DynamicPropertyRegistry) {
             registry.add("spring.kafka.bootstrap-servers") { KAFKA.bootstrapServers }
             registry.add("fint.provider.kafka.replicas") { "1" }
-            registry.add("fint.consumer.kafka.bootstrap-topics") { "true" }
         }
     }
 }

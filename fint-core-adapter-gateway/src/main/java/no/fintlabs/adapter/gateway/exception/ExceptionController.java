@@ -3,13 +3,9 @@ package no.fintlabs.adapter.gateway.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import no.fintlabs.adapter.gateway.event.InvalidOrgIdException;
 import no.fintlabs.adapter.gateway.event.InvalidResponseFintEventException;
 import no.fintlabs.adapter.gateway.event.NoRequestFoundException;
 import no.fintlabs.adapter.gateway.event.ReadAnswerTooLargeException;
-import no.fintlabs.adapter.gateway.register.AdapterNotRegisteredException;
-import no.fintlabs.adapter.gateway.security.InvalidJwtException;
-import no.fintlabs.adapter.gateway.sync.InvalidSyncPageEntryException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -42,16 +38,6 @@ public class ExceptionController {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(e.getMessage());
     }
 
-    @ExceptionHandler(AdapterNotRegisteredException.class)
-    public ResponseEntity<String> handleAdapterNotRegisteredException(Throwable e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidSyncPageEntryException.class)
-    public ResponseEntity<String> handleInvalidSyncPageEntryException(Throwable e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-    }
-
     @ExceptionHandler(JacksonException.class)
     public ResponseEntity<Void> handleJacksonException(Throwable e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
@@ -60,16 +46,6 @@ public class ExceptionController {
     @ExceptionHandler({NoRequestFoundException.class})
     public ResponseEntity<?> handleNoRequestFoundException(NoRequestFoundException exception) {
         return ResponseEntity.notFound().build();
-    }
-
-    @ExceptionHandler({InvalidOrgIdException.class})
-    public ResponseEntity<?> handleInvalidOrgIdException(InvalidOrgIdException exception) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).build();
-    }
-
-    @ExceptionHandler({InvalidJwtException.class})
-    public ResponseEntity<?> handleInvalidJwtException(InvalidJwtException exception) {
-        return ResponseEntity.badRequest().build();
     }
 
     @ExceptionHandler(UnknownTopicOrPartitionException.class)

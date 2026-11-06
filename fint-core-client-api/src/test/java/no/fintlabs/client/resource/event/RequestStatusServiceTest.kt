@@ -1,5 +1,6 @@
 package no.fintlabs.client.resource.event
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import no.fintlabs.adapter.models.event.EventBodyResponse
@@ -9,6 +10,7 @@ import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.models.sync.SyncPageEntry
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.RelationEdgeLookupMetrics
 import no.novari.core.shared.event.EventState
 import no.novari.core.shared.event.EventStore
 import no.novari.core.shared.event.StoredEvent
@@ -42,7 +44,15 @@ class RequestStatusServiceTest {
         )
 
     private val relationEdgeStore: RelationEdgeStore = mockk()
-    private val service = RequestStatusService(eventStore, resourceStore, relationEdgeStore, configuration, clock)
+    private val service =
+        RequestStatusService(
+            eventStore,
+            resourceStore,
+            relationEdgeStore,
+            configuration,
+            RelationEdgeLookupMetrics(SimpleMeterRegistry()),
+            clock,
+        )
 
     private val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "vurdering", "aktivitetsfravar")
     private val eventCollection = "fintlabs_no_events"
