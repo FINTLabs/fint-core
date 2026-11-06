@@ -5,6 +5,7 @@ import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidSyntaxException
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
+import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.paging.PageCursor
@@ -29,6 +30,7 @@ class ResourceService(
     private val resourceStore: ResourceStore,
     private val relationEdgeStore: RelationEdgeStore,
     private val cursorCodec: PageCursorCodec,
+    private val edgeLookupMetrics: RelationEdgeLookupMetrics,
 ) {
     private val storageMapper = FintJson.storageMapper()
     private val filterService: FintFilterService = ODataFilterService()
@@ -162,16 +164,21 @@ class ResourceService(
 
         val edges =
             if (fullDump) {
-                relationEdgeStore.findAllByTargetType(
-                    resourceCoordinate.toEdgeCollectionName(),
-                    resourceCoordinate.toResourceUri(),
-                )
+                edgeLookupMetrics.record(resourceCoordinate, Lookup.FULL, entries.size, identifiers = 0) {
+                    relationEdgeStore.findAllByTargetType(
+                        resourceCoordinate.toEdgeCollectionName(),
+                        resourceCoordinate.toResourceUri(),
+                    )
+                }
             } else {
-                relationEdgeStore.findByTargets(
-                    resourceCoordinate.toEdgeCollectionName(),
-                    resourceCoordinate.toResourceUri(),
-                    entries.flatMap { it.identifiers },
-                )
+                val identifiers = entries.flatMap { it.identifiers }
+                edgeLookupMetrics.record(resourceCoordinate, Lookup.PAGE, entries.size, identifiers.size) {
+                    relationEdgeStore.findByTargets(
+                        resourceCoordinate.toEdgeCollectionName(),
+                        resourceCoordinate.toResourceUri(),
+                        identifiers,
+                    )
+                }
             }
 
         edges.mergeInto(entries.zip(resources))
