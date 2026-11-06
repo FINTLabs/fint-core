@@ -133,14 +133,24 @@ class RelationEdgeStore(
             .set("targetIdValue", targetIdValue)
             .setOnInsert("createdAt", timestamp)
 
+    /**
+     * The edges of [targetType] that point at any of [identifiers]. The lookup is split into small
+     * queries, one identifier field and at most [TARGET_VALUES_PER_QUERY] values each, and run one
+     * after the other.
+     */
     fun findByTargets(
         collectionName: String,
         targetType: String,
         identifiers: Collection<IdentifierRef>,
-    ): List<RelationEdge> {
-        val query = targetQuery(targetType, identifiers) ?: return emptyList()
-        return template.find(query, RelationEdge::class.java, collectionName)
-    }
+    ): List<RelationEdge> =
+        identifiers
+            .groupBy({ it.field }, { it.value })
+            .flatMap { (field, values) ->
+                // An edge has one target field and one target value, so no edge can come back from two queries
+                values.distinct().chunked(TARGET_VALUES_PER_QUERY).flatMap { chunk ->
+                    template.find(targetQuery(targetType, field, chunk), RelationEdge::class.java, collectionName)
+                }
+            }
 
     fun findAllByTargetType(
         collectionName: String,
@@ -243,27 +253,21 @@ class RelationEdgeStore(
                 .nin(keptIds),
         )
 
+    // One field per query instead of an $or across fields, so the server never merges branches in memory
     private fun targetQuery(
         targetType: String,
-        identifiers: Collection<IdentifierRef>,
-    ): Query? {
-        if (identifiers.isEmpty()) return null
-
-        val branches =
-            identifiers
-                .groupBy({ it.field }, { it.value })
-                .map { (field, values) ->
-                    Criteria
-                        .where("targetType")
-                        .`is`(targetType)
-                        .and("targetIdField")
-                        .`is`(field)
-                        .and("targetIdValue")
-                        .`in`(values.distinct())
-                }
-
-        return Query.query(Criteria().orOperator(branches))
-    }
+        field: String,
+        values: List<String>,
+    ): Query =
+        Query.query(
+            Criteria
+                .where("targetType")
+                .`is`(targetType)
+                .and("targetIdField")
+                .`is`(field)
+                .and("targetIdValue")
+                .`in`(values),
+        )
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -282,5 +286,10 @@ class RelationEdgeStore(
                 .on("sourceId", Sort.Direction.ASC)
                 .named("source_lookup"),
         )
+    }
+
+    companion object {
+        // Keeps each query and its result small enough for a small Cosmos DB node
+        const val TARGET_VALUES_PER_QUERY = 500
     }
 }
