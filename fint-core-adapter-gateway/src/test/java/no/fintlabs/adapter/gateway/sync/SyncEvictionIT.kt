@@ -21,11 +21,13 @@ import no.novari.core.shared.kafka.EntityHeaders.SYNC_TOTAL_SIZE
 import no.novari.core.shared.kafka.EntityHeaders.SYNC_TYPE
 import no.novari.core.shared.kafka.toHeaderBytes
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.relation.BackLinkEdge
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
 import no.novari.core.shared.relation.mergeInto
 import no.novari.core.shared.store.FintResourceBsonConverter
+import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.FintResource
@@ -39,7 +41,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
-import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
@@ -109,19 +110,19 @@ class SyncEvictionIT {
     @Test
     fun `the edges an evicted resource owned go with it, so its back-link stops being served`() {
         bufferReader.readMessage(listOf(elevforholdRecord("EF-OLD", writtenAt = BEFORE)))
-        assertEquals(listOf("EF-OLD"), edgesTargeting("elevnummer", "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-OLD"), edgesTargeting("elevnummer", "E-1").map { it.sourceIdValue })
 
         bufferReader.readMessage(
             listOf(elevforholdRecord("EF-KEEP", writtenAt = DURING, sync = fullSync("S-1", totalSize = 1))),
         )
 
         assertTrue(
-            edgesTargeting("elevnummer", "E-1").none { it.sourceId == "EF-OLD" },
+            edgesTargeting("elevnummer", "E-1").none { it.sourceIdValue == "EF-OLD" },
             "the evicted Elevforhold must stop supplying a back-link to the Elev it pointed at",
         )
         assertEquals(
             listOf("EF-KEEP"),
-            edgesTargeting("elevnummer", "E-1").map { it.sourceId },
+            edgesTargeting("elevnummer", "E-1").map { it.sourceIdValue },
             "the surviving Elevforhold keeps supplying its own",
         )
     }
@@ -142,7 +143,7 @@ class SyncEvictionIT {
 
         assertEquals(listOf("E-KEEP"), storedIds(elevCollection))
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection))
-        assertEquals(listOf("EF-1"), edgesTargeting("elevnummer", "E-GONE").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting("elevnummer", "E-GONE").map { it.sourceIdValue })
     }
 
     @Test
@@ -308,7 +309,7 @@ class SyncEvictionIT {
         )
 
         assertEquals(listOf("EF-KEEP"), storedIds(elevforholdCollection))
-        assertEquals(listOf("EF-KEEP"), edgesTargeting("elevnummer", "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-KEEP"), edgesTargeting("elevnummer", "E-1").map { it.sourceIdValue })
         assertEquals(5.0, evictedCount("fint.core.eviction.resources"), "batches of two, two and one add up to five")
         assertEquals(5.0, evictedCount("fint.core.eviction.edges"))
     }
@@ -340,7 +341,7 @@ class SyncEvictionIT {
         assertTrue("EF-KEEP" in remaining)
         assertEquals(
             remaining,
-            edgesTargeting("elevnummer", "E-1").map { it.sourceId }.sorted(),
+            edgesTargeting("elevnummer", "E-1").map { it.sourceIdValue }.sorted(),
             "the failed batch had deleted its edges inside the transaction, the rollback must bring them back",
         )
     }
@@ -379,7 +380,7 @@ class SyncEvictionIT {
         assertEquals(listOf("EF-KEEP", survivor).sorted(), storedIds(elevforholdCollection).sorted())
         assertEquals(
             listOf("EF-KEEP", survivor).sorted(),
-            edgesTargeting("elevnummer", "E-1").map { it.sourceId }.sorted(),
+            edgesTargeting("elevnummer", "E-1").map { it.sourceIdValue }.sorted(),
             "the survivor keeps supplying its back-link, the evicted ones stop",
         )
         assertEquals(
@@ -536,18 +537,10 @@ class SyncEvictionIT {
     private fun edgesTargeting(
         field: String,
         value: String,
-    ): List<RelationEdge> =
-        mongoTemplate.find(
-            Query.query(
-                Criteria
-                    .where("targetType")
-                    .`is`("utdanning/elev/elev")
-                    .and("targetIdField")
-                    .`is`(field)
-                    .and("targetIdValue")
-                    .`is`(value),
-            ),
-            RelationEdge::class.java,
+    ): List<BackLinkEdge> =
+        relationEdgeStore.findByTargets(
             edgeCollection,
+            "utdanning/elev/elev",
+            listOf(IdentifierRef(field, value)),
         )
 }

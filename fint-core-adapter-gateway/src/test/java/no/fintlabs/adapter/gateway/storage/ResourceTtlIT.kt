@@ -10,9 +10,10 @@ import no.fintlabs.adapter.gateway.sync.FullSyncStatusStore
 import no.fintlabs.adapter.gateway.sync.SyncProgressStore
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
-import no.novari.core.shared.relation.RelationEdge
+import no.novari.core.shared.relation.BackLinkEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.store.FintResourceBsonConverter
+import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -24,8 +25,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
-import org.springframework.data.mongodb.core.query.Criteria
-import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
@@ -112,7 +111,7 @@ class ResourceTtlIT {
 
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(GATEWAY_ORG)))
         assertEquals(listOf("E-1"), storedIds(elevCollection(GATEWAY_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(GATEWAY_ORG, "elevforhold"))
         assertNotNull(status(GATEWAY_ORG, "elev"))
     }
@@ -153,7 +152,7 @@ class ResourceTtlIT {
         ttlService().expireOldResources()
 
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(GATEWAY_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(GATEWAY_ORG, "elevforhold"))
     }
 
@@ -170,7 +169,7 @@ class ResourceTtlIT {
         assertTrue(storedIds(elevforholdCollection(GATEWAY_ORG)).isEmpty())
         assertTrue(storedIds(elevforholdCollection(SUB_ORG)).isEmpty())
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(OTHER_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(OTHER_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(OTHER_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(OTHER_ORG, "elevforhold"))
     }
 
@@ -341,19 +340,11 @@ class ResourceTtlIT {
     private fun edgesTargeting(
         org: String,
         elevnummer: String,
-    ): List<RelationEdge> =
-        mongoTemplate.find(
-            Query.query(
-                Criteria
-                    .where("targetType")
-                    .`is`("utdanning/elev/elev")
-                    .and("targetIdField")
-                    .`is`("elevnummer")
-                    .and("targetIdValue")
-                    .`is`(elevnummer),
-            ),
-            RelationEdge::class.java,
+    ): List<BackLinkEdge> =
+        relationEdgeStore.findByTargets(
             coordinate(org, "elev").toEdgeCollectionName(),
+            "utdanning/elev/elev",
+            listOf(IdentifierRef("elevnummer", elevnummer)),
         )
 
     private fun wiped(counter: String): Double =
