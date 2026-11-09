@@ -1,6 +1,7 @@
 package no.novari.core.shared.relation
 
 import com.mongodb.client.MongoClients
+import no.novari.core.shared.store.IdentifierRef
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -75,6 +76,53 @@ class RelationEdgeStoreIT {
             .containsExactlyInAnyOrder("CHILD" to "PARENT-A", "CHILD" to "PARENT-B", "SIBLING" to "PARENT-A")
     }
 
+    @Test
+    fun `edges are found by the targets they point at, across identifier fields`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A"), replace("OTHER", "PARENT-C")))
+        store.applyAll(listOf(RelationEdgeWrite.Replace(COLLECTION, PERSON, "PUPIL", listOf(edge("PUPIL", "E-1", "elevnummer")))))
+
+        val found =
+            store.findByTargets(
+                COLLECTION,
+                PERSON,
+                listOf(
+                    IdentifierRef("fodselsnummer", "PARENT-A"),
+                    IdentifierRef("fodselsnummer", "PARENT-A"),
+                    IdentifierRef("elevnummer", "E-1"),
+                    IdentifierRef("elevnummer", "MISSING"),
+                ),
+            )
+
+        assertThat(found.map { it.targetIdField to it.sourceIdValue })
+            .containsExactlyInAnyOrder("fodselsnummer" to "CHILD", "elevnummer" to "PUPIL")
+    }
+
+    @Test
+    fun `edges of another target type are not found`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+
+        val found = store.findByTargets(COLLECTION, "utdanning/elev/elev", listOf(IdentifierRef("fodselsnummer", "PARENT-A")))
+
+        assertThat(found).isEmpty()
+    }
+
+    @Test
+    fun `edges are found when the targets span more than one query`() {
+        val parents = (1..RelationEdgeStore.TARGET_VALUES_PER_QUERY + 1).map { "PARENT-$it" }
+        store.applyAll(listOf(replace("CHILD", *parents.toTypedArray())))
+
+        val found = store.findByTargets(COLLECTION, PERSON, parents.map { IdentifierRef("fodselsnummer", it) })
+
+        assertThat(found.map { it.targetIdValue }).containsExactlyInAnyOrderElementsOf(parents)
+    }
+
+    @Test
+    fun `no targets finds no edges`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+
+        assertThat(store.findByTargets(COLLECTION, PERSON, emptyList())).isEmpty()
+    }
+
     private fun replace(
         sourceId: String,
         vararg parents: String,
@@ -83,15 +131,16 @@ class RelationEdgeStoreIT {
     private fun edge(
         sourceId: String,
         parent: String,
+        targetIdField: String = "fodselsnummer",
     ) = RelationEdge(
-        id = relationEdgeId(PERSON, sourceId, "foreldre", PERSON, "fodselsnummer", parent),
+        id = relationEdgeId(PERSON, sourceId, "foreldre", PERSON, targetIdField, parent),
         sourceType = PERSON,
         sourceId = sourceId,
         sourceIdField = "fodselsnummer",
         sourceIdValue = sourceId,
         inverseName = "foreldreansvar",
         targetType = PERSON,
-        targetIdField = "fodselsnummer",
+        targetIdField = targetIdField,
         targetIdValue = parent,
     )
 
