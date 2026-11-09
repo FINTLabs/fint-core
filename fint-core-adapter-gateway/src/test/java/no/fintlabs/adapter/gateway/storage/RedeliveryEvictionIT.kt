@@ -5,9 +5,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.gateway.config.EvictionProperties
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.store.FintResourceBsonConverter
-import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
+import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
@@ -155,8 +156,19 @@ class RedeliveryEvictionIT {
     private fun storedIds(): List<String> = resourceStore.findAll(null, RESOURCE_COLLECTION).map { it.id }.sorted()
 
     private fun edgeSources(): List<String> =
-        relationEdgeStore
-            .findByTargets(EDGE_COLLECTION, "utdanning/elev/elev", listOf(IdentifierRef("elevnummer", "E-1")))
-            .map { it.sourceId }
+        mongoTemplate
+            .find(
+                Query.query(
+                    Criteria
+                        .where("targetType")
+                        .`is`("utdanning/elev/elev")
+                        .and("targetIdField")
+                        .`is`("elevnummer")
+                        .and("targetIdValue")
+                        .`is`("E-1"),
+                ),
+                RelationEdge::class.java,
+                EDGE_COLLECTION,
+            ).map { it.sourceId }
             .sorted()
 }

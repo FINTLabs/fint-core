@@ -13,7 +13,6 @@ import no.novari.core.shared.org.OrgStore
 import no.novari.core.shared.relation.RelationEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.store.FintResourceBsonConverter
-import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
@@ -25,6 +24,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
+import org.springframework.data.mongodb.core.query.Criteria
+import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
@@ -341,10 +342,18 @@ class ResourceTtlIT {
         org: String,
         elevnummer: String,
     ): List<RelationEdge> =
-        relationEdgeStore.findByTargets(
+        mongoTemplate.find(
+            Query.query(
+                Criteria
+                    .where("targetType")
+                    .`is`("utdanning/elev/elev")
+                    .and("targetIdField")
+                    .`is`("elevnummer")
+                    .and("targetIdValue")
+                    .`is`(elevnummer),
+            ),
+            RelationEdge::class.java,
             coordinate(org, "elev").toEdgeCollectionName(),
-            "utdanning/elev/elev",
-            listOf(IdentifierRef("elevnummer", elevnummer)),
         )
 
     private fun wiped(counter: String): Double =

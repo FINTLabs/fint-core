@@ -117,6 +117,17 @@ class RelationEdgeStoreIT {
     }
 
     @Test
+    fun `a found edge carries what the back-link needs`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+
+        val found = store.findByTargets(COLLECTION, PERSON, listOf(IdentifierRef("fodselsnummer", "PARENT-A"))).single()
+
+        assertThat(found.inverseName).isEqualTo("foreldreansvar")
+        assertThat(found.sourceIdField to found.sourceIdValue).isEqualTo("fodselsnummer" to "CHILD")
+        assertThat(found.targetIdField to found.targetIdValue).isEqualTo("fodselsnummer" to "PARENT-A")
+    }
+
+    @Test
     fun `no targets finds no edges`() {
         store.applyAll(listOf(replace("CHILD", "PARENT-A")))
 

@@ -26,7 +26,6 @@ import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
 import no.novari.core.shared.relation.mergeInto
 import no.novari.core.shared.store.FintResourceBsonConverter
-import no.novari.core.shared.store.IdentifierRef
 import no.novari.core.shared.store.ResourceStore
 import no.novari.core.shared.store.Save
 import no.novari.fint.core.model.FintResource
@@ -40,6 +39,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.mongodb.MongoTransactionManager
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory
+import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.transaction.support.TransactionTemplate
 import org.testcontainers.junit.jupiter.Container
@@ -537,9 +537,17 @@ class SyncEvictionIT {
         field: String,
         value: String,
     ): List<RelationEdge> =
-        relationEdgeStore.findByTargets(
+        mongoTemplate.find(
+            Query.query(
+                Criteria
+                    .where("targetType")
+                    .`is`("utdanning/elev/elev")
+                    .and("targetIdField")
+                    .`is`(field)
+                    .and("targetIdValue")
+                    .`is`(value),
+            ),
+            RelationEdge::class.java,
             edgeCollection,
-            "utdanning/elev/elev",
-            listOf(IdentifierRef(field, value)),
         )
 }

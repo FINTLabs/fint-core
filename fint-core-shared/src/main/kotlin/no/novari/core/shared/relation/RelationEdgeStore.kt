@@ -134,7 +134,7 @@ class RelationEdgeStore(
             .setOnInsert("createdAt", timestamp)
 
     /**
-     * The edges of [targetType] that point at any of [identifiers]. The
+     * The back-link parts of the edges of [targetType] that point at any of [identifiers]. The
      * lookup runs as small queries one after the other, one identifier field and at most
      * [TARGET_VALUES_PER_QUERY] values each.
      */
@@ -142,13 +142,13 @@ class RelationEdgeStore(
         collectionName: String,
         targetType: String,
         identifiers: Collection<IdentifierRef>,
-    ): List<RelationEdge> =
+    ): List<BackLinkEdge> =
         identifiers
             .groupBy({ it.field }, { it.value })
             .flatMap { (field, values) ->
                 // An edge has one target field and one target value, so no edge comes back from two queries
                 values.distinct().chunked(TARGET_VALUES_PER_QUERY).flatMap { chunk ->
-                    template.find(targetQuery(targetType, field, chunk), RelationEdge::class.java, collectionName)
+                    template.find(targetQuery(targetType, field, chunk), StoredBackLinkEdge::class.java, collectionName)
                 }
             }
 
@@ -249,15 +249,20 @@ class RelationEdgeStore(
         field: String,
         values: List<String>,
     ): Query =
-        Query.query(
-            Criteria
-                .where("targetType")
-                .`is`(targetType)
-                .and("targetIdField")
-                .`is`(field)
-                .and("targetIdValue")
-                .`in`(values),
-        )
+        Query
+            .query(
+                Criteria
+                    .where("targetType")
+                    .`is`(targetType)
+                    .and("targetIdField")
+                    .`is`(field)
+                    .and("targetIdValue")
+                    .`in`(values),
+            ).apply {
+                fields()
+                    .include("sourceIdField", "sourceIdValue", "inverseName", "targetIdField", "targetIdValue")
+                    .exclude("_id")
+            }
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -283,3 +288,11 @@ class RelationEdgeStore(
         const val TARGET_VALUES_PER_QUERY = 500
     }
 }
+
+internal data class StoredBackLinkEdge(
+    override val sourceIdField: String,
+    override val sourceIdValue: String,
+    override val inverseName: String,
+    override val targetIdField: String,
+    override val targetIdValue: String,
+) : BackLinkEdge

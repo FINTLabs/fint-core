@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import no.novari.core.shared.model.ResourceCoordinate
-import no.novari.core.shared.relation.RelationEdge
+import no.novari.core.shared.relation.BackLinkEdge
 import org.springframework.stereotype.Component
 import java.time.Duration
 
@@ -31,8 +31,8 @@ class RelationEdgeLookupMetrics(
         lookup: Lookup,
         resources: Int,
         identifiers: Int,
-        block: () -> List<RelationEdge>,
-    ): List<RelationEdge> {
+        block: () -> List<BackLinkEdge>,
+    ): List<BackLinkEdge> {
         val tags =
             Tags.of(
                 "domain",
