@@ -6,7 +6,7 @@ decides which one it gets.
 
 | Kind    | Request                      | What the client gets                                                       |
 |---------|------------------------------|----------------------------------------------------------------------------|
-| A page  | `size` above zero            | `size` entries, with `self`, `prev` and `next` links to move through them. |
+| A page  | `size` above zero            | `size` entries, at most 1000, with `self`, `prev` and `next` links to move through them. |
 | A full read | no `size`, or `size=0`       | Every entry of the collection, in one response.                            |
 
 Both accept `sinceTimeStamp`, which keeps only the entries modified at or after it, and `$filter`, an OData
@@ -26,6 +26,10 @@ expression evaluated on each entry. Both come in the same shape:
 full read the two counts come after `_embedded` instead, see below.
 
 ## A page
+
+A page holds at most `fint.consumer.paging.max-size` entries, 1000 by default. A larger `size` is cut down to that,
+and the links carry the size the page was read with. A client that follows `next` still gets every entry. A client
+that wants the whole collection in one response uses a full read.
 
 One query reads `size + 1` entries through the `created_at_id` index, so every page is in `createdAt` order and the
 extra entry says whether there is a `next`. A `cursor` in the link lets the next page start where this one ended

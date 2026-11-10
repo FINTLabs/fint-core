@@ -23,9 +23,15 @@ data class ConsumerConfiguration(
         get() = OrgId.from(orgIdValue)
 }
 
+/** [maxSize] is the largest page a client gets. A larger `size` is cut down to it. */
 data class PagingProperties(
     val cursorKey: String? = null,
-)
+    val maxSize: Int = 1000,
+) {
+    init {
+        require(maxSize > 0) { "maxSize must be positive: $maxSize" }
+    }
+}
 
 /**
  * How a list read without `size` is served. [batchSize] is how many entries are read from the

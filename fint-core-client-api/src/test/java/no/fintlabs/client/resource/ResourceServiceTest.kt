@@ -9,6 +9,7 @@ import no.fint.antlr.exception.InvalidArgumentException
 import no.fintlabs.client.config.AutorelationConfig
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.ListReadProperties
+import no.fintlabs.client.config.PagingProperties
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -384,15 +385,37 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `an explicit page above 1000 still queries edges by identifier`() {
+    fun `a page at the max size still queries edges by identifier`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val entries = (1..1200).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
-        every { resourceStore.findPage(null, 1201, 0, collectionName) } returns entries
-        every { resourceStore.count(null, collectionName) } returns 1200
+        val entries = (1..1000).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
+        every { resourceStore.findPage(null, 1001, 0, collectionName) } returns entries
+        every { resourceStore.count(null, collectionName) } returns 1000
 
-        resourceService.getResources(resourceCoordinate, 1200, 0, null, null)
+        resourceService.getResources(resourceCoordinate, 1000, 0, null, null)
 
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a size above the max size reads a page of the max size and its links carry the max size`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val service = serviceWith(consumerConfiguration(maxPageSize = 2))
+        every { resourceStore.count(null, collectionName) } returns 5
+        every { resourceStore.findPage(null, 3, 0, collectionName) } returns
+            listOf("A", "B", "C").map { resourceEntry(it) }
+
+        val result = service.getResources(resourceCoordinate, 10_000, 0, null, null)
+
+        verify(exactly = 1) { resourceStore.findPage(null, 3, 0, collectionName) }
+        assertEquals(2, result.size)
+        assertEquals(5, result.totalItems)
+        assertEquals(
+            "$BASE?offset=2&size=2",
+            result.links["next"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
     }
 
     @Test
@@ -618,9 +641,11 @@ class ResourceServiceTest {
         verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }
 
-    private fun batchedService(batchSize: Int) =
+    private fun batchedService(batchSize: Int) = serviceWith(consumerConfiguration(batchSize = batchSize))
+
+    private fun serviceWith(configuration: ConsumerConfiguration) =
         ResourceService(
-            consumerConfiguration = consumerConfiguration(batchSize = batchSize),
+            consumerConfiguration = configuration,
             resourceStore = resourceStore,
             relationEdgeStore = relationEdgeStore,
             cursorCodec = cursorCodec,
@@ -630,10 +655,12 @@ class ResourceServiceTest {
     private fun consumerConfiguration(
         autorelationEnabled: Boolean = true,
         batchSize: Int = 500,
+        maxPageSize: Int = 1000,
     ) = ConsumerConfiguration(
         baseUrl = "https://api.felleskomponent.no",
         orgIdValue = "fintlabs.no",
         autorelation = AutorelationConfig(enabled = autorelationEnabled),
+        paging = PagingProperties(maxSize = maxPageSize),
         listRead = ListReadProperties(batchSize = batchSize),
     )
 

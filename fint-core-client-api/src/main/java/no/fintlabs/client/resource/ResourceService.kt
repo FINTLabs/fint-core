@@ -80,19 +80,21 @@ class ResourceService(
     }
 
     /**
-     * Serves one page of [size] entries. A positive [sinceTimeStamp] keeps only resources
+     * Serves one page of [size] entries, or of the configured max size when [size] is larger. A positive [sinceTimeStamp] keeps only resources
      * modified at or after it. A page with a [cursor] starts where the cursor points; without
      * one it skips [offset] entries. A read without a size is a full read, see [streamResources].
      */
     fun getResources(
         resourceCoordinate: ResourceCoordinate,
-        size: Int,
+        requestedSize: Int,
         offset: Long,
         sinceTimeStamp: Long?,
         filter: String?,
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
-        require(size > 0) { "A page needs a positive size, a read without one is a full read" }
+        require(requestedSize > 0) { "A page needs a positive size, a read without one is a full read" }
+        // A large page is read, enriched and held in memory at once, in the app and in Mongo
+        val size = minOf(requestedSize, consumerConfiguration.paging.maxSize)
 
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
