@@ -20,16 +20,28 @@ data class RelationEdge(
     val sourceType: String,
     val sourceId: String,
     // Fields that are used to generate back-link uri for example systemid/123
-    val sourceIdField: String, // systemid
-    val sourceIdValue: String, // 123
-    val inverseName: String, // Relasjonen fra target til source (elevforhold)
+    override val sourceIdField: String, // systemid
+    override val sourceIdValue: String, // 123
+    override val inverseName: String, // Relasjonen fra target til source (elevforhold)
     // TODO: Answer how we handle /utdanning/kodeverk/iso elements
     // Fields to query back-links
     val targetType: String, // targetPath == null (bruk coordinates fra elev istedenfor)
-    val targetIdField: String,
-    val targetIdValue: String,
+    override val targetIdField: String,
+    override val targetIdValue: String,
     val createdAt: Instant? = null,
-)
+) : BackLinkEdge
+
+/**
+ * The part of a relation edge a back-link is built from. Reads only load these fields, so the
+ * rest of the edge stays in the database.
+ */
+interface BackLinkEdge {
+    val sourceIdField: String
+    val sourceIdValue: String
+    val inverseName: String
+    val targetIdField: String
+    val targetIdValue: String
+}
 
 const val RELATION_EDGE_ID_DELIMITER = "\u001F"
 

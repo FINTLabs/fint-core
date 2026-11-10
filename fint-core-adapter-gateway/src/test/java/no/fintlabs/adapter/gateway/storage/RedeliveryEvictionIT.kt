@@ -157,6 +157,6 @@ class RedeliveryEvictionIT {
     private fun edgeSources(): List<String> =
         relationEdgeStore
             .findByTargets(EDGE_COLLECTION, "utdanning/elev/elev", listOf(IdentifierRef("elevnummer", "E-1")))
-            .map { it.sourceId }
+            .map { it.sourceIdValue }
             .sorted()
 }

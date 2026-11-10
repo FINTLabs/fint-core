@@ -187,9 +187,9 @@ class ResourceService(
 
     /**
      * Attaches the back-links autorelation supplies onto the resources of a response, before the
-     * response form renders `_links`: one query fetches the relation edges pointing at any of the
-     * response's identifiers, and each edge becomes an ordinary id-based link on the resource it
-     * points at, for example `elevforhold` on an Elev.
+     * response form renders `_links`. The relation edges that point at the response's identifiers
+     * are fetched, and each edge becomes an ordinary id-based link on the resource it points at,
+     * for example `elevforhold` on an Elev.
      */
     private fun mergeRelationEdges(
         resourceCoordinate: ResourceCoordinate,

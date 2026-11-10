@@ -39,7 +39,6 @@ class ResourceServiceTest {
     private val relationEdgeStore =
         mockk<RelationEdgeStore> {
             every { findByTargets(any(), any(), any()) } returns emptyList()
-            every { findAllByTargetType(any(), any()) } returns emptyList()
         }
 
     private val cursorCodec = PageCursorCodec.withRandomKey()
@@ -382,7 +381,6 @@ class ResourceServiceTest {
         disabledService.getResourceById(resourceCoordinate, "systemid", "EF-2")
 
         verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
-        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
     }
 
     @Test
@@ -395,7 +393,6 @@ class ResourceServiceTest {
         resourceService.getResources(resourceCoordinate, 1200, 0, null, null)
 
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
-        verify(exactly = 0) { relationEdgeStore.findAllByTargetType(any(), any()) }
     }
 
     @Test

@@ -10,7 +10,7 @@ import no.fintlabs.adapter.gateway.sync.FullSyncStatusStore
 import no.fintlabs.adapter.gateway.sync.SyncProgressStore
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.org.OrgStore
-import no.novari.core.shared.relation.RelationEdge
+import no.novari.core.shared.relation.BackLinkEdge
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.store.FintResourceBsonConverter
 import no.novari.core.shared.store.IdentifierRef
@@ -111,7 +111,7 @@ class ResourceTtlIT {
 
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(GATEWAY_ORG)))
         assertEquals(listOf("E-1"), storedIds(elevCollection(GATEWAY_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(GATEWAY_ORG, "elevforhold"))
         assertNotNull(status(GATEWAY_ORG, "elev"))
     }
@@ -152,7 +152,7 @@ class ResourceTtlIT {
         ttlService().expireOldResources()
 
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(GATEWAY_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(GATEWAY_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(GATEWAY_ORG, "elevforhold"))
     }
 
@@ -169,7 +169,7 @@ class ResourceTtlIT {
         assertTrue(storedIds(elevforholdCollection(GATEWAY_ORG)).isEmpty())
         assertTrue(storedIds(elevforholdCollection(SUB_ORG)).isEmpty())
         assertEquals(listOf("EF-1"), storedIds(elevforholdCollection(OTHER_ORG)))
-        assertEquals(listOf("EF-1"), edgesTargeting(OTHER_ORG, "E-1").map { it.sourceId })
+        assertEquals(listOf("EF-1"), edgesTargeting(OTHER_ORG, "E-1").map { it.sourceIdValue })
         assertNotNull(status(OTHER_ORG, "elevforhold"))
     }
 
@@ -340,7 +340,7 @@ class ResourceTtlIT {
     private fun edgesTargeting(
         org: String,
         elevnummer: String,
-    ): List<RelationEdge> =
+    ): List<BackLinkEdge> =
         relationEdgeStore.findByTargets(
             coordinate(org, "elev").toEdgeCollectionName(),
             "utdanning/elev/elev",
