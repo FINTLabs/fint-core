@@ -133,24 +133,24 @@ class RelationEdgeStore(
             .set("targetIdValue", targetIdValue)
             .setOnInsert("createdAt", timestamp)
 
+    /**
+     * The back-link parts of the edges of [targetType] that point at any of [identifiers]. The
+     * lookup runs as small queries one after the other, one identifier field and at most
+     * [TARGET_VALUES_PER_QUERY] values each.
+     */
     fun findByTargets(
         collectionName: String,
         targetType: String,
         identifiers: Collection<IdentifierRef>,
-    ): List<RelationEdge> {
-        val query = targetQuery(targetType, identifiers) ?: return emptyList()
-        return template.find(query, RelationEdge::class.java, collectionName)
-    }
-
-    fun findAllByTargetType(
-        collectionName: String,
-        targetType: String,
-    ): List<RelationEdge> =
-        template.find(
-            Query.query(Criteria.where("targetType").`is`(targetType)),
-            RelationEdge::class.java,
-            collectionName,
-        )
+    ): List<BackLinkEdge> =
+        identifiers
+            .groupBy({ it.field }, { it.value })
+            .flatMap { (field, values) ->
+                // An edge has one target field and one target value, so no edge comes back from two queries
+                values.distinct().chunked(TARGET_VALUES_PER_QUERY).flatMap { chunk ->
+                    template.find(targetQuery(targetType, field, chunk), StoredBackLinkEdge::class.java, collectionName)
+                }
+            }
 
     /** The edges of [sourceType] owned by any of [sourceIds]. */
     fun findBySources(
@@ -243,27 +243,26 @@ class RelationEdgeStore(
                 .nin(keptIds),
         )
 
+    // One field per query instead of an $or across fields, so each query is one bounded range in target_lookup
     private fun targetQuery(
         targetType: String,
-        identifiers: Collection<IdentifierRef>,
-    ): Query? {
-        if (identifiers.isEmpty()) return null
-
-        val branches =
-            identifiers
-                .groupBy({ it.field }, { it.value })
-                .map { (field, values) ->
-                    Criteria
-                        .where("targetType")
-                        .`is`(targetType)
-                        .and("targetIdField")
-                        .`is`(field)
-                        .and("targetIdValue")
-                        .`in`(values.distinct())
-                }
-
-        return Query.query(Criteria().orOperator(branches))
-    }
+        field: String,
+        values: List<String>,
+    ): Query =
+        Query
+            .query(
+                Criteria
+                    .where("targetType")
+                    .`is`(targetType)
+                    .and("targetIdField")
+                    .`is`(field)
+                    .and("targetIdValue")
+                    .`in`(values),
+            ).apply {
+                fields()
+                    .include("sourceIdField", "sourceIdValue", "inverseName", "targetIdField", "targetIdValue")
+                    .exclude("_id")
+            }
 
     private fun ensureIndexes(collectionName: String) {
         if (!indexedCollections.add(collectionName)) return
@@ -283,4 +282,17 @@ class RelationEdgeStore(
                 .named("source_lookup"),
         )
     }
+
+    companion object {
+        // Keeps each query and its result small on a small Cosmos DB node
+        const val TARGET_VALUES_PER_QUERY = 500
+    }
 }
+
+internal data class StoredBackLinkEdge(
+    override val sourceIdField: String,
+    override val sourceIdValue: String,
+    override val inverseName: String,
+    override val targetIdField: String,
+    override val targetIdValue: String,
+) : BackLinkEdge

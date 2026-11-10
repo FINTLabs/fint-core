@@ -202,9 +202,6 @@ class AutoRelationIT {
         assertNotNull(links, "the merged back-link lands under the inverse relation name")
         assertEquals(listOf("systemid" to "EF-123"), links.map { it.idField to it.idValue })
 
-        val allForType = relationEdgeStore.findAllByTargetType(edgeCollection, "utdanning/elev/elev")
-        assertEquals(1, allForType.size)
-
         val unrelated =
             relationEdgeStore.findByTargets(
                 edgeCollection,

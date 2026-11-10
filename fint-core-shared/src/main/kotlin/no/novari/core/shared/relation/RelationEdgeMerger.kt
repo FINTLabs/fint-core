@@ -14,17 +14,17 @@ import no.novari.fint.core.model.Link
  * skipped: some adapters deliver both directions of a relation themselves, and a link the
  * adapter stored on the target must not be rendered a second time by our edge.
  */
-fun List<RelationEdge>.mergeInto(page: List<Pair<ResourceEntry, FintResource>>) =
+fun List<BackLinkEdge>.mergeInto(page: List<Pair<ResourceEntry, FintResource>>) =
     mergeIntoIdentified(page.map { (entry, resource) -> entry.identifiers to resource })
 
 /**
  * The same merge for resources that were never stored, such as the result of a live read. The
  * identifiers are read off the resources themselves.
  */
-fun List<RelationEdge>.mergeIntoResources(resources: List<FintResource>) =
+fun List<BackLinkEdge>.mergeIntoResources(resources: List<FintResource>) =
     mergeIntoIdentified(resources.map { it.toIdentifierRefs() to it })
 
-private fun List<RelationEdge>.mergeIntoIdentified(page: List<Pair<List<IdentifierRef>, FintResource>>) {
+private fun List<BackLinkEdge>.mergeIntoIdentified(page: List<Pair<List<IdentifierRef>, FintResource>>) {
     if (isEmpty()) return
 
     val byIdentifier = HashMap<IdentifierRef, BackLinkTarget>()
@@ -50,7 +50,7 @@ private class BackLinkTarget(
 ) {
     private val present = HashMap<String, MutableSet<LinkKey>>()
 
-    fun add(edge: RelationEdge) {
+    fun add(edge: BackLinkEdge) {
         val keys =
             present.getOrPut(edge.inverseName) {
                 resource.relationLinks(edge.inverseName).mapNotNullTo(HashSet()) { it.key() }
