@@ -94,6 +94,9 @@ updates:
     labels:
       - "dependencies"
       - "docker-compose"
+    ignore:
+      - dependency-name: "confluentinc/cp-kafka"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "deps"
       include: "scope"
