@@ -197,23 +197,23 @@ class ResourceStore(
         collectionName,
     )
 
+    /** The entry that holds [idValue] under the identifier named [idField]. */
     fun findByIdentifier(
         idField: String,
         idValue: String,
         collectionName: String,
     ): ResourceEntry? {
-        val query =
-            Query.query(
-                Criteria.where("identifiers").elemMatch(
-                    Criteria
-                        .where("field")
-                        .`is`(idField)
-                        .and("value")
-                        .`is`(idValue),
-                ),
-            )
+        // The read asks for the value alone and the field is checked here. Azure DocumentDB walks
+        // every entry of an index on field and value together, so that lookup gets slower as the
+        // collection grows. An index on the value alone is read straight to the entry.
+        val query = Query.query(Criteria.where("identifiers.value").`is`(idValue))
 
-        return template.findOne<ResourceEntry>(query, collectionName)
+        return template.stream(query, ResourceEntry::class.java, collectionName).use { candidates ->
+            candidates
+                .filter { entry -> entry.identifiers.any { it.field == idField && it.value == idValue } }
+                .findFirst()
+                .orElse(null)
+        }
     }
 
     fun findAll(
@@ -521,6 +521,10 @@ class ResourceStore(
                 .on("identifiers.value", Sort.Direction.ASC)
                 .named(IDENTIFIERS_INDEX),
         )
+
+        template.indexOps(collectionName).createIndex(
+            Index().on("identifiers.value", Sort.Direction.ASC).named(IDENTIFIER_VALUES_INDEX),
+        )
     }
 
     companion object {
@@ -528,5 +532,6 @@ class ResourceStore(
         const val LAST_MODIFIED_INDEX = "last_modified"
         const val LAST_DELIVERED_INDEX = "last_delivered"
         const val IDENTIFIERS_INDEX = "identifiers"
+        const val IDENTIFIER_VALUES_INDEX = "identifier_values"
     }
 }
