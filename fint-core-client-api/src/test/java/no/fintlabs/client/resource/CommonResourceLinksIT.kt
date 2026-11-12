@@ -8,6 +8,8 @@ import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
+import no.fintlabs.client.security.OpaFieldPruner
+import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.Person
@@ -53,8 +55,14 @@ class CommonResourceLinksIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class)
-    @Import(ResourceController::class, JacksonConfiguration::class, TomcatConfiguration::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
+    @Import(
+        ResourceController::class,
+        ResourceStreamWriter::class,
+        OpaFieldPruner::class,
+        JacksonConfiguration::class,
+        TomcatConfiguration::class,
+    )
     open class SliceApplication
 
     @MockitoBean

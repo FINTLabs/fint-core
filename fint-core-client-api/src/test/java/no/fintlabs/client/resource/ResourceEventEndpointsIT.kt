@@ -20,6 +20,8 @@ import no.fintlabs.client.resource.event.ResourceDeleted
 import no.fintlabs.client.resource.event.ResourceNotRead
 import no.fintlabs.client.resource.event.ResourceRead
 import no.fintlabs.client.resource.event.ResourcesRead
+import no.fintlabs.client.security.OpaFieldPruner
+import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -64,10 +66,12 @@ class ResourceEventEndpointsIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
         ResourceExceptionHandler::class,
+        ResourceStreamWriter::class,
+        OpaFieldPruner::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,
     )

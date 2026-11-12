@@ -496,6 +496,64 @@ class ResourceServiceTest {
     }
 
     @Test
+    fun `streamResources reads nothing until a batch is asked for`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.streamAll(null, 500, collectionName) } returns
+            listOf(resourceEntry("A", identifiers = listOf(IdentifierRef("systemid", "A")))).stream()
+
+        val stream = resourceService.streamResources(resourceCoordinate, null, null)
+
+        verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        stream.batches().next()
+        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+    }
+
+    @Test
+    fun `streamResources hands on each batch with its count before the filter`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val entries =
+            listOf("A", "B", "C").map {
+                resourceEntry(it, data = Document("systemId", Document("identifikatorverdi", it)))
+            }
+        every { resourceStore.streamAll(null, 2, collectionName) } returns entries.stream()
+
+        val batches =
+            batchedService(batchSize = 2)
+                .streamResources(resourceCoordinate, null, "systemId/identifikatorverdi eq 'C'")
+                .batches()
+                .asSequence()
+                .toList()
+
+        assertEquals(listOf(2, 1), batches.map { it.read })
+        assertEquals(listOf(0, 1), batches.map { it.resources.size })
+    }
+
+    @Test
+    fun `streamResources self-links from the timestamp and treats 0 as no timestamp`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.streamAll(Instant.ofEpochMilli(30), 500, collectionName) } returns Stream.empty()
+        every { resourceStore.streamAll(null, 500, collectionName) } returns Stream.empty()
+
+        assertEquals(
+            "$BASE?sinceTimeStamp=30",
+            resourceService.streamResources(resourceCoordinate, 30, null).selfLink.href,
+        )
+        assertEquals(BASE, resourceService.streamResources(resourceCoordinate, 0, null).selfLink.href)
+    }
+
+    @Test
+    fun `closing the stream closes the store cursor`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        var closed = false
+        every { resourceStore.streamAll(null, 500, collectionName) } returns
+            Stream.empty<ResourceEntry>().onClose { closed = true }
+
+        resourceService.streamResources(resourceCoordinate, null, null).close()
+
+        assertEquals(true, closed)
+    }
+
+    @Test
     fun `an explicit page above 1000 still queries edges by identifier`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         val entries = (1..1200).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }

@@ -8,6 +8,8 @@ import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
+import no.fintlabs.client.security.OpaFieldPruner
+import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
@@ -52,9 +54,11 @@ class ResourceFilterIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
+        ResourceStreamWriter::class,
+        OpaFieldPruner::class,
         ResourceExceptionHandler::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,

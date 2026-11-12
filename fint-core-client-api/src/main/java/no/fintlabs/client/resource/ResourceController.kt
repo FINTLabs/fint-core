@@ -1,5 +1,7 @@
 package no.fintlabs.client.resource
 
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import no.fint.antlr.FintFilterService
 import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidSyntaxException
@@ -29,7 +31,10 @@ import no.fintlabs.client.resource.paging.PageCursor
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.InvalidMediaTypeException
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -47,11 +52,16 @@ import java.net.URI
  * can go live. Then the read is sent to the adapter as an event, and the client gets `202`
  * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
  * the result once the adapter has answered.
+ *
+ * A list read without `size` is streamed as NDJSON when the client asks for it with
+ * `Accept: application/x-ndjson`. [ResourceStreamWriter] writes that response itself, so the
+ * handler returns nothing for it.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
+    private val streamWriter: ResourceStreamWriter,
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
     private val liveReadService: LiveReadService,
@@ -72,7 +82,9 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-    ): ResponseEntity<FintResourcesResponse> {
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): ResponseEntity<FintResourcesResponse>? {
         // Checked once for every read path, so a bad filter is refused before the live read asks
         // the gateway and before any store is read.
         validateFilter(filter)
@@ -81,6 +93,14 @@ class ResourceController(
         liveReadService
             .startByFilter(coordinate, filter, ListOptions(size, offset, sinceTimeStamp, cursor), prefer)
             ?.let { return it.toLiveReadAccepted(domainName, packageName) }
+
+        // Only a read without size is streamed. A page is never bigger than its size, so it stays JSON
+        if (size <= 0 && request.asksForNdjson()) {
+            resourceService
+                .streamResources(coordinate, sinceTimeStamp, filter)
+                .use { streamWriter.write(it, request, response) }
+            return null // The writer has written the response
+        }
 
         return resourceService
             .getResources(coordinate, size, offset, sinceTimeStamp, filter, cursor)
@@ -99,7 +119,9 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-    ): ResponseEntity<FintResourcesResponse> =
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): ResponseEntity<FintResourcesResponse>? =
         getResource(
             domainName,
             packageName,
@@ -111,6 +133,8 @@ class ResourceController(
             orgId,
             cursor,
             prefer,
+            request,
+            response,
         )
 
     @GetMapping(EndpointsConstants.BY_ID)
@@ -214,6 +238,20 @@ class ResourceController(
                 resourceData,
                 OperationType.UPDATE,
             ).toAcceptedResponse(domainName, packageName)
+
+    /**
+     * True when the `Accept` header names `application/x-ndjson`. A wildcard does not count, so a
+     * client that does not ask for a stream keeps getting JSON.
+     */
+    private fun HttpServletRequest.asksForNdjson(): Boolean =
+        try {
+            MediaType
+                .parseMediaTypes(getHeaders(HttpHeaders.ACCEPT).toList())
+                .any { it.equalsTypeAndSubtype(MediaType.APPLICATION_NDJSON) && it.qualityValue > 0 }
+        } catch (_: InvalidMediaTypeException) {
+            // Spring answers a broken Accept header itself when it picks the response type
+            false
+        }
 
     private fun validateFilter(filter: String?) {
         if (filter != null && !filterService.validate(filter)) {

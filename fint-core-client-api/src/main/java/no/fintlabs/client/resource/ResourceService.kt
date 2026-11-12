@@ -6,6 +6,7 @@ import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
 import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
@@ -35,6 +36,42 @@ class ResourceService(
     private val filterService: FintFilterService = ODataFilterService()
 
     /**
+     * Opens a read of every resource in the collection, or of those modified at or after a
+     * positive [sinceTimeStamp]. Nothing is read until the batches are asked for. The caller
+     * closes the stream to release the store cursor.
+     */
+    fun streamResources(
+        resourceCoordinate: ResourceCoordinate,
+        sinceTimeStamp: Long?,
+        filter: String?,
+    ): ResourceStream {
+        // Resolved first, so an unknown resource type fails before anything is read or written
+        val resourceClass = resourceCoordinate.toResourceClass()
+        val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
+        val batchSize = consumerConfiguration.listRead.batchSize
+
+        val entries = resourceStore.streamAll(since, batchSize, resourceCoordinate.toCollectionName())
+        val batches =
+            entries.asSequence().chunked(batchSize).map { batch ->
+                ResourceBatch(
+                    batch.size,
+                    batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
+                )
+            }
+
+        return ResourceStream(
+            selfLink =
+                fullReadSelfLink(
+                    consumerConfiguration.baseUrl,
+                    resourceCoordinate.toResourceUri(),
+                    since.toTimeStamp(),
+                ),
+            batches = batches,
+            onClose = entries::close,
+        )
+    }
+
+    /**
      * Serves a list read. A `size` above zero gives one page, otherwise everything. A positive
      * `sinceTimeStamp` keeps only resources modified at or after it. A page with a [cursor] starts
      * where the cursor points. Without one it skips [offset] entries.
@@ -54,14 +91,17 @@ class ResourceService(
         val resourceClass = resourceCoordinate.toResourceClass()
 
         if (size <= 0) {
-            val all = readAll(resourceCoordinate, resourceClass, since, filter)
+            // A JSON body is written in one go, so every batch is kept until the cursor is empty
+            val batches =
+                streamResources(resourceCoordinate, sinceTimeStamp, filter)
+                    .use { it.batches().asSequence().toList() }
             return createFintResourcesResponse(
                 baseUrl,
                 resourceUri,
-                all.resources,
+                batches.flatMap { it.resources },
                 offset,
                 size,
-                all.read,
+                batches.sumOf { it.read },
                 since.toTimeStamp(),
             )
         }
@@ -108,31 +148,6 @@ class ResourceService(
         val resource = entry.toFintResource(resourceCoordinate.toResourceClass())
         mergeRelationEdges(resourceCoordinate, listOf(entry), listOf(resource), Lookup.PAGE)
         return resource
-    }
-
-    /**
-     * Reads every entry of the collection through a cursor, one batch at a time. A batch is
-     * converted, given its back-links and filtered before the next one is fetched. Only the
-     * resources of the response stay in memory, not the stored entries or all of their edges.
-     */
-    private fun readAll(
-        resourceCoordinate: ResourceCoordinate,
-        resourceClass: Class<out FintResource>,
-        since: Instant?,
-        filter: String?,
-    ): FullRead {
-        val batchSize = consumerConfiguration.listRead.batchSize
-        val resources = mutableListOf<FintResource>()
-        var read = 0
-
-        resourceStore.streamAll(since, batchSize, resourceCoordinate.toCollectionName()).use { entries ->
-            entries.asSequence().chunked(batchSize).forEach { batch ->
-                read += batch.size
-                resources += batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL)
-            }
-        }
-
-        return FullRead(read, resources)
     }
 
     /**
@@ -219,12 +234,6 @@ class ResourceService(
 
     private fun Instant?.toTimeStamp(): Long = this?.toEpochMilli() ?: 0
 }
-
-/** A list read without `size`. [read] counts the entries before `$filter`, [resources] are the ones left after it. */
-private data class FullRead(
-    val read: Int,
-    val resources: List<FintResource>,
-)
 
 /**
  * One page of entries and the bookmarks a client needs to move on from it. [next] points at the
