@@ -8,7 +8,6 @@ import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
 import no.fintlabs.client.exception.resource.InvalidResourceBodyException
 import no.fintlabs.client.resource.dto.createFintResourcesResponse
-import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestAccepted
 import no.fintlabs.client.resource.event.RequestFailed
@@ -21,8 +20,6 @@ import no.fintlabs.client.resource.event.ResourceDeleted
 import no.fintlabs.client.resource.event.ResourceNotRead
 import no.fintlabs.client.resource.event.ResourceRead
 import no.fintlabs.client.resource.event.ResourcesRead
-import no.fintlabs.client.security.OpaFieldPruner
-import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -67,12 +64,10 @@ class ResourceEventEndpointsIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class)
     @Import(
         ResourceController::class,
         ResourceExceptionHandler::class,
-        ResourceStreamWriter::class,
-        OpaFieldPruner::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,
     )
@@ -238,12 +233,15 @@ class ResourceEventEndpointsIT {
 
     @Test
     fun `a read that cannot go live is answered from the cache without the applied preference`() {
-        given(resourceService.streamResources(coordinate, 0, 0, "navn eq 'Testesen'"))
+        given(resourceService.getResources(coordinate, 0, 0, 0, "navn eq 'Testesen'", null))
             .willReturn(
-                ResourceStream.of(
-                    0,
-                    fullReadSelfLink("https://api.felleskomponent.no", "utdanning/elev/elev"),
+                createFintResourcesResponse(
+                    "https://api.felleskomponent.no",
+                    "utdanning/elev/elev",
                     emptyList(),
+                    0,
+                    0,
+                    0,
                 ),
             )
 

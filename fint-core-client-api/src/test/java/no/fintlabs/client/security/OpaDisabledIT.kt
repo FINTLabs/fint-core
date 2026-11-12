@@ -97,7 +97,6 @@ class OpaDisabledIT {
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
         OpaFieldAdvice::class,
-        OpaFieldPruner::class,
         OpaClient::class,
         OpaService::class,
         JacksonConfiguration::class,

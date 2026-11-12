@@ -1,11 +1,5 @@
 package no.fintlabs.client.resource
 
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
-import no.fint.antlr.FintFilterService
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
-import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.admin.StatsService
@@ -49,24 +43,17 @@ import java.net.URI
  * can go live. Then the read is sent to the adapter as an event, and the client gets `202`
  * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
  * the result once the adapter has answered.
- *
- * A list read with a `size` is one page, returned as a body. A list read without one is a full read
- * of the whole collection, which [ResourceStreamWriter] streams to the response while it is read,
- * so the handler returns nothing for it.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
-    private val streamWriter: ResourceStreamWriter,
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
     private val liveReadService: LiveReadService,
     private val consumerConfig: ConsumerConfiguration,
     private val statsService: StatsService,
 ) {
-    private val filterService: FintFilterService = ODataFilterService()
-
     @GetMapping
     fun getResource(
         @PathVariable domainName: String,
@@ -79,24 +66,12 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): ResponseEntity<FintResourcesResponse>? {
-        // Checked once for every read path, so a bad filter is refused before the live read asks
-        // the gateway and before any store is read.
-        validateFilter(filter)
+    ): ResponseEntity<FintResourcesResponse> {
         val coordinate = ResourceCoordinate(orgId, domainName, packageName, resourceName)
 
         liveReadService
             .startByFilter(coordinate, filter, ListOptions(size, offset, sinceTimeStamp, cursor), prefer)
             ?.let { return it.toLiveReadAccepted(domainName, packageName) }
-
-        if (size <= 0) {
-            resourceService
-                .streamResources(coordinate, offset, sinceTimeStamp, filter)
-                .use { streamWriter.write(it, request, response) }
-            return null // We write response in streamWriter.write
-        }
 
         return resourceService
             .getResources(coordinate, size, offset, sinceTimeStamp, filter, cursor)
@@ -115,9 +90,7 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): ResponseEntity<FintResourcesResponse>? =
+    ): ResponseEntity<FintResourcesResponse> =
         getResource(
             domainName,
             packageName,
@@ -129,8 +102,6 @@ class ResourceController(
             orgId,
             cursor,
             prefer,
-            request,
-            response,
         )
 
     @GetMapping(EndpointsConstants.BY_ID)
@@ -234,12 +205,6 @@ class ResourceController(
                 resourceData,
                 OperationType.UPDATE,
             ).toAcceptedResponse(domainName, packageName)
-
-    private fun validateFilter(filter: String?) {
-        if (filter != null && !filterService.validate(filter)) {
-            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
-        }
-    }
 
     private fun RequestFailed.FailureType.toHttpStatus() =
         when (this) {
