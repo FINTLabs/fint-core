@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.register
 
 import no.fintlabs.adapter.models.AdapterContract
+import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.operation.OperationType
 import no.novari.core.shared.event.OrgEventCapabilities
 import no.novari.core.shared.event.ResourceOperations
@@ -48,6 +49,23 @@ class ContractService(
 
         return ContractLookup.Found(contract.toRegisteredContract())
     }
+
+    /** Adapter ids whose contracts cover this event. */
+    fun adaptersFor(request: RequestFintEvent): Set<String> =
+        contractJpaRepository
+            .findAllByOrgId(OrgId.from(request.orgId).value)
+            .filter { contract ->
+                contract.eventCapabilityEntityset.any { capability ->
+                    capability.domainName == request.domainName &&
+                        capability.pkgName == request.packageName &&
+                        capability.resourceName == request.resourceName &&
+                        capability.operation == request.operationType
+                }
+            }
+            .mapNotNull { contract ->
+                contract.adapterId?.takeIf(String::isNotBlank)
+                    ?: contract.userName.takeIf(String::isNotBlank)
+            }.toSet()
 
     /**
      * What the adapters of [orgId] together answer events for: a resource is listed with every
