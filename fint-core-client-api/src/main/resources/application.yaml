@@ -32,6 +32,10 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:
