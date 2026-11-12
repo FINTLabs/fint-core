@@ -1,7 +1,5 @@
 package no.fintlabs.client.resource
 
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
 import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
@@ -15,6 +13,7 @@ import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
 import org.junit.jupiter.api.Test
 import org.mockito.BDDMockito.given
+import org.mockito.BDDMockito.then
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -149,10 +148,7 @@ class ResourceFilterIT {
     }
 
     @Test
-    fun `invalid dollar-filter surfaces as a 400, via the shared ResourceExceptionHandler`() {
-        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi = 'B'"))
-            .willThrow(FilterException(InvalidSyntaxException("Invalid \$filter: systemId/identifikatorverdi = 'B'")))
-
+    fun `GET with an invalid dollar-filter is a 400 before the live read or the service is asked`() {
         val response = get("/utdanning/vurdering/elevfravar?\$filter=systemId%2Fidentifikatorverdi%20%3D%20%27B%27")
 
         assertEquals(400, response.statusCode())
@@ -160,5 +156,20 @@ class ResourceFilterIT {
             "no.fint.antlr.exception.InvalidSyntaxException: Invalid \$filter: systemId/identifikatorverdi = 'B'",
             response.body(),
         )
+        then(liveReadService).shouldHaveNoInteractions()
+        then(resourceService).shouldHaveNoInteractions()
+    }
+
+    @Test
+    fun `POST dollar-query with an invalid body is a 400 before the live read or the service is asked`() {
+        val response = postQuery("/utdanning/vurdering/elevfravar/\$query", "systemId/identifikatorverdi = 'B'")
+
+        assertEquals(400, response.statusCode())
+        assertEquals(
+            "no.fint.antlr.exception.InvalidSyntaxException: Invalid \$filter: systemId/identifikatorverdi = 'B'",
+            response.body(),
+        )
+        then(liveReadService).shouldHaveNoInteractions()
+        then(resourceService).shouldHaveNoInteractions()
     }
 }

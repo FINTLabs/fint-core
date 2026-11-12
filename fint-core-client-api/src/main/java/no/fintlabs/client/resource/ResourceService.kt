@@ -1,8 +1,6 @@
 package no.fintlabs.client.resource
 
 import no.fint.antlr.FintFilterService
-import no.fint.antlr.exception.FilterException
-import no.fint.antlr.exception.InvalidSyntaxException
 import no.fint.antlr.odata.ODataFilterService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.resource.RelationEdgeLookupMetrics.Lookup
@@ -49,10 +47,6 @@ class ResourceService(
         filter: String?,
         cursor: PageCursor? = null,
     ): FintResourcesResponse {
-        if (filter != null && !filterService.validate(filter)) {
-            throw FilterException(InvalidSyntaxException("Invalid \$filter: $filter"))
-        }
-
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
         val baseUrl = consumerConfiguration.baseUrl
