@@ -26,7 +26,6 @@ class ResourceControllerLastUpdatedTest {
                     mockk(),
                     mockk(),
                     mockk(),
-                    mockk(),
                     ConsumerConfiguration(
                         baseUrl = baseUrl,
                         orgIdValue = "fintlabs.no",
