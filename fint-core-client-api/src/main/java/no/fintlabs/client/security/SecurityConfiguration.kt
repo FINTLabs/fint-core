@@ -125,14 +125,15 @@ class SecurityConfiguration(
         private const val ENDPOINTS_PATH = "/{domainName}/{packageName}"
 
         /**
-         * The two endpoints the platform calls without a token: the health probe and the Prometheus
-         * scrape. The ingress only routes resource paths, so neither is reachable from outside the
-         * cluster. Anything else under `/actuator` stays behind the client check.
+         * The endpoints the platform calls without a token: health probes and the Prometheus scrape.
+         * The ingress only routes resource paths, so these are not reachable from outside the cluster.
+         * Anything else under `/actuator` stays behind the client check.
          */
         private val OPEN_PATHS =
             arrayOf(
                 "/actuator/health",
                 "/actuator/health/liveness",
+                "/actuator/health/readiness",
                 "/actuator/prometheus",
             )
     }

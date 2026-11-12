@@ -94,6 +94,7 @@ class SecurityConfiguration(
                 "${ProviderApi.PREFIX}/v3/api-docs/**",
                 "/actuator/health",
                 "/actuator/health/liveness",
+                "/actuator/health/readiness",
                 "/actuator/prometheus",
             )
     }
