@@ -1,7 +1,7 @@
 version: '3'
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.9.10
+    image: confluentinc/cp-zookeeper:7.9.11
     networks:
       - broker-kafka
     environment:
@@ -9,7 +9,7 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
-    image: confluentinc/cp-kafka:7.9.10
+    image: confluentinc/cp-kafka:7.9.11
     networks:
       - broker-kafka
     depends_on:
