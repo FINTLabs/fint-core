@@ -21,4 +21,5 @@ fills in the routes the other components add. The routing policy lives in
 every overlay. [docs/routing.md](../../../docs/routing.md) explains the rules.
 
 `novari-no` is the exception. It is a test org, so its overlay replaces these
-routes with one route that takes every client path.
+routes with one route that takes every client path apart from
+`/felles/kodeverk`.

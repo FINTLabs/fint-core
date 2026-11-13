@@ -37,11 +37,9 @@ ADMIN_ORGS="rogfk.no telemarkfylke.no trondelagfylke.no vestfoldfylke.no"
 UTDANNING_GATED_ENVS="api"
 # Environments where core 1 serves okonomi faktura and kodeverk, so only regnskap reaches the client-api there.
 OKONOMI_SPLIT_ENVS="api"
-# Test orgs the client-api serves whole. The header gate and the package split do not apply to them.
+# Test orgs the client-api serves whole, apart from felles kodeverk. The header gate and the package
+# split do not apply to them.
 WHOLE_ORGS="novari.no"
-# Environments where the route of a whole org also takes every org without an overlay. Felles kodeverk
-# is shared by all orgs, so it stays on core 1 there.
-SHARED_WHOLE_ENVS="beta"
 
 V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
 V4=("x-fint-model-version: V4" "x-fint-model-version: v4" "x-fint-model-version-override: V4" "x-fint-model-version-override: V4|x-fint-model-version: V3")
@@ -81,8 +79,7 @@ while read -r env org host id enabled; do
   fi
   always client-api /okonomi/regnskap/
   always client-api /felles/person/ /ressurs/datautstyr/ /personvern/samtykke/ /personvern/kodeverk/
-  always core1 /utdanning/elev/provider/ /administrasjon/personal/provider/
-  if [ $whole = 1 ] && ! has "$env" "$SHARED_WHOLE_ENVS"; then always client-api /felles/kodeverk/; else always core1 /felles/kodeverk/; fi
+  always core1 /felles/kodeverk/ /utdanning/elev/provider/ /administrasjon/personal/provider/
   if [ $whole = 1 ] || { has "$id" "$ADMIN_ORGS" && [ "$enabled" = 1 ]; }; then
     always client-api "${admin[@]}"
   elif ! has "$id" "$ADMIN_ORGS"; then

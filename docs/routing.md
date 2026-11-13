@@ -25,5 +25,5 @@ Every county runs its own client-api in api and beta. V4 means `x-fint-model-ver
 `x-fint-model-version` is `v4` in any case, with the override winning. In beta every org without its own overlay goes
 to the shared novari-no client-api, apart from `/felles/kodeverk`. Alpha only routes novari.no to the client-api.
 
-In api novari.no has its own client-api. It takes every path for novari.no and its sub-orgs, apart from the provider
-paths. That includes `/felles/kodeverk`.
+In api novari.no has its own client-api. It takes every path for novari.no and its sub-orgs, apart from
+`/felles/kodeverk` and the provider paths.
