@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base
+  - org-values.yaml
+# novari.no is a test org that the client-api serves whole. The administrasjon component and the
+# route below add the domains that a county leaves on core 1.
+components:
+  - ../../../components/utdanning-gated
+  - ../../../components/okonomi-regnskap
+  - ../../../components/administrasjon
+  - ../../../components/org
+patches:
+  - target:
+      kind: IngressRoute
+      name: fint-core-client-api-ingress
+    patch: |-
+      - op: add
+        path: /spec/routes/-
+        value:
+          kind: Rule
+          match: 'Host(`api.felleskomponent.no`) && HeadersRegexp(`x-org-id`, `(^|\.)novari\.no$`) && (PathPrefix(`/arkiv`) || PathPrefix(`/profilbilde`)) && !PathPrefix(`/{domain:[a-z]+}/{package:[a-z]+}/provider`)'
+          services:
+            - name: fint-core-client-api
+              namespace: novari-no
+              port: 8080
+  # The topic cleanup in the admin API can only delete a topic that this gateway has access to.
+  - target:
+      kind: Application
+      name: fint-core-adapter-gateway
+    patch: |-
+      - op: add
+        path: /spec/kafka/acls/-
+        value:
+          topic: "*fint-core*"
+          permission: admin
