@@ -117,6 +117,8 @@ class ResourceStreamWriter(
     ) {
         aborted.increment()
         log.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, cause)
+        // Not thrown. Tomcat drops the connection for a thrown failure too, but Spring Boot first
+        // appends its error document to the body
         request.setAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE, cause)
     }
 
