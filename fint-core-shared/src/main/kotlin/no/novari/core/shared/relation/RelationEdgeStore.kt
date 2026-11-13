@@ -65,12 +65,15 @@ data class RelationEdgeChanges(
     /** How many edges were stored, counting new ones and ones stored again with other content. */
     val written: Long get() = added.size.toLong()
 
-    /** How many edges are gone for good, so without the ones stored again with other content. */
-    val deleted: Long
+    /** The removed edges that are gone for good, so without the ones stored again with other content. */
+    val gone: List<RelationEdge>
         get() {
             val storedAgain = added.mapTo(HashSet()) { it.id }
-            return removed.count { it.id !in storedAgain }.toLong()
+            return removed.filterNot { it.id in storedAgain }
         }
+
+    /** How many edges are gone for good. */
+    val deleted: Long get() = gone.size.toLong()
 
     operator fun plus(other: RelationEdgeChanges): RelationEdgeChanges = RelationEdgeChanges(added + other.added, removed + other.removed)
 
@@ -114,26 +117,40 @@ class RelationEdgeStore(
         writes: List<RelationEdgeWrite>,
         timestamp: Instant,
     ): RelationEdgeChanges {
-        val stored =
-            writes
-                .groupBy({ it.sourceType }, { it.sourceId })
-                .flatMap { (sourceType, sourceIds) -> findBySources(collectionName, sourceType, sourceIds) }
+        val changes = changesOf(writes, storedEdgesOf(collectionName, writes))
+        if (changes.added.isEmpty() && changes.removed.isEmpty()) return changes
+
+        val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
+        // An upsert and not an insert, since an edge stored again with other content is already there.
+        changes.added.forEach { bulkOps.upsert(byId(it.id), it.toUpdate(timestamp)) }
+        val gone = changes.gone.map { it.id }
+        if (gone.isNotEmpty()) bulkOps.remove(Query.query(Criteria.where("_id").`in`(gone)))
+        bulkOps.execute()
+
+        return changes
+    }
+
+    private fun storedEdgesOf(
+        collectionName: String,
+        writes: List<RelationEdgeWrite>,
+    ): List<RelationEdge> =
+        writes
+            .groupBy({ it.sourceType }, { it.sourceId })
+            .flatMap { (sourceType, sourceIds) -> findBySources(collectionName, sourceType, sourceIds) }
+
+    /** What [writes] change when [stored] holds every edge their sources own now. */
+    private fun changesOf(
+        writes: List<RelationEdgeWrite>,
+        stored: List<RelationEdge>,
+    ): RelationEdgeChanges {
         val storedById = stored.associateBy { it.id }
         // A delete wants no edges, so every edge its source owns ends up as removed.
         val wantedById = writes.filterIsInstance<RelationEdgeWrite.Replace>().flatMap { it.edges }.associateBy { it.id }
 
-        val added = wantedById.values.filterNot { it.rendersSameLinkAs(storedById[it.id]) }
-        val removed = stored.filterNot { it.rendersSameLinkAs(wantedById[it.id]) }
-        val gone = removed.map { it.id }.filterNot { it in wantedById }
-        if (added.isEmpty() && gone.isEmpty()) return RelationEdgeChanges.NONE
-
-        val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
-        // An upsert and not an insert, since an edge stored again with other content is already there.
-        added.forEach { bulkOps.upsert(byId(it.id), it.toUpdate(timestamp)) }
-        if (gone.isNotEmpty()) bulkOps.remove(Query.query(Criteria.where("_id").`in`(gone)))
-        bulkOps.execute()
-
-        return RelationEdgeChanges(added, removed)
+        return RelationEdgeChanges(
+            added = wantedById.values.filterNot { it.rendersSameLinkAs(storedById[it.id]) },
+            removed = stored.filterNot { it.rendersSameLinkAs(wantedById[it.id]) },
+        )
     }
 
     /**
