@@ -47,7 +47,6 @@ class ResourceService(
         sinceTimeStamp: Long?,
         filter: String?,
     ): ResourceStream {
-        // Resolved first, so an unknown resource type fails before anything is read or written
         val resourceClass = resourceCoordinate.toResourceClass()
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
@@ -56,8 +55,6 @@ class ResourceService(
         var cursor: Stream<ResourceEntry>? = null
         val batches =
             sequence {
-                // Opened with the first batch. A request that is refused before that, such as one
-                // with an Accept header we cannot serve, never opens a cursor that nobody closes
                 val entries = resourceStore.streamAll(since, batchSize, collectionName).also { cursor = it }
                 yieldAll(
                     entries.asSequence().chunked(batchSize).map { batch ->
