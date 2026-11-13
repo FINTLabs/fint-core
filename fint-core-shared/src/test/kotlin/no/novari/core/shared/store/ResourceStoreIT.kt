@@ -3,6 +3,7 @@ package no.novari.core.shared.store
 import com.mongodb.client.MongoClients
 import no.novari.core.shared.model.OrgId
 import no.novari.core.shared.model.ResourceCoordinate
+import no.novari.fint.core.model.Link
 import no.novari.fint.core.model.felles.Person
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.elev.Elev
@@ -276,7 +277,7 @@ class ResourceStoreIT {
 
         val outcomes = store.applyAll(listOf(slightlyNewer))
 
-        assertThat(outcomes).containsExactly(WriteOutcome(slightlyNewer, WriteResult.CHANGED))
+        assertThat(outcomes).containsExactly(WriteOutcome(slightlyNewer, WriteResult.CHANGED, identifiersChanged = true))
         assertThat(store.findByResourceId("1", collection)!!.identifiers).hasSize(2)
     }
 
@@ -381,6 +382,41 @@ class ResourceStoreIT {
     @Test
     fun `getLastUpdated is null for a resource type with nothing stored`() {
         assertThat(store.getLastUpdated(coordinate)).isNull()
+    }
+
+    @Test
+    fun `a changed save says when the resource answers to other identifiers than before`() {
+        store.saveAll(listOf(Save("1", collection, elev("1"), base)))
+
+        val sameIdentifiers =
+            store.saveAll(
+                listOf(
+                    Save(
+                        "1",
+                        collection,
+                        elev("1").apply {
+                            addLink("person", Link("fodselsnummer", "P-1"))
+                        },
+                        base.plusSeconds(1),
+                    ),
+                ),
+            )
+        val otherIdentifiers = store.saveAll(listOf(Save("1", collection, elevWithNumber("1"), base.plusSeconds(2))))
+
+        assertThat(sameIdentifiers.single().result).isEqualTo(WriteResult.CHANGED)
+        assertThat(sameIdentifiers.single().identifiersChanged).isFalse()
+        assertThat(sameIdentifiers.single().reachedByOtherEdges).isFalse()
+        assertThat(otherIdentifiers.single().identifiersChanged).isTrue()
+        assertThat(otherIdentifiers.single().reachedByOtherEdges).isTrue()
+    }
+
+    @Test
+    fun `a new save is reached by other edges and an unchanged one is not`() {
+        val new = store.saveAll(listOf(Save("1", collection, elev("1"), base)))
+        val unchanged = store.saveAll(listOf(Save("1", collection, elev("1"), base.plusSeconds(1))))
+
+        assertThat(new.single().reachedByOtherEdges).isTrue()
+        assertThat(unchanged.single().reachedByOtherEdges).isFalse()
     }
 
     @Test

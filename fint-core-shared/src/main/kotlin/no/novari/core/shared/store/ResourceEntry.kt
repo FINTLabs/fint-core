@@ -39,6 +39,11 @@ data class ResourceId(
     @Id val id: String,
 )
 
+data class ResourceIdentifiers(
+    @Id val id: String,
+    val identifiers: List<IdentifierRef> = emptyList(),
+)
+
 /**
  * What we use to decide if we should write to [ResourceStore] or not. If [contentHash] is equal, we only update the
  * [lastDelivered] field on the related document. Though if [lastDelivered] is older than what already exists, nothing is written.
