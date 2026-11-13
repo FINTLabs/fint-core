@@ -10,7 +10,7 @@ decides which one it gets.
 | A full read | no `size`, or `size=0`       | Every entry of the collection, in one response.                            |
 
 Both accept `sinceTimeStamp`, which keeps only the entries modified at or after it, and `$filter`, an OData
-expression evaluated on each entry. Both come in the same shape:
+expression evaluated on each entry. Both come in the same shape.
 
 ```json
 {
@@ -22,8 +22,11 @@ expression evaluated on each entry. Both come in the same shape:
 }
 ```
 
-`total_items` is how many entries matched before `$filter`, `size` is how many entries the response holds. In a
-full read the two counts come after `_embedded` instead, see below.
+`total_items` is how many entries matched before `$filter`. `size` is how many entries the response holds. In a
+full read the two counts come after `_embedded`, see below.
+
+The response has the content type the client asked for in `Accept`, for a page and a full read alike. A client that
+asks for `application/hal+json` gets that back, and one that asks for nothing gets `application/json`.
 
 ## A page
 
@@ -31,7 +34,7 @@ One query reads `size + 1` entries through the `created_at_id` index, so every p
 extra entry says whether there is a `next`. A `cursor` in the link lets the next page start where this one ended
 instead of skipping `offset` entries. The page's back-links come from one lookup of the relation edges that point
 at the page's identifiers. Which relations get a back-link is listed in [RELATION_RULES.md](../RELATION_RULES.md). The page is built
-in memory and returned as a body, which is fine: it is never bigger than `size`.
+in memory and returned as a body, which is fine since it is never bigger than `size`.
 
 ## A full read
 
@@ -64,35 +67,44 @@ sequenceDiagram
 
 The body goes out as `Transfer-Encoding: chunked`, since its length is not known when it starts. `total_items` is
 counted as the entries come off the cursor and `size` as they are written, so both are exact and both close the
-body, after `_links`. A page has them before `_embedded`; the order of fields in a JSON object carries no meaning,
+body, after `_links`. A page has them before `_embedded`. The order of fields in a JSON object carries no meaning,
 and an exact count is worth more than the same order.
 
 ### When something goes wrong
 
 The writer reads the first batch, adds its back-links and runs the filter before it writes a byte. So the usual
-failures still get a proper status:
+failures still get a proper status.
 
 | Failure                                                   | Status             |
 |-----------------------------------------------------------|--------------------|
 | `$filter` with bad syntax, or one that fails to evaluate  | 400                |
 | Missing `x-org-id`                                        | 400                |
+| An `Accept` header we cannot serve                        | 406                |
 | Not allowed by the token or OPA                           | 401 or 403         |
 | Mongo unreachable, cursor cannot open, first batch fails  | 500                |
 
-Once the first batch is written the status is `200` and on the wire. If a later batch fails, say Mongo goes away
-halfway, the status cannot change. The writer stops where it is. The `_entries` array is never closed, `_links`,
-`total_items` and `size` never come, and nothing is appended, so the body does not parse as JSON. A client cannot
-take it for a complete answer. Tomcat finishes the chunked encoding, so the client's read succeeds; the body is what
-gives the failure away. The writer logs it at error level and counts it in `fint.client.list.stream.aborted`. The gauge
+A later batch that fails also gets a `500` as long as nothing has left the pod. That is the case while the entries
+written so far fit in the response buffer, for example with a `$filter` that matches few of them.
+
+Once the first bytes are sent the status is `200` and cannot change. If a batch fails after that, say Mongo goes
+away halfway, the writer stops and the client-api drops the connection without ending the response. The client's
+HTTP library reports that as a network error, the same as any broken connection. A client must treat it as a failed
+read and read again.
+
+The proxy in front has to pass the dropped connection on to the client. Traefik 2.11.62 and 3.6 do. Traefik 2.11.2
+does not. It ends the response normally, so the client gets a `200` with a body that is cut off. The `_entries`
+array is never closed and `total_items` and `size` never come, so that body does not parse as JSON and cannot be
+taken for a complete answer.
+
+The writer logs the failure at error level and counts it in `fint.client.list.stream.aborted`. The gauge
 `fint.client.list.stream.active` shows how many full reads are in flight.
 
 A client that disconnects mid-read is not a failure. It is logged at debug and nothing is counted.
 
 ### Why it is built this way
 
-Until October 2026 a full read loaded the whole collection, converted every entry, fetched every relation edge of the
-type and, with OPA on, copied the whole response into a tree before Jackson wrote the first byte. A full read of
-200,000 entries held one to two gigabytes of heap for its duration. The pod has one replica, a 4 Gi limit and exits
-on OutOfMemoryError, so one oversized full read, or two at once, took the org's API down. Forcing clients to page would
-have fixed it, but FINT clients pull the whole collection by default and that contract could not change. Streaming keeps the
-contract and the response shape and makes memory per request a function of the batch, not the collection.
+A full read built in memory holds every converted entry until the body is written, and with OPA on a second copy of
+them as a tree. For 200,000 entries that is one to two gigabytes of heap. The pod has one replica, a 4 Gi limit and
+exits on OutOfMemoryError, so one oversized full read, or two at once, can take the org's API down. FINT clients
+pull the whole collection by default, so they cannot be made to page. Streaming keeps the response shape and makes
+memory per request depend on the batch and not on the collection.
