@@ -97,8 +97,8 @@ fun createFintResourcesResponse(
 }
 
 /**
- * The `self` link of a read without paging: the plain resource URL, with `sinceTimeStamp` added
- * when the request had one.
+ * The `self` link of a read without paging. It is the plain resource URL, with `sinceTimeStamp`
+ * added when the request had one.
  */
 fun fullReadSelfLink(
     baseUrl: String,

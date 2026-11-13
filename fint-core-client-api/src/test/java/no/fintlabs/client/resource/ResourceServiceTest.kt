@@ -541,8 +541,10 @@ class ResourceServiceTest {
 
         val stream = resourceService.streamResources(resourceCoordinate, 0, null, null)
 
+        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
         verify(exactly = 0) { relationEdgeStore.findByTargets(any(), any(), any()) }
         stream.batches().next()
+        verify(exactly = 1) { resourceStore.streamAll(null, 500, collectionName) }
         verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
     }
 
@@ -551,13 +553,20 @@ class ResourceServiceTest {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
         var closed = false
         every { resourceStore.streamAll(null, 500, collectionName) } returns
-            java.util.stream.Stream
-                .empty<ResourceEntry>()
-                .onClose { closed = true }
+            listOf(resourceEntry("A")).stream().onClose { closed = true }
 
-        resourceService.streamResources(resourceCoordinate, 0, null, null).close()
+        val stream = resourceService.streamResources(resourceCoordinate, 0, null, null)
+        stream.batches().next()
+        stream.close()
 
         assertEquals(true, closed)
+    }
+
+    @Test
+    fun `closing a stream that was never read opens no cursor`() {
+        resourceService.streamResources(resourceCoordinate, 0, null, null).close()
+
+        verify(exactly = 0) { resourceStore.streamAll(any(), any(), any()) }
     }
 
     @Test

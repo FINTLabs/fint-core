@@ -4,6 +4,7 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
+import no.fintlabs.client.resource.dto.createFintResourcesResponse
 import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
@@ -15,6 +16,8 @@ import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.BDDMockito.given
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
@@ -28,8 +31,9 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.bean.override.mockito.MockitoBean
-import tools.jackson.core.JacksonException
 import tools.jackson.databind.json.JsonMapper
+import java.io.IOException
+import java.net.Socket
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -40,7 +44,7 @@ import kotlin.test.assertTrue
 
 /**
  * A full read through a real Tomcat. The service is mocked so the batches can be shaped and made to
- * fail at a chosen point; the controller, the writer and the exception handler are real. Each
+ * fail at a chosen point. The controller, the writer and the Tomcat configuration are real. Each
  * batch is bigger than Tomcat's 8 KB output buffer, so the status is on the wire before the
  * second batch is read.
  */
@@ -145,47 +149,138 @@ class ResourceStreamIT {
         assertEquals(500, response.statusCode())
     }
 
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "",
+            "*/*",
+            "application/json",
+            "application/hal+json",
+            "application/hal+json, application/json;q=0.5",
+            "application/*",
+            "text/html, application/xhtml+xml, */*;q=0.8",
+            "application/xml",
+        ],
+    )
+    fun `a full read answers an Accept header with the status and content type a page does`(accept: String) {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willAnswer { streamOf(batches(1)) }
+        given(resourceService.getResources(coordinate, 1, 0, 0, null))
+            .willReturn(
+                createFintResourcesResponse(baseUrl, "utdanning/vurdering/elevfravar", batch(0).take(1), 0, 1, 1),
+            )
+
+        val fullRead = get(path, accept)
+        val page = get("$path?size=1", accept)
+
+        assertEquals(page.statusCode(), fullRead.statusCode())
+        assertEquals(page.headers().firstValue("Content-Type"), fullRead.headers().firstValue("Content-Type"))
+    }
+
+    @Test
+    fun `a client that asks for HAL gets the full read labelled as HAL`() {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches(1)))
+
+        val response = get(path, "application/hal+json")
+
+        assertEquals(200, response.statusCode())
+        assertEquals("application/hal+json", response.headers().firstValue("Content-Type").orElse(null))
+        assertEquals(BATCH, mapper.readTree(response.body()).get("size").asInt())
+    }
+
+    @Test
+    fun `an Accept header we cannot serve is a 406 and nothing is read`() {
+        var read = false
+        val untouched =
+            sequence {
+                read = true
+                yield(batch(0))
+            }
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(untouched))
+
+        val response = get(path, "application/xml")
+
+        assertEquals(406, response.statusCode())
+        assertFalse(read, "the cursor is only opened when the writer asks for the first batch")
+    }
+
     /**
-     * The status is already sent when a later batch fails, so the client sees 200. What it must
-     * never see is a body that parses as a complete answer: the entries array is never closed,
-     * `total_items` and `size` never come, and no error document is appended. On the wire Tomcat finishes the
-     * chunked encoding after the exception, so the client's read succeeds and the body is what
-     * gives the failure away. This test pins that down; if Tomcat ever drops the connection
-     * instead, the read throws and this test will say so.
+     * Nothing has left Tomcat's buffer when the second batch fails, so the failure can still be
+     * answered with a status.
      */
     @Test
-    fun `a failure on a later batch leaves a body that does not parse, with nothing appended`() {
+    fun `a failure on a later batch before anything was sent is a 500`() {
         val batches =
             sequence {
-                yield(batch(0))
+                yield(batch(0).take(1))
                 error("mongo gone")
             }
         given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches))
 
         val response = get(path)
 
-        assertEquals(200, response.statusCode())
-        val body = response.body()
-        assertTrue(
-            body.startsWith("""{"offset":0,"_embedded":{"_entries":["""),
-            "the body starts as a full read",
-        )
-        assertFalse(body.contains("total_items") || body.contains("\"size\""), "the counts are never written")
-        assertFalse(body.contains("detail") || body.contains("Stream aborted"), "no error document is appended")
-        assertThrows<JacksonException>("the body must not parse as a complete value") {
-            mapper.readValue(body, Map::class.java)
-        }
+        assertEquals(500, response.statusCode())
+        assertFalse(response.body().contains("EF-0-0"), "what was buffered is thrown away")
     }
 
-    private fun get(path: String): HttpResponse<String> =
-        client.send(
-            HttpRequest
-                .newBuilder(URI.create("http://localhost:$port$path"))
-                .header("x-org-id", "fintlabs.no")
-                .GET()
-                .build(),
-            HttpResponse.BodyHandlers.ofString(),
+    /**
+     * The status is already sent when a later batch fails, so it cannot be changed. The
+     * connection is dropped instead, which the client's HTTP library reports as a failed read.
+     */
+    @Test
+    fun `a failure after the first bytes were sent is a network error for the client`() {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(failingAfterFirstBatch()))
+
+        assertThrows<IOException> { get(path) }
+    }
+
+    /**
+     * The same failure seen on the wire. Tomcat sends what was written and closes the connection
+     * without the empty chunk that ends a chunked body, so the response is incomplete by the rules
+     * of HTTP and not only because its JSON is cut off.
+     */
+    @Test
+    fun `a failure after the first bytes were sent closes the connection without the last chunk`() {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(failingAfterFirstBatch()))
+
+        val raw =
+            Socket("localhost", port).use { socket ->
+                socket.soTimeout = 10_000
+                socket.getOutputStream().write(
+                    "GET $path HTTP/1.1\r\nHost: localhost:$port\r\nx-org-id: fintlabs.no\r\n\r\n".toByteArray(),
+                )
+                // Reads until Tomcat closes. A kept-alive connection would run into the timeout
+                socket.getInputStream().readAllBytes().decodeToString()
+            }
+
+        assertTrue(raw.startsWith("HTTP/1.1 200"), "the status was sent before the failure")
+        assertTrue(raw.contains("Transfer-Encoding: chunked"))
+        assertTrue(
+            raw.contains("""{"offset":0,"_embedded":{"_entries":["""),
+            "what was written before the failure went out",
         )
+        assertFalse(raw.endsWith("0\r\n\r\n"), "the chunk that ends the body never comes")
+        assertFalse(raw.contains("total_items"), "the counts are never written")
+        assertFalse(raw.contains("mongo gone") || raw.contains("\"status\":500"), "no error document is appended")
+    }
+
+    private fun failingAfterFirstBatch(): Sequence<List<Elevfravar>> =
+        sequence {
+            yield(batch(0))
+            error("mongo gone")
+        }
+
+    private fun get(
+        path: String,
+        accept: String = "",
+    ): HttpResponse<String> {
+        val request =
+            HttpRequest
+                .newBuilder(
+                    URI.create("http://localhost:$port$path"),
+                ).header("x-org-id", "fintlabs.no")
+        if (accept.isNotEmpty()) request.header("Accept", accept)
+        return client.send(request.GET().build(), HttpResponse.BodyHandlers.ofString())
+    }
 
     private fun streamOf(batches: Sequence<List<Elevfravar>>) =
         ResourceStream(

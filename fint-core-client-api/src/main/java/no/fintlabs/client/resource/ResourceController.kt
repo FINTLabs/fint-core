@@ -1,7 +1,5 @@
 package no.fintlabs.client.resource
 
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import no.fint.antlr.FintFilterService
 import no.fint.antlr.exception.FilterException
 import no.fint.antlr.exception.InvalidSyntaxException
@@ -11,7 +9,6 @@ import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.EndpointsConstants
-import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.LastUpdatedResponse
 import no.fintlabs.client.resource.dto.ResourceCacheSizeResponse
 import no.fintlabs.client.resource.event.LiveReadService
@@ -50,15 +47,13 @@ import java.net.URI
  * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
  * the result once the adapter has answered.
  *
- * A list read with a `size` is one page, returned as a body. A list read without one is a full read
- * of the whole collection, which [ResourceStreamWriter] streams to the response while it is read,
- * so the handler returns nothing for it.
+ * A list read with a `size` is one page. A list read without one is a full read of the whole
+ * collection, returned as a [ResourceStream] that [ResourceStreamWriter] writes while it is read.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
 class ResourceController(
     private val resourceService: ResourceService,
-    private val streamWriter: ResourceStreamWriter,
     private val requestFintEventService: RequestFintEventService,
     private val requestStatusService: RequestStatusService,
     private val liveReadService: LiveReadService,
@@ -79,9 +74,7 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): ResponseEntity<FintResourcesResponse>? {
+    ): ResponseEntity<*> {
         // Checked once for every read path, so a bad filter is refused before the live read asks
         // the gateway and before any store is read.
         validateFilter(filter)
@@ -89,13 +82,11 @@ class ResourceController(
 
         liveReadService
             .startByFilter(coordinate, filter, ListOptions(size, offset, sinceTimeStamp, cursor), prefer)
-            ?.let { return it.toLiveReadAccepted(domainName, packageName) }
+            ?.let { return it.toLiveReadAccepted<Any>(domainName, packageName) }
 
         if (size <= 0) {
-            resourceService
-                .streamResources(coordinate, offset, sinceTimeStamp, filter)
-                .use { streamWriter.write(it, request, response) }
-            return null // We write response in streamWriter.write
+            // Returned as a body like a page is, so Spring picks the content type the client asked for
+            return ResponseEntity.ok(resourceService.streamResources(coordinate, offset, sinceTimeStamp, filter))
         }
 
         return resourceService
@@ -115,9 +106,7 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): ResponseEntity<FintResourcesResponse>? =
+    ): ResponseEntity<*> =
         getResource(
             domainName,
             packageName,
@@ -129,8 +118,6 @@ class ResourceController(
             orgId,
             cursor,
             prefer,
-            request,
-            response,
         )
 
     @GetMapping(EndpointsConstants.BY_ID)

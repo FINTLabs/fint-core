@@ -4,14 +4,20 @@ import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
+import no.fintlabs.client.config.AbortedResponseValve
 import no.fintlabs.client.security.OpaFieldPruner
 import no.fintlabs.client.security.opa.OpaDecision
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatus
+import org.springframework.http.HttpInputMessage
+import org.springframework.http.HttpOutputMessage
 import org.springframework.http.MediaType
+import org.springframework.http.converter.AbstractHttpMessageConverter
+import org.springframework.http.server.ServletServerHttpResponse
 import org.springframework.stereotype.Component
+import org.springframework.util.StreamUtils
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.exc.JacksonIOException
 import tools.jackson.databind.json.JsonMapper
@@ -20,36 +26,20 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Writes a [ResourceStream] straight to the response while it is read, so the body leaves the pod
- * batch by batch and the collection is never held in memory. The JSON holds the same fields as a
- * [no.fintlabs.client.resource.dto.FintResourcesResponse]: `offset`, then the entries, the self
- * link, `total_items` and `size`. `total_items` is how many entries the cursor yielded before
- * `$filter` and `size` how many were written, so both are only known at the end and close the
- * body. That puts `total_items` later in the JSON than the page response has it, which no
- * parser cares about, and makes it exact, which clients do care about.
+ * Writes a [ResourceStream] to the response while it is read, so the collection is never held in
+ * memory. It is a message converter, so Spring picks the content type from the `Accept` header
+ * the same way it does for a page.
  *
- * The first batch is read, enriched and filtered before anything is written. So a filter that
- * fails to evaluate, a store that cannot be reached or a cursor that cannot open still answers
- * with an error status. Once the first bytes are out the status is fixed. A failure after that
- * stops the body where it is: the entries array is never closed and `total_items` and `size`
- * never come, so the body does not parse and no client can take it for a complete answer. Such a
- * failure is logged, counted in `fint.client.list.stream.aborted` and rethrown as
- * [ResourceStreamAbortedException], which the exception handler lets pass without writing.
- *
- * A client that goes away mid-read is not a failure. The write fails with an I/O error, which
- * is logged at debug and swallowed.
- *
- * Each resource renders through the response mapper, exactly as a returned body does. When OPA
- * is enabled, each resource is pruned to what the request's decision allows before it is
- * written, since a streamed body never passes the response advice. The write runs on the
- * request thread so the mapper can read the request's component.
+ * The body has the fields of a [no.fintlabs.client.resource.dto.FintResourcesResponse].
+ * `total_items` and `size` are only known when the cursor is empty, so they come after the entries.
  */
 @Component
 class ResourceStreamWriter(
     private val jsonMapper: JsonMapper,
     private val pruner: OpaFieldPruner,
     meterRegistry: MeterRegistry,
-) {
+    // The types the JSON converter writes, so a full read and a page negotiate the same content type
+) : AbstractHttpMessageConverter<ResourceStream>(MediaType.APPLICATION_JSON, MediaType("application", "*+json")) {
     private val active = AtomicInteger()
     private val aborted: Counter = meterRegistry.counter(ABORTED_METRIC)
 
@@ -57,50 +47,79 @@ class ResourceStreamWriter(
         Gauge.builder(ACTIVE_METRIC, active) { it.get().toDouble() }.register(meterRegistry)
     }
 
-    fun write(
-        stream: ResourceStream,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ) {
-        val allowed = if (pruner.enabled) pruner.allowedFor(request) else null
-        val batches = stream.batches()
-        // Pulled before the status is committed, so a store or filter failure still gets an error status.
-        val first = if (batches.hasNext()) batches.next() else ResourceBatch(0, emptyList())
+    override fun supports(clazz: Class<*>): Boolean = ResourceStream::class.java.isAssignableFrom(clazz)
 
+    override fun canRead(
+        clazz: Class<*>,
+        mediaType: MediaType?,
+    ): Boolean = false
+
+    override fun readInternal(
+        clazz: Class<out ResourceStream>,
+        inputMessage: HttpInputMessage,
+    ): ResourceStream = throw UnsupportedOperationException("A resource stream is only written")
+
+    /** Runs on the request thread, since the mapper reads the request to build self links. */
+    override fun writeInternal(
+        stream: ResourceStream,
+        outputMessage: HttpOutputMessage,
+    ) {
+        val request = (RequestContextHolder.currentRequestAttributes() as ServletRequestAttributes).request
         active.incrementAndGet()
         val tally = Tally()
         try {
-            response.status = HttpStatus.OK.value()
-            response.contentType = MediaType.APPLICATION_JSON_VALUE
-            jsonMapper
-                .createGenerator(response.outputStream)
-                .writeBody(stream, sequenceOf(first) + batches.asSequence(), allowed, tally)
-        } catch (e: Exception) {
-            when (e) {
-                is IOException, is JacksonIOException -> {
-                    logger.debug(
-                        "Client left during a full read of {} after {} entries: {}",
-                        request.requestURI,
-                        tally.written,
-                        e.message,
-                    )
-                }
+            // OpaFieldAdvice passes a stream on untouched, so each resource is pruned here
+            val allowed = if (pruner.enabled) pruner.allowedFor(request) else null
+            val batches = stream.batches()
+            // Read before anything is written, so a store or filter failure still gets an error status
+            val first = if (batches.hasNext()) batches.next() else ResourceBatch(0, emptyList())
+            try {
+                jsonMapper
+                    // The generator is closed to flush it. The response itself is closed by Spring
+                    .createGenerator(StreamUtils.nonClosing(outputMessage.body))
+                    .writeBody(stream, sequenceOf(first) + batches.asSequence(), allowed, tally)
+            } catch (e: Exception) {
+                when {
+                    // The client went away, which is not a failure of the read
+                    e is IOException || e is JacksonIOException -> {
+                        log.debug(
+                            "Client left during a full read of {} after {} entries: {}",
+                            request.requestURI,
+                            tally.written,
+                            e.message,
+                        )
+                    }
 
-                else -> {
-                    aborted.increment()
-                    logger.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, e)
-                    throw ResourceStreamAbortedException(tally.written, e)
+                    // Nothing has left the pod yet, so the failure can still get an error status
+                    !outputMessage.isCommitted() -> {
+                        throw e
+                    }
+
+                    else -> {
+                        abort(request, tally, e)
+                    }
                 }
             }
         } finally {
+            stream.close()
             active.decrementAndGet()
         }
     }
 
     /**
-     * The whole body, start to end. The generator is closed only once everything is written: closing
-     * it after a failure would close the open array and object too, and leave a body that parses.
+     * The status is already sent, so the failure cannot be reported with one. The request is marked
+     * for [AbortedResponseValve], which drops the connection so the client gets a network error.
      */
+    private fun abort(
+        request: HttpServletRequest,
+        tally: Tally,
+        cause: Exception,
+    ) {
+        aborted.increment()
+        log.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, cause)
+        request.setAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE, cause)
+    }
+
     private fun JsonGenerator.writeBody(
         stream: ResourceStream,
         batches: Sequence<ResourceBatch>,
@@ -124,6 +143,7 @@ class ResourceStreamWriter(
         writeNumberProperty("total_items", tally.read)
         writeNumberProperty("size", tally.written)
         writeEndObject()
+        // Closed only on success. Closing after a failure would end the open array and object and leave a body that parses
         close()
     }
 
@@ -136,7 +156,10 @@ class ResourceStreamWriter(
         writeTree(jsonMapper.valueToTree<ObjectNode>(resource).also { pruner.pruneResource(it, allowed) })
     }
 
-    /** How far the body got: entries read off the cursor before `$filter`, and entries written. */
+    private fun HttpOutputMessage.isCommitted(): Boolean =
+        (this as? ServletServerHttpResponse)?.servletResponse?.isCommitted ?: true
+
+    /** Entries read off the cursor before `$filter`, and entries written. */
     private class Tally {
         var read = 0L
         var written = 0
@@ -145,6 +168,6 @@ class ResourceStreamWriter(
     companion object {
         const val ACTIVE_METRIC = "fint.client.list.stream.active"
         const val ABORTED_METRIC = "fint.client.list.stream.aborted"
-        private val logger = LoggerFactory.getLogger(ResourceStreamWriter::class.java)
+        private val log = LoggerFactory.getLogger(ResourceStreamWriter::class.java)
     }
 }

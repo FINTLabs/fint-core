@@ -22,6 +22,7 @@ import no.novari.core.shared.store.SinceFilter
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.stream.Stream
 import kotlin.streams.asSequence
 
 @Service
@@ -36,12 +37,9 @@ class ResourceService(
     private val filterService: FintFilterService = ODataFilterService()
 
     /**
-     * Opens a full read: every resource of the collection, or every one modified at or after a
-     * positive [sinceTimeStamp]. Nothing is read yet. Its batches read the store a batch
-     * at a time, through a cursor, and each batch gets its back-links and the [filter] before it
-     * is handed on. The caller closes the stream to release the cursor.
-     *
-     * The resource type is checked here, so an unknown one fails before any of it is written.
+     * A full read of every resource of the collection, or of every one modified at or after a
+     * positive [sinceTimeStamp]. Nothing is read until the first batch is asked for. The caller
+     * closes the stream to release the cursor.
      */
     fun streamResources(
         resourceCoordinate: ResourceCoordinate,
@@ -49,22 +47,27 @@ class ResourceService(
         sinceTimeStamp: Long?,
         filter: String?,
     ): ResourceStream {
+        // Resolved first, so an unknown resource type fails before anything is read or written
         val resourceClass = resourceCoordinate.toResourceClass()
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
         val batchSize = consumerConfiguration.listRead.batchSize
 
-        val entries = resourceStore.streamAll(since, batchSize, collectionName)
+        var cursor: Stream<ResourceEntry>? = null
         val batches =
-            entries
-                .asSequence()
-                .chunked(batchSize)
-                .map { batch ->
-                    ResourceBatch(
-                        batch.size,
-                        batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
-                    )
-                }
+            sequence {
+                // Opened with the first batch. A request that is refused before that, such as one
+                // with an Accept header we cannot serve, never opens a cursor that nobody closes
+                val entries = resourceStore.streamAll(since, batchSize, collectionName).also { cursor = it }
+                yieldAll(
+                    entries.asSequence().chunked(batchSize).map { batch ->
+                        ResourceBatch(
+                            batch.size,
+                            batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
+                        )
+                    },
+                )
+            }
 
         return ResourceStream(
             offset = offset,
@@ -75,7 +78,7 @@ class ResourceService(
                     since.toTimeStamp(),
                 ),
             batches = batches,
-            onClose = entries::close,
+            onClose = { cursor?.close() },
         )
     }
 

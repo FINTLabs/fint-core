@@ -25,4 +25,8 @@ open class TomcatConfiguration {
                 },
             )
         }
+
+    @Bean
+    open fun dropAbortedResponses(): WebServerFactoryCustomizer<TomcatServletWebServerFactory> =
+        WebServerFactoryCustomizer { factory -> factory.addContextValves(AbortedResponseValve()) }
 }
