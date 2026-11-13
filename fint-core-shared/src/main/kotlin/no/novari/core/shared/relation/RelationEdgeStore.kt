@@ -184,13 +184,37 @@ class RelationEdgeStore(
         collectionName: String,
         targetType: String,
         identifiers: Collection<IdentifierRef>,
+    ): List<BackLinkEdge> = findByTargets(collectionName, targetType, identifiers, sourceIdValues = null)
+
+    /**
+     * The same lookup as [findByTargets], but only the edges whose source has one of
+     * [sourceIdValues] come back. The database still reads every edge of the targets.
+     */
+    fun findByTargetsAndSourceValues(
+        collectionName: String,
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+        sourceIdValues: Collection<String>,
+    ): List<BackLinkEdge> {
+        if (sourceIdValues.isEmpty()) return emptyList()
+
+        return findByTargets(collectionName, targetType, identifiers, sourceIdValues.distinct())
+    }
+
+    private fun findByTargets(
+        collectionName: String,
+        targetType: String,
+        identifiers: Collection<IdentifierRef>,
+        sourceIdValues: List<String>?,
     ): List<BackLinkEdge> =
         identifiers
             .groupBy({ it.field }, { it.value })
             .flatMap { (field, values) ->
                 // An edge has one target field and one target value, so no edge comes back from two queries
                 values.distinct().chunked(TARGET_VALUES_PER_QUERY).flatMap { chunk ->
-                    template.find(targetQuery(targetType, field, chunk), StoredBackLinkEdge::class.java, collectionName)
+                    val query = targetQuery(targetType, field, chunk)
+                    if (sourceIdValues != null) query.addCriteria(Criteria.where("sourceIdValue").`in`(sourceIdValues))
+                    template.find(query, StoredBackLinkEdge::class.java, collectionName)
                 }
             }
 
