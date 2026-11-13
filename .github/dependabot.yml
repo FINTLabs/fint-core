@@ -12,12 +12,7 @@ updates:
     registries:
       - fintlabs
     target-branch: "develop"
-    directories:
-      - "/"
-      - "/buildSrc"
-      - "/fint-core-client-api"
-      - "/fint-core-adapter-gateway"
-      - "/fint-core-shared"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
