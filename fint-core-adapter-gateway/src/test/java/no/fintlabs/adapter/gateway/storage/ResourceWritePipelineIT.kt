@@ -5,9 +5,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import no.fintlabs.adapter.gateway.mongoTestContainer
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.relation.RelationEdge
+import no.novari.core.shared.relation.RelationEdgeChanges
 import no.novari.core.shared.relation.RelationEdgeStore
 import no.novari.core.shared.relation.RelationEdgeWrite
-import no.novari.core.shared.relation.RelationEdgeWriteResult
 import no.novari.core.shared.store.FintResourceBsonConverter
 import no.novari.core.shared.store.ResourceEntry
 import no.novari.core.shared.store.ResourceStore
@@ -83,7 +83,7 @@ class ResourceWritePipelineIT {
     fun `when the edge write fails the resource write is rolled back with it`() {
         val failingEdgeStore =
             object : RelationEdgeStore(mongoTemplate) {
-                override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult =
+                override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeChanges =
                     throw IllegalStateException("edge write failed")
             }
         val failingPipeline = ResourceWritePipeline(resourceStore, failingEdgeStore, transactions, meterRegistry)
@@ -191,7 +191,7 @@ class ResourceWritePipelineIT {
     ) : RelationEdgeStore(template) {
         val batches = mutableListOf<List<RelationEdgeWrite>>()
 
-        override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult {
+        override fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeChanges {
             batches += writes
             return super.applyAll(writes)
         }

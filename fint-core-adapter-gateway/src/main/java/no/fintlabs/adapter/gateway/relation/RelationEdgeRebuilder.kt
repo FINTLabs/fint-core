@@ -78,7 +78,7 @@ class RelationEdgeRebuilder(
         return RebuiltBatch(
             size = entries.size,
             last = entries.lastOrNull()?.toAnchor(),
-            rebuild = RelationEdgeRebuild(entries.size.toLong(), written.written, written.removed),
+            rebuild = RelationEdgeRebuild(entries.size.toLong(), written.written, written.deleted),
         )
     }
 
