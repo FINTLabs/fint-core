@@ -4,10 +4,12 @@ import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.JacksonConfiguration
 import no.fintlabs.client.config.TomcatConfiguration
-import no.fintlabs.client.resource.dto.createFintResourcesResponse
+import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.event.LiveReadService
 import no.fintlabs.client.resource.event.RequestFintEventService
 import no.fintlabs.client.resource.event.RequestStatusService
+import no.fintlabs.client.security.OpaFieldPruner
+import no.fintlabs.client.security.opa.OpaProperties
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.felles.kompleksedatatyper.Identifikator
 import no.novari.fint.core.model.utdanning.vurdering.Elevfravar
@@ -52,9 +54,11 @@ class ResourceFilterIT {
             OAuth2ResourceServerWebSecurityAutoConfiguration::class,
         ],
     )
-    @EnableConfigurationProperties(ConsumerConfiguration::class)
+    @EnableConfigurationProperties(ConsumerConfiguration::class, OpaProperties::class)
     @Import(
         ResourceController::class,
+        ResourceStreamWriter::class,
+        OpaFieldPruner::class,
         ResourceExceptionHandler::class,
         JacksonConfiguration::class,
         TomcatConfiguration::class,
@@ -111,9 +115,9 @@ class ResourceFilterIT {
 
     @Test
     fun `GET with dollar-filter forwards the decoded expression to the service`() {
-        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi eq 'B'"))
+        given(resourceService.streamResources(resourceCoordinate, 0, 0, "systemId/identifikatorverdi eq 'B'"))
             .willReturn(
-                createFintResourcesResponse(baseUrl, "utdanning/vurdering/elevfravar", listOf(elevfravarB), 0, 0, 1),
+                ResourceStream.of(0, fullReadSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
             )
 
         val response = get("/utdanning/vurdering/elevfravar?\$filter=systemId%2Fidentifikatorverdi%20eq%20%27B%27")
@@ -130,9 +134,9 @@ class ResourceFilterIT {
 
     @Test
     fun `POST dollar-query forwards the raw body as the filter expression`() {
-        given(resourceService.getResources(resourceCoordinate, 0, 0, 0, "systemId/identifikatorverdi eq 'B'"))
+        given(resourceService.streamResources(resourceCoordinate, 0, 0, "systemId/identifikatorverdi eq 'B'"))
             .willReturn(
-                createFintResourcesResponse(baseUrl, "utdanning/vurdering/elevfravar", listOf(elevfravarB), 0, 0, 1),
+                ResourceStream.of(0, fullReadSelfLink(baseUrl, "utdanning/vurdering/elevfravar"), listOf(elevfravarB)),
             )
 
         val response = postQuery("/utdanning/vurdering/elevfravar/\$query", "systemId/identifikatorverdi eq 'B'")
