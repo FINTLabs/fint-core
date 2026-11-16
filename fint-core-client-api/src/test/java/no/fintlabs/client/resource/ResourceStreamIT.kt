@@ -19,6 +19,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.BDDMockito.given
+import org.mockito.BDDMockito.then
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -188,19 +189,11 @@ class ResourceStreamIT {
     }
 
     @Test
-    fun `an Accept header we cannot serve is a 406 and nothing is read`() {
-        var read = false
-        val untouched =
-            sequence {
-                read = true
-                yield(batch(0))
-            }
-        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(untouched))
-
+    fun `an Accept header we cannot serve is a 406 and the service is not called`() {
         val response = get(path, "application/xml")
 
         assertEquals(406, response.statusCode())
-        assertFalse(read, "the cursor is only opened when the writer asks for the first batch")
+        then(resourceService).shouldHaveNoInteractions()
     }
 
     /**

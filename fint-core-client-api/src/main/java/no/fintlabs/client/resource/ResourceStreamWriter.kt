@@ -39,7 +39,10 @@ class ResourceStreamWriter(
     private val pruner: OpaFieldPruner,
     meterRegistry: MeterRegistry,
     // The types the JSON converter writes, so a full read and a page negotiate the same content type
-) : AbstractHttpMessageConverter<ResourceStream>(MediaType.APPLICATION_JSON, MediaType("application", "*+json")) {
+) : AbstractHttpMessageConverter<ResourceStream>(
+        MediaType.APPLICATION_JSON,
+        MediaType.parseMediaType(APPLICATION_ANY_JSON_VALUE),
+    ) {
     private val active = AtomicInteger()
     private val aborted: Counter = meterRegistry.counter(ABORTED_METRIC)
 
@@ -168,6 +171,8 @@ class ResourceStreamWriter(
     }
 
     companion object {
+        /** Every JSON type with a suffix, such as `application/hal+json`. */
+        const val APPLICATION_ANY_JSON_VALUE = "application/*+json"
         const val ACTIVE_METRIC = "fint.client.list.stream.active"
         const val ABORTED_METRIC = "fint.client.list.stream.aborted"
         private val log = LoggerFactory.getLogger(ResourceStreamWriter::class.java)

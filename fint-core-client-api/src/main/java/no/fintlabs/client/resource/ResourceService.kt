@@ -22,7 +22,6 @@ import no.novari.core.shared.store.SinceFilter
 import no.novari.fint.core.model.FintResource
 import org.springframework.stereotype.Service
 import java.time.Instant
-import java.util.stream.Stream
 import kotlin.streams.asSequence
 
 @Service
@@ -52,19 +51,17 @@ class ResourceService(
         val collectionName = resourceCoordinate.toCollectionName()
         val batchSize = consumerConfiguration.listRead.batchSize
 
-        var cursor: Stream<ResourceEntry>? = null
+        val entries = resourceStore.streamAll(since, batchSize, collectionName)
         val batches =
-            sequence {
-                val entries = resourceStore.streamAll(since, batchSize, collectionName).also { cursor = it }
-                yieldAll(
-                    entries.asSequence().chunked(batchSize).map { batch ->
-                        ResourceBatch(
-                            batch.size,
-                            batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
-                        )
-                    },
-                )
-            }
+            entries
+                .asSequence()
+                .chunked(batchSize)
+                .map { batch ->
+                    ResourceBatch(
+                        batch.size,
+                        batch.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.FULL),
+                    )
+                }
 
         return ResourceStream(
             offset = offset,
@@ -75,7 +72,7 @@ class ResourceService(
                     since.toTimeStamp(),
                 ),
             batches = batches,
-            onClose = { cursor?.close() },
+            onClose = entries::close,
         )
     }
 

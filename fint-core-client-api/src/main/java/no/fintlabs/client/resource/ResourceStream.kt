@@ -6,7 +6,7 @@ import no.novari.fint.core.model.FintResource
 /**
  * A list read without `size` that is read while it is written. Each batch is fetched from the
  * store, given its back-links and filtered when it is asked for, not before. The store cursor
- * opens with the first batch and stays open until [close] is called.
+ * stays open until [close] is called.
  */
 class ResourceStream(
     val offset: Long,

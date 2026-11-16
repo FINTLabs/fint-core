@@ -29,6 +29,7 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -62,7 +63,8 @@ class ResourceController(
 ) {
     private val filterService: FintFilterService = ODataFilterService()
 
-    @GetMapping
+    // Spring refuses any other Accept with a 406 before it calls this method, so no read starts for it
+    @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE])
     fun getResource(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
