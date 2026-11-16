@@ -13,7 +13,7 @@ repositories {
 
 dependencies {
     // When spring boot is updated from 4.1.1, review and remove "extra" pins and constraints!
-    implementation("org.springframework.boot:spring-boot-gradle-plugin:4.1.1")
+    implementation("org.springframework.boot:spring-boot-gradle-plugin:4.1.2")
     implementation("io.spring.gradle:dependency-management-plugin:1.1.7")
 
     implementation("org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:2.4.10")
