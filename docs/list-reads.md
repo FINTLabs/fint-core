@@ -96,10 +96,9 @@ does not. It ends the response normally, so the client gets a `200` with a body 
 array is never closed and `total_items` and `size` never come, so that body does not parse as JSON and cannot be
 taken for a complete answer.
 
-The writer logs the failure at error level and counts it in `fint.client.list.stream.aborted`. The gauge
-`fint.client.list.stream.active` shows how many full reads are in flight.
+The writer logs the failure at error level.
 
-A client that disconnects mid-read is not a failure. It is logged at debug and nothing is counted.
+A client that disconnects mid-read is not a failure. It is logged at debug.
 
 ### Why it is built this way
 

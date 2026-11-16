@@ -1,6 +1,5 @@
 package no.fintlabs.client.resource
 
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import jakarta.servlet.ServletOutputStream
 import jakarta.servlet.WriteListener
 import jakarta.servlet.http.HttpServletResponse
@@ -45,8 +44,7 @@ class ResourceStreamWriterTest {
     private val resourceUri = "utdanning/vurdering/elevfravar"
     private val mapper = FintJson.responseMapper(baseUrl)
     private val opaProperties = OpaProperties()
-    private val registry = SimpleMeterRegistry()
-    private val writer = ResourceStreamWriter(mapper, OpaFieldPruner(opaProperties), registry)
+    private val writer = ResourceStreamWriter(mapper, OpaFieldPruner(opaProperties))
 
     private val request = MockHttpServletRequest("GET", "/utdanning/vurdering/elevfravar")
 
@@ -164,7 +162,6 @@ class ResourceStreamWriterTest {
 
         assertFalse(response.isCommitted)
         assertEquals(0, response.contentAsByteArray.size)
-        assertEquals(0.0, registry.counter(ResourceStreamWriter.ABORTED_METRIC).count())
         assertNull(request.getAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE))
         assertTrue(closed, "the cursor is released on a failure too")
     }
@@ -184,7 +181,6 @@ class ResourceStreamWriterTest {
         }
 
         assertFalse(response.isCommitted)
-        assertEquals(0.0, registry.counter(ResourceStreamWriter.ABORTED_METRIC).count())
         assertNull(request.getAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE))
     }
 
@@ -202,7 +198,6 @@ class ResourceStreamWriterTest {
 
         assertTrue(response.isCommitted, "the first batch is past the buffers, so the status is out")
         assertSame(failure, request.getAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE))
-        assertEquals(1.0, registry.counter(ResourceStreamWriter.ABORTED_METRIC).count())
         val body = response.contentAsString
         assertFalse(body.contains("total_items") || body.contains("\"size\""), "the counts are never written")
         assertThrows<JacksonException>("the body must not parse as a complete value") {
@@ -229,26 +224,7 @@ class ResourceStreamWriterTest {
 
         write(streamOf(listOf(listOf(elevfravar("EF-1")))), gone)
 
-        assertEquals(0.0, registry.counter(ResourceStreamWriter.ABORTED_METRIC).count())
         assertNull(request.getAttribute(AbortedResponseValve.ABORTED_ATTRIBUTE))
-    }
-
-    @Test
-    fun `the in-flight gauge is back to zero after a full read, finished or aborted`() {
-        write(streamOf(listOf(listOf(elevfravar("EF-1")))))
-        write(
-            ResourceStream(
-                0,
-                fullReadSelfLink(baseUrl, resourceUri),
-                sequence {
-                    yield(bigBatch())
-                    error("x")
-                },
-            ),
-        )
-
-        assertEquals(1.0, registry.counter(ResourceStreamWriter.ABORTED_METRIC).count())
-        assertEquals(0.0, registry.get(ResourceStreamWriter.ACTIVE_METRIC).gauge().value())
     }
 
     @Test

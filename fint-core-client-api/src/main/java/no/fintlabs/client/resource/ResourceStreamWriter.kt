@@ -1,8 +1,5 @@
 package no.fintlabs.client.resource
 
-import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.Gauge
-import io.micrometer.core.instrument.MeterRegistry
 import jakarta.servlet.http.HttpServletRequest
 import no.fintlabs.client.config.AbortedResponseValve
 import no.fintlabs.client.security.OpaFieldPruner
@@ -23,7 +20,6 @@ import tools.jackson.core.exc.JacksonIOException
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.ObjectNode
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Writes a [ResourceStream] to the response while it is read, so the collection is never held in
@@ -37,19 +33,11 @@ import java.util.concurrent.atomic.AtomicInteger
 class ResourceStreamWriter(
     private val jsonMapper: JsonMapper,
     private val pruner: OpaFieldPruner,
-    meterRegistry: MeterRegistry,
     // The types the JSON converter writes, so a full read and a page negotiate the same content type
 ) : AbstractHttpMessageConverter<ResourceStream>(
         MediaType.APPLICATION_JSON,
         MediaType.parseMediaType(APPLICATION_ANY_JSON_VALUE),
     ) {
-    private val active = AtomicInteger()
-    private val aborted: Counter = meterRegistry.counter(ABORTED_METRIC)
-
-    init {
-        Gauge.builder(ACTIVE_METRIC, active) { it.get().toDouble() }.register(meterRegistry)
-    }
-
     override fun supports(clazz: Class<*>): Boolean = ResourceStream::class.java.isAssignableFrom(clazz)
 
     override fun canRead(
@@ -68,7 +56,6 @@ class ResourceStreamWriter(
         outputMessage: HttpOutputMessage,
     ) {
         val request = (RequestContextHolder.currentRequestAttributes() as ServletRequestAttributes).request
-        active.incrementAndGet()
         val tally = Tally()
         try {
             // OpaFieldAdvice passes a stream on untouched, so each resource is pruned here
@@ -105,7 +92,6 @@ class ResourceStreamWriter(
             }
         } finally {
             stream.close()
-            active.decrementAndGet()
         }
     }
 
@@ -118,7 +104,6 @@ class ResourceStreamWriter(
         tally: Tally,
         cause: Exception,
     ) {
-        aborted.increment()
         log.error("Full read of {} aborted after {} entries", request.requestURI, tally.written, cause)
         // Not thrown. Tomcat drops the connection for a thrown failure too, but Spring Boot first
         // appends its error document to the body
@@ -173,8 +158,6 @@ class ResourceStreamWriter(
     companion object {
         /** Every JSON type with a suffix, such as `application/hal+json`. */
         const val APPLICATION_ANY_JSON_VALUE = "application/*+json"
-        const val ACTIVE_METRIC = "fint.client.list.stream.active"
-        const val ABORTED_METRIC = "fint.client.list.stream.aborted"
         private val log = LoggerFactory.getLogger(ResourceStreamWriter::class.java)
     }
 }
