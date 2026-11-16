@@ -196,6 +196,24 @@ class ResourceStreamIT {
         then(resourceService).shouldHaveNoInteractions()
     }
 
+    @Test
+    fun `an Accept header we cannot serve is a 406 through OData too`() {
+        val response =
+            client.send(
+                HttpRequest
+                    .newBuilder(URI.create("http://localhost:$port$path/\$query"))
+                    .header("x-org-id", "fintlabs.no")
+                    .header("Content-Type", "text/plain")
+                    .header("Accept", "application/xml")
+                    .POST(HttpRequest.BodyPublishers.ofString("systemId/identifikatorverdi ne 'x'"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+
+        assertEquals(406, response.statusCode())
+        then(resourceService).shouldHaveNoInteractions()
+    }
+
     /**
      * Nothing has left Tomcat's buffer when the second batch fails, so the failure can still be
      * answered with a status.

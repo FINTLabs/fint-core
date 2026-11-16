@@ -95,7 +95,10 @@ class ResourceController(
             .let { ResponseEntity.ok(it) }
     }
 
-    @PostMapping("/\$query")
+    @PostMapping(
+        "/\$query",
+        produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE],
+    )
     fun getResourceByOdataFilter(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
