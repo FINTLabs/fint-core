@@ -87,7 +87,6 @@ class ResourceController(
             ?.let { return it.toLiveReadAccepted<Any>(domainName, packageName) }
 
         if (size <= 0) {
-            // Returned as a body like a page is, so Spring picks the content type the client asked for
             return ResponseEntity.ok(resourceService.streamResources(coordinate, offset, sinceTimeStamp, filter))
         }
 
