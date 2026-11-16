@@ -121,7 +121,7 @@ class ResourceStreamIT {
     }
 
     @Test
-    fun `a full read through dollar-query streams the same way`() {
+    fun `a full read through OData streams the same way`() {
         given(resourceService.streamResources(coordinate, 0, 0, "systemId/identifikatorverdi ne 'x'"))
             .willReturn(streamOf(batches(2)))
 
