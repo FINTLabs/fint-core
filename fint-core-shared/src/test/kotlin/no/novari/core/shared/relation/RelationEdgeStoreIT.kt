@@ -38,7 +38,54 @@ class RelationEdgeStoreIT {
 
         assertThat(edges().map { it.targetIdValue }).containsExactly("PARENT-A")
         assertThat(edges().single().createdAt).isEqualTo(createdAt)
-        assertThat(result).isEqualTo(RelationEdgeWriteResult(written = 0, removed = 1))
+        assertThat(result.added).isEmpty()
+        assertThat(result.removed.map { it.targetIdValue }).containsExactly("PARENT-B")
+    }
+
+    @Test
+    fun `a replace says which edges it added`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+
+        val result = store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B")))
+
+        assertThat(result.added.map { it.targetIdValue }).containsExactly("PARENT-B")
+        assertThat(result.removed).isEmpty()
+    }
+
+    @Test
+    fun `a replace with the edges already stored changes nothing`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B")))
+
+        val result = store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B")))
+
+        assertThat(result).isEqualTo(RelationEdgeChanges.NONE)
+        assertThat(edges()).hasSize(2)
+    }
+
+    @Test
+    fun `an edge stored again with another source identifier is both removed and added`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A")))
+        val renamed = edge("CHILD", "PARENT-A").copy(sourceIdField = "systemid", sourceIdValue = "S-1")
+
+        val result = store.applyAll(listOf(RelationEdgeWrite.Replace(COLLECTION, PERSON, "CHILD", listOf(renamed))))
+
+        assertThat(result.removed.map { it.sourceIdValue }).containsExactly("CHILD")
+        assertThat(result.added.map { it.sourceIdValue }).containsExactly("S-1")
+        assertThat(result.written).isEqualTo(1)
+        assertThat(result.deleted).isEqualTo(0)
+        assertThat(edges().map { it.sourceIdValue }).containsExactly("S-1")
+    }
+
+    @Test
+    fun `a delete removes every edge the source owned and says which`() {
+        store.applyAll(listOf(replace("CHILD", "PARENT-A", "PARENT-B"), replace("SIBLING", "PARENT-A")))
+
+        val result = store.applyAll(listOf(RelationEdgeWrite.Delete(COLLECTION, PERSON, "CHILD")))
+
+        assertThat(result.added).isEmpty()
+        assertThat(result.removed.map { it.targetIdValue }).containsExactlyInAnyOrder("PARENT-A", "PARENT-B")
+        assertThat(result.deleted).isEqualTo(2)
+        assertThat(edges().map { it.sourceId }).containsExactly("SIBLING")
     }
 
     @Test

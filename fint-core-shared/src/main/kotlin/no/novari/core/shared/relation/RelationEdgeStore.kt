@@ -17,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 sealed interface RelationEdgeWrite {
     val collectionName: String
+    val sourceType: String
+    val sourceId: String
 
     /**
      * Makes [edges] the whole set of edges the source owns. Each edge is inserted, or updated when
@@ -24,8 +26,8 @@ sealed interface RelationEdgeWrite {
      */
     data class Replace(
         override val collectionName: String,
-        val sourceType: String,
-        val sourceId: String,
+        override val sourceType: String,
+        override val sourceId: String,
         val edges: List<RelationEdge>,
     ) : RelationEdgeWrite {
         companion object {
@@ -46,20 +48,37 @@ sealed interface RelationEdgeWrite {
 
     data class Delete(
         override val collectionName: String,
-        val sourceType: String,
-        val sourceId: String,
+        override val sourceType: String,
+        override val sourceId: String,
     ) : RelationEdgeWrite
 }
 
-data class RelationEdgeWriteResult(
-    val written: Long,
-    val removed: Long,
+/**
+ * The edges a batch of writes [added] and [removed]. These are the back-links their targets got
+ * and lost. An edge that is stored again with another source identifier or back-relation is in
+ * both, the stored one as removed and the new one as added.
+ */
+data class RelationEdgeChanges(
+    val added: List<RelationEdge>,
+    val removed: List<RelationEdge>,
 ) {
-    operator fun plus(other: RelationEdgeWriteResult): RelationEdgeWriteResult =
-        RelationEdgeWriteResult(written + other.written, removed + other.removed)
+    /** How many edges were stored, counting new ones and ones stored again with other content. */
+    val written: Long get() = added.size.toLong()
+
+    /** The removed edges that are gone for good, so without the ones stored again with other content. */
+    val gone: List<RelationEdge>
+        get() {
+            val storedAgain = added.mapTo(HashSet()) { it.id }
+            return removed.filterNot { it.id in storedAgain }
+        }
+
+    /** How many edges are gone for good. */
+    val deleted: Long get() = gone.size.toLong()
+
+    operator fun plus(other: RelationEdgeChanges): RelationEdgeChanges = RelationEdgeChanges(added + other.added, removed + other.removed)
 
     companion object {
-        val NONE = RelationEdgeWriteResult(0, 0)
+        val NONE = RelationEdgeChanges(emptyList(), emptyList())
     }
 }
 
@@ -72,14 +91,16 @@ class RelationEdgeStore(
     fun prepareCollection(collectionName: String) = ensureIndexes(collectionName)
 
     /**
-     * Applies a batch of edge writes. Edges are stored in one collection per organization,
-     * and one batch can hold writes for more than one organization, so the batch is grouped
-     * by collection and each group is written on its own. Writing the same edge again,
-     * for example after a re-sync, changes nothing: `createdAt` is only set on the first insert,
-     * which is why edges are updated field by field instead of replaced as whole documents.
+     * Applies a batch of edge writes and says which edges it added and removed. Edges are stored
+     * in one collection per organization, and one batch can hold writes for more than one
+     * organization, so the batch is grouped by collection and each group is written on its own.
+     *
+     * The store reads the edges the sources own first and only writes what differs, so writing
+     * the same edges again, for example after a re-sync, writes nothing. The answer is only
+     * trustworthy inside a Mongo transaction.
      */
-    fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeWriteResult {
-        if (writes.isEmpty()) return RelationEdgeWriteResult.NONE
+    fun applyAll(writes: List<RelationEdgeWrite>): RelationEdgeChanges {
+        if (writes.isEmpty()) return RelationEdgeChanges.NONE
 
         val timestamp = Instant.now()
 
@@ -87,39 +108,60 @@ class RelationEdgeStore(
             .groupBy { it.collectionName }
             .map { (collectionName, collectionWrites) ->
                 ensureIndexes(collectionName)
-
-                val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
-                collectionWrites.forEach { bulkOps.add(it, timestamp) }
-                val result = bulkOps.execute()
-                RelationEdgeWriteResult(
-                    written = (result.upserts.size + result.modifiedCount).toLong(),
-                    removed = result.deletedCount.toLong(),
-                )
-            }.fold(RelationEdgeWriteResult.NONE, RelationEdgeWriteResult::plus)
+                applyToCollection(collectionName, collectionWrites, timestamp)
+            }.fold(RelationEdgeChanges.NONE, RelationEdgeChanges::plus)
     }
 
-    private fun BulkOperations.add(
-        write: RelationEdgeWrite,
+    private fun applyToCollection(
+        collectionName: String,
+        writes: List<RelationEdgeWrite>,
         timestamp: Instant,
-    ): BulkOperations =
-        when (write) {
-            is RelationEdgeWrite.Replace -> {
-                write.edges.forEach { upsert(byId(it.id), it.toUpdate(timestamp)) }
-                remove(edgesOfSourceExcept(write.sourceType, write.sourceId, write.edges.map { it.id }))
-            }
+    ): RelationEdgeChanges {
+        val changes = changesOf(writes, storedEdgesOf(collectionName, writes))
+        if (changes.added.isEmpty() && changes.removed.isEmpty()) return changes
 
-            is RelationEdgeWrite.Delete -> {
-                remove(
-                    Query.query(
-                        Criteria
-                            .where("sourceType")
-                            .`is`(write.sourceType)
-                            .and("sourceId")
-                            .`is`(write.sourceId),
-                    ),
-                )
-            }
-        }
+        val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
+        // An upsert and not an insert, since an edge stored again with other content is already there.
+        changes.added.forEach { bulkOps.upsert(byId(it.id), it.toUpdate(timestamp)) }
+        val gone = changes.gone.map { it.id }
+        if (gone.isNotEmpty()) bulkOps.remove(Query.query(Criteria.where("_id").`in`(gone)))
+        bulkOps.execute()
+
+        return changes
+    }
+
+    private fun storedEdgesOf(
+        collectionName: String,
+        writes: List<RelationEdgeWrite>,
+    ): List<RelationEdge> =
+        writes
+            .groupBy({ it.sourceType }, { it.sourceId })
+            .flatMap { (sourceType, sourceIds) -> findBySources(collectionName, sourceType, sourceIds) }
+
+    /** What [writes] change when [stored] holds every edge their sources own now. */
+    private fun changesOf(
+        writes: List<RelationEdgeWrite>,
+        stored: List<RelationEdge>,
+    ): RelationEdgeChanges {
+        val storedById = stored.associateBy { it.id }
+        // A delete wants no edges, so every edge its source owns ends up as removed.
+        val wantedById = writes.filterIsInstance<RelationEdgeWrite.Replace>().flatMap { it.edges }.associateBy { it.id }
+
+        return RelationEdgeChanges(
+            added = wantedById.values.filterNot { it.rendersSameLinkAs(storedById[it.id]) },
+            removed = stored.filterNot { it.rendersSameLinkAs(wantedById[it.id]) },
+        )
+    }
+
+    /**
+     * True when [stored] gives its target the same back-link as this edge. Source and target are
+     * part of the edge id, so two edges with the same id can only differ in what the link looks like.
+     */
+    private fun RelationEdge.rendersSameLinkAs(stored: RelationEdge?): Boolean =
+        stored != null &&
+            sourceIdField == stored.sourceIdField &&
+            sourceIdValue == stored.sourceIdValue &&
+            inverseName == stored.inverseName
 
     private fun RelationEdge.toUpdate(timestamp: Instant): UpdateDefinition =
         Update()
@@ -222,28 +264,6 @@ class RelationEdgeStore(
 
     private fun byId(id: String): Query = Query.query(Criteria.where("_id").`is`(id))
 
-    /**
-     * Every edge the source owns except the ones in [keptIds]. When a source is saved, [keptIds]
-     * are the edges its current links produce, so this finds the edges an earlier version left
-     * behind: links the source no longer has. Removing them stops those links from still showing
-     * up as back-links on their targets. With no [keptIds], it finds every edge the source owns.
-     */
-    private fun edgesOfSourceExcept(
-        sourceType: String,
-        sourceId: String,
-        keptIds: Collection<String>,
-    ): Query =
-        Query.query(
-            Criteria
-                .where("sourceType")
-                .`is`(sourceType)
-                .and("sourceId")
-                .`is`(sourceId)
-                .and("_id")
-                .nin(keptIds),
-        )
-
-    // One field per query instead of an $or across fields, so each query is one bounded range in target_lookup
     private fun targetQuery(
         targetType: String,
         field: String,
