@@ -392,23 +392,35 @@ class ResourceStoreIT {
     }
 
     @Test
-    fun `findByIdentifier reads through the identifiers index`() {
+    fun `findByIdentifier tells apart two resources that hold the same value under different identifiers`() {
+        store.saveAll(
+            listOf(
+                Save("by-system-id", collection, elev("E-2"), base),
+                Save("by-number", collection, elevWithNumber("2"), base),
+            ),
+        )
+
+        assertThat(store.findByIdentifier("systemid", "E-2", collection)?.id).isEqualTo("by-system-id")
+        assertThat(store.findByIdentifier("elevnummer", "E-2", collection)?.id).isEqualTo("by-number")
+    }
+
+    @Test
+    fun `findByIdentifier finds nothing in a collection that does not exist`() {
+        assertThat(store.findByIdentifier("systemid", "1", "no_such_collection")).isNull()
+    }
+
+    @Test
+    fun `findByIdentifier reads through the identifier values index`() {
         store.saveAll((1..50).map { Save("$it", collection, elevWithNumber("$it"), base) })
 
-        val filter =
-            Document(
-                "identifiers",
-                Document("\$elemMatch", Document("field", "elevnummer").append("value", "E-25")),
-            )
         val plan =
             template
                 .getCollection(collection)
-                .find(filter)
-                .limit(1)
+                .find(Document("identifiers.value", "E-25"))
                 .explain()
                 .toJson()
 
-        assertThat(plan).contains("\"indexName\": \"${ResourceStore.IDENTIFIERS_INDEX}\"")
+        assertThat(plan).contains("\"indexName\": \"${ResourceStore.IDENTIFIER_VALUES_INDEX}\"")
     }
 
     private fun storedHash(id: String): Binary? =
