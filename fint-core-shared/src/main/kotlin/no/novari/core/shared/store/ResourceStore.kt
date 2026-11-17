@@ -68,12 +68,36 @@ class ResourceStore(
         val latestById = writes.sortedBy { it.timestamp }.associateBy { it.resourceId }
         val stored = findFingerprints(latestById.keys, collectionName)
         val planned = latestById.values.map { it.plan(stored[it.resourceId]) }
+        // Read before the write below replaces them.
+        val identifiersBefore =
+            findIdentifiers(planned.filter { it.result == WriteResult.CHANGED }.map { it.write.resourceId }, collectionName)
 
         val bulkOps = template.bulkOps(BulkOperations.BulkMode.UNORDERED, collectionName)
         val sent = planned.count { bulkOps.add(it) }
         if (sent > 0) bulkOps.execute()
 
-        return planned.map { WriteOutcome(it.write, it.result) }
+        return planned.map { WriteOutcome(it.write, it.result, it.changesIdentifiers(identifiersBefore)) }
+    }
+
+    private fun findIdentifiers(
+        ids: Collection<String>,
+        collectionName: String,
+    ): Map<String, Set<IdentifierRef>> {
+        if (ids.isEmpty()) return emptyMap()
+
+        val query = Query.query(Criteria.where("_id").`in`(ids))
+        query.fields().include("identifiers")
+
+        return template
+            .find(query, ResourceIdentifiers::class.java, collectionName)
+            .associate { it.id to it.identifiers.toSet() }
+    }
+
+    private fun PlannedWrite.changesIdentifiers(before: Map<String, Set<IdentifierRef>>): Boolean {
+        val save = write as? Save ?: return false
+        if (result != WriteResult.CHANGED) return false
+
+        return save.resource.toIdentifierRefs().toSet() != before[save.resourceId]
     }
 
     private fun findFingerprints(
