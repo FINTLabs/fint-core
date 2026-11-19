@@ -157,7 +157,7 @@ class ResourceStreamWriter(
 
     companion object {
         /** Every JSON type with a suffix, such as `application/hal+json`. */
-        const val APPLICATION_ANY_JSON_VALUE = "application/*+json"
+        private const val APPLICATION_ANY_JSON_VALUE = "application/*+json"
         private val log = LoggerFactory.getLogger(ResourceStreamWriter::class.java)
     }
 }

@@ -29,7 +29,6 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -63,8 +62,8 @@ class ResourceController(
 ) {
     private val filterService: FintFilterService = ODataFilterService()
 
-    // Spring refuses any other Accept with a 406 before it calls this method, so no read starts for it
-    @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE])
+    // Spring refuses any other type or charset with a 406 before it calls this method, so no read starts for it
+    @GetMapping(produces = [APPLICATION_JSON_UTF8_VALUE, APPLICATION_HAL_JSON_UTF8_VALUE])
     fun getResource(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
@@ -95,10 +94,7 @@ class ResourceController(
             .let { ResponseEntity.ok(it) }
     }
 
-    @PostMapping(
-        "/\$query",
-        produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE],
-    )
+    @PostMapping("/\$query", produces = [APPLICATION_JSON_UTF8_VALUE, APPLICATION_HAL_JSON_UTF8_VALUE])
     fun getResourceByOdataFilter(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
@@ -264,6 +260,10 @@ class ResourceController(
     ): URI = URI.create("${consumerConfig.baseUrl}/$domainName/$packageName/$resourceName/status/$corrId".lowercase())
 
     companion object {
+        // JSON is always UTF-8, so the content type of a list read says so
+        const val APPLICATION_JSON_UTF8_VALUE = "application/json;charset=UTF-8"
+        const val APPLICATION_HAL_JSON_UTF8_VALUE = "application/hal+json;charset=UTF-8"
+
         private val logger = LoggerFactory.getLogger(ResourceController::class.java)
     }
 }
