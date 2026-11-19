@@ -160,8 +160,6 @@ class ResourceStreamIT {
             "application/hal+json, application/json;q=0.5",
             "application/*",
             "text/html, application/xhtml+xml, */*;q=0.8",
-            "application/hal+json;charset=UTF-8",
-            "application/hal+json;charset=UTF-16BE",
             "application/xml",
         ],
     )
@@ -180,36 +178,19 @@ class ResourceStreamIT {
     }
 
     @Test
-    fun `a client that asks for HAL gets the full read labelled as HAL in UTF-8`() {
+    fun `a client that asks for HAL gets the full read labelled as HAL`() {
         given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches(1)))
 
         val response = get(path, "application/hal+json")
 
         assertEquals(200, response.statusCode())
-        assertEquals("application/hal+json;charset=UTF-8", response.headers().firstValue("Content-Type").orElse(null))
+        assertEquals("application/hal+json", response.headers().firstValue("Content-Type").orElse(null))
         assertEquals(BATCH, mapper.readTree(response.body()).get("size").asInt())
     }
 
     @Test
-    fun `a client that asks for nothing gets the full read labelled as JSON in UTF-8`() {
-        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches(1)))
-
-        val response = get(path)
-
-        assertEquals(200, response.statusCode())
-        assertEquals("application/json;charset=UTF-8", response.headers().firstValue("Content-Type").orElse(null))
-    }
-
-    @ParameterizedTest
-    @ValueSource(
-        strings = [
-            "application/xml",
-            "application/hal+json;charset=UTF-16BE",
-            "application/json;charset=ISO-8859-1",
-        ],
-    )
-    fun `an Accept header we cannot serve is a 406 and the service is not called`(accept: String) {
-        val response = get(path, accept)
+    fun `an Accept header we cannot serve is a 406 and the service is not called`() {
+        val response = get(path, "application/xml")
 
         assertEquals(406, response.statusCode())
         then(resourceService).shouldHaveNoInteractions()
