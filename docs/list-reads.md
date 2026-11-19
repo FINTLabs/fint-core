@@ -26,7 +26,8 @@ expression evaluated on each entry. Both come in the same shape.
 full read the two counts come after `_embedded`, see below.
 
 The response has the content type the client asked for in `Accept`, for a page and a full read alike. A client that
-asks for `application/hal+json` gets that back, and one that asks for nothing gets `application/json`.
+asks for `application/hal+json` gets that back, and one that asks for nothing gets `application/json`. A full read
+is always UTF-8. When the client names another charset, the content type names UTF-8.
 
 ## A page
 

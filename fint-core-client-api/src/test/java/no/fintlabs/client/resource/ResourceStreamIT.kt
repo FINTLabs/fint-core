@@ -188,6 +188,18 @@ class ResourceStreamIT {
         assertEquals(BATCH, mapper.readTree(response.body()).get("size").asInt())
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = ["UTF-16BE", "ISO-8859-1"])
+    fun `a full read is labelled as UTF-8 when the client asks for another charset`(charset: String) {
+        given(resourceService.streamResources(coordinate, 0, 0, null)).willReturn(streamOf(batches(1)))
+
+        val response = get(path, "application/hal+json;charset=$charset")
+
+        assertEquals(200, response.statusCode())
+        assertEquals("application/hal+json;charset=UTF-8", response.headers().firstValue("Content-Type").orElse(null))
+        assertEquals(BATCH, mapper.readTree(response.body()).get("size").asInt())
+    }
+
     @Test
     fun `an Accept header we cannot serve is a 406 and the service is not called`() {
         val response = get(path, "application/xml")

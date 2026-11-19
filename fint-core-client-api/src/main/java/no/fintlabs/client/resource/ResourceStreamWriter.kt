@@ -64,6 +64,11 @@ class ResourceStreamWriter(
             // Read before anything is written, so a store or filter failure still gets an error status
             val first = if (batches.hasNext()) batches.next() else ResourceBatch(0, emptyList())
             try {
+                // The generator always writes UTF-8, so the content type must not name another charset
+                val type = outputMessage.headers.contentType
+                if (type?.charset != null && type.charset != Charsets.UTF_8) {
+                    outputMessage.headers.contentType = MediaType(type, Charsets.UTF_8)
+                }
                 jsonMapper
                     // The generator is closed to flush it. The response itself is closed by Spring
                     .createGenerator(StreamUtils.nonClosing(outputMessage.body))
