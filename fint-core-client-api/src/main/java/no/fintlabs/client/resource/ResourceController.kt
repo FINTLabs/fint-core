@@ -9,7 +9,6 @@ import no.fintlabs.adapter.operation.OperationType
 import no.fintlabs.client.admin.StatsService
 import no.fintlabs.client.config.ConsumerConfiguration
 import no.fintlabs.client.config.EndpointsConstants
-import no.fintlabs.client.resource.dto.FintResourcesResponse
 import no.fintlabs.client.resource.dto.LastUpdatedResponse
 import no.fintlabs.client.resource.dto.ResourceCacheSizeResponse
 import no.fintlabs.client.resource.event.LiveReadService
@@ -30,6 +29,7 @@ import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.fint.core.model.FintResource
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -47,6 +47,9 @@ import java.net.URI
  * can go live. Then the read is sent to the adapter as an event, and the client gets `202`
  * with the status location and `Preference-Applied: respond-async`. The status endpoint serves
  * the result once the adapter has answered.
+ *
+ * A list read with a `size` is one page. A list read without one is a full read of the whole
+ * collection, returned as a [ResourceStream] that [ResourceStreamWriter] writes while it is read.
  */
 @RestController
 @RequestMapping("{domainName}/{packageName}/{resourceName}")
@@ -60,7 +63,8 @@ class ResourceController(
 ) {
     private val filterService: FintFilterService = ODataFilterService()
 
-    @GetMapping
+    // Spring refuses any other Accept with a 406 before it calls this method, so no read starts for it
+    @GetMapping(produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE])
     fun getResource(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
@@ -72,7 +76,7 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-    ): ResponseEntity<FintResourcesResponse> {
+    ): ResponseEntity<*> {
         // Checked once for every read path, so a bad filter is refused before the live read asks
         // the gateway and before any store is read.
         validateFilter(filter)
@@ -80,14 +84,21 @@ class ResourceController(
 
         liveReadService
             .startByFilter(coordinate, filter, ListOptions(size, offset, sinceTimeStamp, cursor), prefer)
-            ?.let { return it.toLiveReadAccepted(domainName, packageName) }
+            ?.let { return it.toLiveReadAccepted<Any>(domainName, packageName) }
+
+        if (size <= 0) {
+            return ResponseEntity.ok(resourceService.streamResources(coordinate, offset, sinceTimeStamp, filter))
+        }
 
         return resourceService
             .getResources(coordinate, size, offset, sinceTimeStamp, filter, cursor)
             .let { ResponseEntity.ok(it) }
     }
 
-    @PostMapping("/\$query")
+    @PostMapping(
+        "/\$query",
+        produces = [MediaType.APPLICATION_JSON_VALUE, ResourceStreamWriter.APPLICATION_ANY_JSON_VALUE],
+    )
     fun getResourceByOdataFilter(
         @PathVariable domainName: String,
         @PathVariable packageName: String,
@@ -99,7 +110,7 @@ class ResourceController(
         @RequestHeader("x-org-id") orgId: String,
         @RequestParam(required = false) cursor: PageCursor?,
         @RequestHeader(name = PreferHeader.NAME, required = false) prefer: String?,
-    ): ResponseEntity<FintResourcesResponse> =
+    ): ResponseEntity<*> =
         getResource(
             domainName,
             packageName,
