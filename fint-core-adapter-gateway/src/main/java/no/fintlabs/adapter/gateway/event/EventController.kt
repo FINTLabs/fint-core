@@ -2,6 +2,7 @@ package no.fintlabs.adapter.gateway.event
 
 import jakarta.validation.Valid
 import no.fintlabs.adapter.gateway.ProviderApi
+import no.fintlabs.adapter.gateway.config.EventLongPollProperties
 import no.fintlabs.adapter.gateway.event.request.RequestEventService
 import no.fintlabs.adapter.gateway.event.response.ResponseEventService
 import no.fintlabs.adapter.gateway.security.EventAuthorization
@@ -9,6 +10,7 @@ import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.novari.core.shared.event.EventScope
 import no.novari.resource.server.authentication.CorePrincipal
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 
 @RestController
 @RequestMapping("${ProviderApi.PREFIX}/event")
@@ -25,10 +29,15 @@ class EventController(
     private val requestEventService: RequestEventService,
     private val responseEventService: ResponseEventService,
     private val eventAuthorization: EventAuthorization,
+    private val longPoll: EventLongPollProperties,
 ) {
     /**
      * Pending events for every org in the token, filtered by the path. No role or contract is
      * needed; a contract narrows a listed resource and opens READ.
+     *
+     * With [wait], an empty answer is held until an event arrives. Its value is the seconds the
+     * adapter is prepared to wait, and an empty value gives the default. Without it the answer
+     * is immediate.
      */
     @GetMapping("{domainName}", "{domainName}/{packageName}", "{domainName}/{packageName}/{resourceName}")
     fun getEvents(
@@ -37,10 +46,21 @@ class EventController(
         @PathVariable(required = false) packageName: String?,
         @PathVariable(required = false) resourceName: String?,
         @RequestParam(defaultValue = "0") size: Int,
+        @RequestParam(required = false) wait: String?,
     ): ResponseEntity<List<RequestFintEvent>> {
         val orgs = eventAuthorization.readableOrgs(corePrincipal)
         val scope = EventScope.of(domainName, packageName, resourceName)
-        return ResponseEntity.ok(requestEventService.getEvents(orgs, scope, size))
+        return ResponseEntity.ok(requestEventService.getEvents(orgs, scope, size, waitOf(wait)))
+    }
+
+    private fun waitOf(wait: String?): Duration {
+        if (wait == null) return Duration.ZERO
+        if (wait.isBlank()) return longPoll.defaultWait
+
+        val seconds =
+            wait.trim().toLongOrNull()
+                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "wait must be a whole number of seconds")
+        return Duration.ofSeconds(seconds)
     }
 
     /**
