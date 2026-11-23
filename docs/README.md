@@ -8,7 +8,7 @@ Short explanations of how fint-core works, with diagrams. Each page stands on it
 | [routing.md](routing.md) | Which backend Traefik sends each client request to, per environment and org. |
 | [live-read.md](live-read.md) | How a client reads straight from the source system with `Prefer: respond-async`, which is a READ event. |
 | [list-reads.md](list-reads.md) | How a list read is served: a page when `size` is given, otherwise a full read streamed from a Mongo cursor in batches. |
-| [page-limits.md](page-limits.md) | A proposed default and maximum page size for each resource, with the estimated bytes of a page. |
+| [page-limits.md](page-limits.md) | A proposed page size for each resource and the bytes of that page, with and without the network gateway. |
 | [backwards-compatibility/](backwards-compatibility/README.md) | Where adapter-gateway treats an adapter differently from provider-gateway, and the PRDs for closing the gaps. |
 
 The diagrams are written in [Mermaid](https://mermaid.js.org/)
