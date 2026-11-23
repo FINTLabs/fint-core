@@ -17,9 +17,9 @@ A client request goes through a network gateway before it reaches the client-api
 We have seen that a large response body can arrive damaged when it goes through the gateway.
 The client then gets a body that is cut off or that it cannot parse.
 
-In our tests, pages of 1,000 entries of `utdanning/timeplan/undervisningsgruppemedlemskap` went through the gateway
-with a correct body. One such page is 0.50 MB. So we know that a page of 0.5 MB is safe.
-We do not know the largest safe size.
+Our tests show that the largest safe size is about 0.5 MB.
+A page of 1,000 entries of `utdanning/timeplan/undervisningsgruppemedlemskap` is 0.50 MB, and it went through the
+gateway with a correct body.
 
 ## With the network gateway
 
