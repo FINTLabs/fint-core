@@ -40,6 +40,8 @@ OKONOMI_SPLIT_ENVS="api"
 # Test orgs the client-api serves whole, apart from felles kodeverk. The header gate and the package
 # split do not apply to them.
 WHOLE_ORGS="novari.no"
+# Environments where arkiv stays on core 1 for every org, the whole orgs and the orgs with no overlay included.
+ARKIV_CORE1_ENVS="beta"
 
 V3=("" "x-fint-model-version: V3" "x-fint-model-version-override: V3" "x-fint-model-version-override: v3|x-fint-model-version: V4")
 V4=("x-fint-model-version: V4" "x-fint-model-version: v4" "x-fint-model-version-override: V4" "x-fint-model-version-override: V4|x-fint-model-version: V3")
@@ -87,12 +89,15 @@ while read -r env org host id enabled; do
   else
     echo "  skip  administrasjon, the overlay is disabled"
   fi
-  if [ $whole = 1 ]; then always client-api /arkiv/noark/ /profilbilde/; else always core1 /arkiv/noark/ /profilbilde/; fi
+  if [ $whole = 1 ] && ! has "$env" "$ARKIV_CORE1_ENVS"; then always client-api /arkiv/noark/; else always core1 /arkiv/noark/; fi
+  if [ $whole = 1 ]; then always client-api /profilbilde/; else always core1 /profilbilde/; fi
   # a sub-org follows its parent. In api (no shared catch-all) a look-alike org does not.
   check client-api "$host" /utdanning/utdanningsprogram/ "sub.$id" "x-fint-model-version: V4"
   if [ $gate_utdanning = 1 ]; then want=core1; else want=client-api; fi
   check "$want" "$host" /utdanning/utdanningsprogram/ "sub.$id"
   [ "$env" = api ] && check core1 "$host" /utdanning/utdanningsprogram/ "not$id" "x-fint-model-version: V4"
+  # the shared catch-all takes a look-alike org, but not its arkiv
+  has "$env" "$ARKIV_CORE1_ENVS" && check core1 "$host" /arkiv/noark/ "not$id"
 done < targets.txt
 
 echo
