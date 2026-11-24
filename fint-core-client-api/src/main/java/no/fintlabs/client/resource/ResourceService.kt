@@ -10,6 +10,7 @@ import no.fintlabs.client.resource.dto.fullReadSelfLink
 import no.fintlabs.client.resource.paging.PageCursor
 import no.fintlabs.client.resource.paging.PageCursorCodec
 import no.fintlabs.client.resource.paging.PageDirection
+import no.fintlabs.client.resource.paging.PageLimits
 import no.novari.core.shared.json.FintJson
 import no.novari.core.shared.model.ResourceCoordinate
 import no.novari.core.shared.model.toResourceClass
@@ -77,7 +78,8 @@ class ResourceService(
     }
 
     /**
-     * Serves one page of [size] entries. A positive [sinceTimeStamp] keeps only resources
+     * Serves one page of at most [size] entries. A [size] above the page limit of the resource
+     * gives a page of that limit, see [PageLimits]. A positive [sinceTimeStamp] keeps only resources
      * modified at or after it. A page with a [cursor] starts where the cursor points; without
      * one it skips [offset] entries. A read without a size is a full read, see [streamResources].
      */
@@ -91,13 +93,14 @@ class ResourceService(
     ): FintResourcesResponse {
         require(size > 0) { "A page needs a positive size, a read without one is a full read" }
 
+        val pageSize = minOf(size, PageLimits.maxSizeOf(resourceCoordinate))
         val since = sinceTimeStamp?.takeIf { it > 0 }?.let(Instant::ofEpochMilli)
         val collectionName = resourceCoordinate.toCollectionName()
         val resourceClass = resourceCoordinate.toResourceClass()
 
         val totalItems = resourceStore.count(since, collectionName)
         val page =
-            readPage(cursor, since?.let { SinceFilter(it, totalItems) }, size, offset, totalItems, collectionName)
+            readPage(cursor, since?.let { SinceFilter(it, totalItems) }, pageSize, offset, totalItems, collectionName)
         val resources = page.entries.toResponseResources(resourceCoordinate, resourceClass, filter, Lookup.PAGE)
 
         return createFintResourcesResponse(
@@ -105,7 +108,8 @@ class ResourceService(
             resourceUri = resourceCoordinate.toResourceUri(),
             entries = resources,
             offset = offset,
-            size = size,
+            // The size of this page and not the size in the request, so that the offsets in the links are right
+            size = pageSize,
             totalItems = totalItems.toInt(),
             sinceTimeStamp = since.toTimeStamp(),
             hasNext = page.hasNext,

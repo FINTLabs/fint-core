@@ -384,15 +384,74 @@ class ResourceServiceTest {
     }
 
     @Test
-    fun `an explicit page above 1000 still queries edges by identifier`() {
+    fun `a size above the page limit of the resource gives a page of the limit`() {
         val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
-        val entries = (1..1200).map { resourceEntry("r-$it", identifiers = listOf(IdentifierRef("systemid", "r-$it"))) }
-        every { resourceStore.findPage(null, 1201, 0, collectionName) } returns entries
+        every { resourceStore.findPage(null, 101, 0, collectionName) } returns (1..101).map { resourceEntry("r-$it") }
+        every { resourceStore.count(null, collectionName) } returns 5000
+
+        val result = resourceService.getResources(resourceCoordinate, 5000, 0, null, null)
+
+        assertEquals(100, result.size)
+        assertEquals("$BASE?offset=0&size=100", result.links["self"]?.single()?.href)
+        assertEquals(
+            "$BASE?offset=100&size=100",
+            result.links["next"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+    }
+
+    @Test
+    fun `a size equal to the page limit of the resource is kept`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        every { resourceStore.findPage(null, 101, 0, collectionName) } returns (1..100).map { resourceEntry("r-$it") }
+        every { resourceStore.count(null, collectionName) } returns 100
+
+        val result = resourceService.getResources(resourceCoordinate, 100, 0, null, null)
+
+        assertEquals(100, result.size)
+        assertEquals(setOf("self"), result.links.keys)
+    }
+
+    @Test
+    fun `a cursor page with a size above the page limit reads a page of the limit`() {
+        val collectionName = "fintlabs_no_utdanning_vurdering_elevfravar"
+        val cursor = PageCursor(PageDirection.AFTER, PageAnchor(Instant.ofEpochMilli(20), "B"))
+        every { resourceStore.count(null, collectionName) } returns 5000
+        every { resourceStore.findPageAfter(cursor.anchor, null, 101, collectionName) } returns
+            (1..101).map { resourceEntry("r-$it") }
+
+        val result = resourceService.getResources(resourceCoordinate, 5000, 100, null, null, cursor)
+
+        assertEquals(100, result.size)
+        assertEquals(
+            "$BASE?offset=200&size=100",
+            result.links["next"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+        assertEquals(
+            "$BASE?offset=0&size=100",
+            result.links["prev"]
+                ?.single()
+                ?.href
+                ?.substringBefore("&cursor="),
+        )
+    }
+
+    @Test
+    fun `a resource without a page limit of its own gets a page of 1000 entries at most`() {
+        val coordinate = ResourceCoordinate("fintlabs.no", "utdanning", "elev", "klassemedlemskap")
+        val collectionName = "fintlabs_no_utdanning_elev_klassemedlemskap"
+        every { resourceStore.findPage(null, 1001, 0, collectionName) } returns (1..1001).map { resourceEntry("r-$it") }
         every { resourceStore.count(null, collectionName) } returns 1200
 
-        resourceService.getResources(resourceCoordinate, 1200, 0, null, null)
+        val result = resourceService.getResources(coordinate, 1200, 0, null, null)
 
-        verify(exactly = 1) { relationEdgeStore.findByTargets(any(), any(), any()) }
+        assertEquals(1000, result.size)
+        assertEquals(setOf("self", "next"), result.links.keys)
     }
 
     @Test
