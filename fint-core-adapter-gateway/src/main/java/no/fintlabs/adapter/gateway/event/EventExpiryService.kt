@@ -1,7 +1,10 @@
 package no.fintlabs.adapter.gateway.event
 
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.response.ResponseFintEventProducer
+import no.fintlabs.adapter.gateway.register.ContractService
 import no.fintlabs.adapter.models.event.RequestFintEvent
 import no.fintlabs.adapter.models.event.ResponseFintEvent
 import no.fintlabs.adapter.operation.OperationType
@@ -38,6 +41,8 @@ class EventExpiryService(
     private val providerProperties: ProviderProperties,
     private val responseFintEventProducer: ResponseFintEventProducer,
     private val clock: Clock,
+    private val contractService: ContractService,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -56,8 +61,19 @@ class EventExpiryService(
         collectionName: String,
         now: Instant,
     ) {
+        val adaptersByEventType = mutableMapOf<EventTypeKey, Set<String>>()
         eventStore.findExpired(collectionName, now).forEach { request ->
             if (!eventStore.markExpired(request.corrId, collectionName, now)) return@forEach
+            val key =
+                EventTypeKey(
+                    request.orgId,
+                    request.domainName,
+                    request.packageName,
+                    request.resourceName,
+                    request.operationType,
+                )
+            val adapters = adaptersByEventType.getOrPut(key) { contractService.adaptersFor(request) }
+            recordUnanswered(request, adapters)
             if (request.operationType == OperationType.READ) {
                 logger.info("Read event {} expired.", request.corrId)
             } else {
@@ -66,6 +82,33 @@ class EventExpiryService(
             }
         }
     }
+
+    private fun recordUnanswered(
+        request: RequestFintEvent,
+        registeredAdapters: Set<String>,
+    ) {
+        val adapters = registeredAdapters.ifEmpty { setOf("unknown") }
+        val resource = "${request.domainName}.${request.packageName}.${request.resourceName}"
+
+        adapters.forEach { adapterId ->
+            Counter
+                .builder("fint.core.event.unanswered")
+                .tag("adapter", adapterId)
+                .tag("org", request.orgId)
+                .tag("resource", resource)
+                .tag("operation", request.operationType.name)
+                .register(meterRegistry)
+                .increment()
+        }
+    }
+
+    private data class EventTypeKey(
+        val orgId: String,
+        val domainName: String,
+        val packageName: String,
+        val resourceName: String,
+        val operationType: OperationType,
+    )
 
     private fun RequestFintEvent.toExpiredResponse(): ResponseFintEvent =
         ResponseFintEvent().apply {
