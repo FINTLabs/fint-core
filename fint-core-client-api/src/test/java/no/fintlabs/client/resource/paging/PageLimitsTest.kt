@@ -22,13 +22,15 @@ class PageLimitsTest {
     }
 
     @Test
-    fun `personalressurs has a page limit above the default`() {
-        assertEquals(64000, PageLimits.maxSizeOf(coordinate(PERSONALRESSURS)))
+    fun `three personal resources have a page limit above the default`() {
+        LARGE_PAGE_RESOURCES.forEach { resource ->
+            assertEquals(64000, PageLimits.maxSizeOf(coordinate(resource)), resource)
+        }
     }
 
     @Test
     fun `every other page limit is from one entry to the default`() {
-        (PageLimits.maxSizes - PERSONALRESSURS).forEach { (resource, maxSize) ->
+        (PageLimits.maxSizes - LARGE_PAGE_RESOURCES).forEach { (resource, maxSize) ->
             assertTrue(maxSize in 1..PageLimits.DEFAULT, "$resource has the page limit $maxSize")
         }
     }
@@ -46,6 +48,11 @@ class PageLimitsTest {
     }
 
     private companion object {
-        const val PERSONALRESSURS = "administrasjon/personal/personalressurs"
+        val LARGE_PAGE_RESOURCES =
+            setOf(
+                "administrasjon/personal/arbeidsforhold",
+                "administrasjon/personal/person",
+                "administrasjon/personal/personalressurs",
+            )
     }
 }
