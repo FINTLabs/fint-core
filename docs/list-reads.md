@@ -4,10 +4,10 @@ A list read is `GET /utdanning/vurdering/elevfravar`, or the same with a `$filte
 client-api answers it from the cache, which the adapters fill through syncs. There are two kinds, and the request
 decides which one it gets.
 
-| Kind    | Request                      | What the client gets                                                       |
-|---------|------------------------------|----------------------------------------------------------------------------|
-| A page  | `size` above zero            | `size` entries, with `self`, `prev` and `next` links to move through them. |
-| A full read | no `size`, or `size=0`       | Every entry of the collection, in one response.                            |
+| Kind        | Request                | What the client gets                                                               |
+|-------------|------------------------|------------------------------------------------------------------------------------|
+| A page      | `size` above zero      | At most `size` entries, with `self`, `prev` and `next` links to move through them. |
+| A full read | no `size`, or `size=0` | Every entry of the collection, in one response.                                    |
 
 Both accept `sinceTimeStamp`, which keeps only the entries modified at or after it, and `$filter`, an OData
 expression evaluated on each entry. Both come in the same shape.
@@ -36,6 +36,10 @@ extra entry says whether there is a `next`. A `cursor` in the link lets the next
 instead of skipping `offset` entries. The page's back-links come from one lookup of the relation edges that point
 at the page's identifiers. Which relations get a back-link is listed in [RELATION_RULES.md](../RELATION_RULES.md). The page is built
 in memory and returned as a body, which is fine since it is never bigger than `size`.
+
+Each resource has a largest page size, and no resource has one above 1,000. A `size` above it gives a page of the
+largest page size, and the links carry the `size` of that page. A client that follows `next` gets every entry. A
+client that adds its own `size` to `offset` skips entries. The sizes are in [page-limits.md](page-limits.md).
 
 ## A full read
 
