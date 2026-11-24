@@ -1,15 +1,25 @@
 # Page limits
 
-This page proposes a page size for each resource in the client-api.
-
-The client-api does not enforce these page sizes today. A read without `size` returns the full collection, and
-`size` has no maximum. The team has not agreed on the values.
+This page gives the largest page size for each resource in the client-api.
 
 The page has two lists.
 
-- [With the network gateway](#with-the-network-gateway) is the list for today. Each page is at most 0.5 MB.
+- [With the network gateway](#with-the-network-gateway) is the list that the client-api enforces. Each page is at
+  most 0.5 MB.
 - [Without the gateway problem](#without-the-gateway-problem) is the list we recommend when the gateway problem
-  is gone.
+  is gone. The client-api does not use it, and the team has not agreed on its values.
+
+## How the client-api enforces the page size
+
+A read with a `size` above the page size of the resource returns a page of that page size.
+The links in the response have the `size` of the page that the client got.
+A client that follows the `next` link gets every entry.
+A client that adds its own `size` to `offset` skips entries.
+
+A read without `size` returns the full collection, and it has no limit.
+A resource that is not in the list has a page size of 1,000.
+
+The values are in `PageLimits.kt` in the client-api. Change that file and this page together.
 
 ## Why the gateway needs small pages
 
