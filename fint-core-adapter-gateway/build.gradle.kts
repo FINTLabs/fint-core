@@ -15,7 +15,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-    implementation("no.fint:fint-event-model:3.0.2")
+    implementation("no.fint:fint-event-model:4.0.0")
     implementation("no.novari:fint-core-principal:4.1.0")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
