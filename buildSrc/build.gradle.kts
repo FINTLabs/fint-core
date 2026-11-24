@@ -12,7 +12,6 @@ repositories {
 }
 
 dependencies {
-    // When spring boot is updated from 4.1.1, review and remove "extra" pins and constraints!
     implementation("org.springframework.boot:spring-boot-gradle-plugin:4.1.2")
     implementation("io.spring.gradle:dependency-management-plugin:1.1.7")
 
@@ -24,15 +23,6 @@ dependencies {
     constraints {
         implementation("org.apache.commons:commons-lang3:3.18.0") {
             because("Versions before 3.18.0 contain a known vulnerability")
-        }
-        // Keep these constraints alongside the jackson-bom.version override in
-        // spring-service-conventions.gradle.kts. The "extra" manages application dependencies,
-        // while these constraints secure buildSrc's separate Spring Boot plugin classpath.
-        implementation("tools.jackson.core:jackson-databind:3.1.7") {
-            because("Versions before 3.1.6 contain a known vulnerability")
-        }
-        implementation("tools.jackson.core:jackson-core:3.1.7") {
-            because("Versions before 3.1.6 contain a known vulnerability")
         }
     }
 }
