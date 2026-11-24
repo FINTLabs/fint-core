@@ -5,7 +5,7 @@ This page gives the largest page size for each resource in the client-api.
 The page has two lists.
 
 - [With the network gateway](#with-the-network-gateway) is the list that the client-api enforces. Each page is at
-  most 0.5 MB.
+  most 0.5 MB, with one exception.
 - [Without the gateway problem](#without-the-gateway-problem) is the list we recommend when the gateway problem
   is gone. The client-api does not use it, and the team has not agreed on its values.
 
@@ -33,11 +33,11 @@ gateway with a correct body.
 
 ## With the network gateway
 
-A page is at most 0.5 MB and at most 1,000 entries.
+A page is at most 0.5 MB and at most 1,000 entries. One resource is an exception, see the text below the table.
 The table starts with the smallest page size.
 
 **Requests** and **Time** show a read of the full collection, in the county that has the most entries of that
-resource. The sum for all 75 resources is 5,282 requests and about 8 minutes.
+resource. The sum for all 75 resources is 5,244 requests and about 8 minutes.
 
 | Resource | Page size | Page | Requests | Time |
 |---|---|---|---|---|
@@ -60,7 +60,6 @@ resource. The sum for all 75 resources is 5,282 requests and about 8 minutes.
 | `administrasjon/personal/arbeidsforhold` | 250 | 0.37 MB | 95 | 4.5 s |
 | `administrasjon/personal/fastlonn` | 250 | 0.32 MB | 1 | 180 ms |
 | `administrasjon/personal/fasttillegg` | 250 | 0.32 MB | 1 | 25 ms |
-| `administrasjon/personal/personalressurs` | 250 | 0.33 MB | 39 | 4.0 s |
 | `administrasjon/personal/variabellonn` | 250 | 0.32 MB | 3 | 160 ms |
 | `ressurs/datautstyr/enhetsgruppe` | 250 | 0.48 MB \* | 1 | 25 ms |
 | `utdanning/vurdering/eksamensgruppe` | 250 | 0.30 MB | 13 | 2.4 s |
@@ -116,9 +115,15 @@ resource. The sum for all 75 resources is 5,282 requests and about 8 minutes.
 | `utdanning/timeplan/undervisningsgruppemedlemskap` | 1,000 | 0.50 MB | 236 | 29 s |
 | `utdanning/vurdering/eksamensgruppemedlemskap` | 1,000 | 0.44 MB | 17 | 2.0 s |
 | `utdanning/vurdering/karakterverdi` | 1,000 | 0.36 MB | 2 | 150 ms |
+| `administrasjon/personal/personalressurs` | 64,000 | 83 MB | 1 | 3.4 s |
 
 Two resources cannot follow the rule. One entry of `utdanning/utdanningsprogram/skole` is about 1.2 MB, and one
 entry of `personvern/samtykke/behandling` is about 0.65 MB. Paging cannot make one entry smaller.
+
+One resource has a page size that does not follow the rule. Clients read
+`administrasjon/personal/personalressurs` with a `size` of 64,000, and the client-api permits that page size.
+The largest collection of that resource has fewer than 10,000 entries, so one page holds the full collection.
+That page is about 12.5 MB, and that is above the largest safe size for the gateway.
 
 ## Without the gateway problem
 
