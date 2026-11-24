@@ -27,16 +27,13 @@ object PageLimits {
             "utdanning/timeplan/faggruppe" to 100,
             "utdanning/timeplan/undervisningsgruppe" to 100,
             "utdanning/vurdering/elevfravar" to 100,
-            "administrasjon/personal/arbeidsforhold" to 250,
             "administrasjon/personal/fastlonn" to 250,
             "administrasjon/personal/fasttillegg" to 250,
-            "administrasjon/personal/personalressurs" to 250,
             "administrasjon/personal/variabellonn" to 250,
             "ressurs/datautstyr/enhetsgruppe" to 250,
             "utdanning/vurdering/eksamensgruppe" to 250,
             "administrasjon/fullmakt/fullmakt" to 500,
             "administrasjon/personal/fravar" to 500,
-            "administrasjon/personal/person" to 500,
             "personvern/kodeverk/behandlingsgrunnlag" to 500,
             "personvern/kodeverk/personopplysning" to 500,
             "personvern/samtykke/samtykke" to 500,
@@ -54,6 +51,10 @@ object PageLimits {
             "utdanning/vurdering/halvarsfagvurdering" to 500,
             "utdanning/vurdering/sluttfagvurdering" to 500,
             "utdanning/vurdering/underveisfagvurdering" to 500,
+            // Clients read these resources with a size of 64,000. The values do not follow the gateway rule.
+            "administrasjon/personal/arbeidsforhold" to 64_000,
+            "administrasjon/personal/person" to 64_000,
+            "administrasjon/personal/personalressurs" to 64_000,
         )
 
     fun maxSizeOf(coordinate: ResourceCoordinate): Int = maxSizes[coordinate.toResourceUri()] ?: DEFAULT

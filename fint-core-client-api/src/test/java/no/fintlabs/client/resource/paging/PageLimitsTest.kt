@@ -22,8 +22,15 @@ class PageLimitsTest {
     }
 
     @Test
-    fun `every page limit is from one entry to the default`() {
-        PageLimits.maxSizes.forEach { (resource, maxSize) ->
+    fun `three personal resources have a page limit above the default`() {
+        LARGE_PAGE_RESOURCES.forEach { resource ->
+            assertEquals(64000, PageLimits.maxSizeOf(coordinate(resource)), resource)
+        }
+    }
+
+    @Test
+    fun `every other page limit is from one entry to the default`() {
+        (PageLimits.maxSizes - LARGE_PAGE_RESOURCES).forEach { (resource, maxSize) ->
             assertTrue(maxSize in 1..PageLimits.DEFAULT, "$resource has the page limit $maxSize")
         }
     }
@@ -38,5 +45,14 @@ class PageLimitsTest {
     private fun coordinate(resourceUri: String): ResourceCoordinate {
         val (domainName, packageName, resourceName) = resourceUri.split("/")
         return ResourceCoordinate("fintlabs.no", domainName, packageName, resourceName)
+    }
+
+    private companion object {
+        val LARGE_PAGE_RESOURCES =
+            setOf(
+                "administrasjon/personal/arbeidsforhold",
+                "administrasjon/personal/person",
+                "administrasjon/personal/personalressurs",
+            )
     }
 }
