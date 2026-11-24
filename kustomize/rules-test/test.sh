@@ -66,11 +66,13 @@ while read -r env org host id enabled; do
   gate_utdanning=0; [ $whole = 0 ] && has "$env" "$UTDANNING_GATED_ENVS" && gate_utdanning=1
   split_okonomi=0; [ $whole = 0 ] && has "$env" "$OKONOMI_SPLIT_ENVS" && split_okonomi=1
   if [ $gate_utdanning = 1 ]; then
-    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/ /utdanning/vurdering/elevvurdering/
+    gated /utdanning/elev/ /utdanning/kodeverk/ /utdanning/kodeverk/skolear/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/ /utdanning/vurdering/elevvurdering/
   else
     always client-api /utdanning/elev/ /utdanning/kodeverk/ /utdanning/timeplan/ /utdanning/utdanningsprogram/ /utdanning/vurdering/
   fi
   always client-api /utdanning/larling/ /utdanning/ot/
+  # the kodeverk of ot follow ot, whatever the headers
+  always client-api /utdanning/kodeverk/otenhet/ /utdanning/kodeverk/otstatus/
   # these vurdering resources never reach core 1, whatever the headers
   always client-api /utdanning/vurdering/karakterverdi/ /utdanning/vurdering/elevfravar/ /utdanning/vurdering/fravarsregistrering/
   # okonomi goes by package, not by header. Where core 1 serves faktura and kodeverk, only regnskap reaches the client-api.

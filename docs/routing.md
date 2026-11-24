@@ -11,6 +11,7 @@ or in fint-infra-tools.
 |---|---|---|---|
 | `/utdanning/vurdering/karakterverdi`, `elevfravar`, `fravarsregistrering` | client-api | client-api | client-api |
 | `/utdanning/larling`, `/utdanning/ot` | client-api | client-api | client-api |
+| `/utdanning/kodeverk/otenhet`, `otstatus` | client-api | client-api | client-api |
 | rest of `/utdanning` | client-api for V4, otherwise core 1 | client-api | client-api |
 | `/okonomi/regnskap` | client-api | client-api | client-api |
 | `/okonomi/faktura`, `/okonomi/kodeverk` | core 1 | client-api | client-api |
