@@ -21,7 +21,7 @@ dependencies {
     implementation("org.jlleitschuh.gradle:ktlint-gradle:14.2.0")
 
     constraints {
-        implementation("org.apache.commons:commons-lang3:3.18.0") {
+        implementation("org.apache.commons:commons-lang3:3.22.0") {
             because("Versions before 3.18.0 contain a known vulnerability")
         }
     }
