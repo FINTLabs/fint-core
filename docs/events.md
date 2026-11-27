@@ -92,13 +92,12 @@ request reads the events collection, as a request without `wait` does.
 When the stream fails, the gateway opens it again. It then wakes every held request, because an event that was stored
 in between gave no signal. While the stream is down, a held request gets a new event only when its wait is over.
 
-| Setting                                                | Value      | Where it is set                                         |
-|--------------------------------------------------------|------------|---------------------------------------------------------|
-| Time a request is held when `wait` has no value        | 90 seconds | `fint.provider.event.long-poll.default-wait`            |
-| Longest time a request is held                         | 15 minutes | `fint.provider.event.long-poll.max-wait`                |
-| Longest time the database holds one read of the stream | 1 second   | `fint.provider.event.long-poll.change-stream-max-await` |
+| Setting                                         | Value      | Where it is set                              |
+|-------------------------------------------------|------------|----------------------------------------------|
+| Time a request is held when `wait` has no value | 90 seconds | `fint.provider.event.long-poll.default-wait` |
+| Longest time a request is held                  | 15 minutes | `fint.provider.event.long-poll.max-wait`     |
 
-All three are set in the adapter-gateway. A longer `wait` in a request is cut to the longest time. The gateway does not
+Both are set in the adapter-gateway. A longer `wait` in a request is cut to the longest time. The gateway does not
 see that an adapter went away while its request is held, and the longest time ends such a request.
 
 ## The life of an event

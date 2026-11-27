@@ -3,7 +3,6 @@ package no.fintlabs.adapter.gateway.event.request
 import com.mongodb.client.model.Aggregates
 import com.mongodb.client.model.Filters
 import com.mongodb.client.model.Projections
-import no.fintlabs.adapter.gateway.config.EventLongPollProperties
 import no.novari.core.shared.event.EVENT_COLLECTION_SUFFIX
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
@@ -17,7 +16,6 @@ import java.util.concurrent.TimeUnit
 class EventInsertWatcher(
     private val template: MongoTemplate,
     private val eventSignal: EventSignal,
-    private val properties: EventLongPollProperties,
 ) : SmartLifecycle {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -66,7 +64,7 @@ class EventInsertWatcher(
     private fun watch() {
         template.db
             .watch(INSERTED_EVENTS)
-            .maxAwaitTime(properties.changeStreamMaxAwait.toMillis(), TimeUnit.MILLISECONDS)
+            .maxAwaitTime(EMPTY_READ_TIME.toMillis(), TimeUnit.MILLISECONDS)
             .cursor()
             .use { changes ->
                 streamOpen = true
@@ -97,6 +95,10 @@ class EventInsertWatcher(
     private companion object {
         val FIRST_RETRY_PAUSE: Duration = Duration.ofSeconds(1)
         val LONGEST_RETRY_PAUSE: Duration = Duration.ofSeconds(30)
+
+        // The database answers a read of the stream at once when an event is stored. When
+        // nothing is stored for this long, it answers with nothing and the watcher reads again.
+        val EMPTY_READ_TIME: Duration = Duration.ofSeconds(1)
 
         // Only the collection name is needed, so the event itself is not sent on the stream.
         val INSERTED_EVENTS =
