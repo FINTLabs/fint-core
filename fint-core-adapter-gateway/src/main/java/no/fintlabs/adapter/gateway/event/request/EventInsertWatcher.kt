@@ -101,9 +101,9 @@ class EventInsertWatcher(
                 .use { changes ->
                     open = true
                     logger.info("Watching {} for new events", collectionName)
-                    // No resume token is kept, so a new stream starts at the present. An event
-                    // stored while no stream was open gave no signal, so the held requests read
-                    // again.
+                    // A request reads the events before it waits, so only a request that already
+                    // waits can miss an event that was stored while no stream was open. Those
+                    // requests read again now.
                     eventSignal.signal(collectionName)
                     while (running) {
                         val change = changes.tryNext()
