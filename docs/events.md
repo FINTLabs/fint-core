@@ -89,18 +89,16 @@ The gateway keeps one Mongo change stream open on the database. The stream repor
 org's collection, and the gateway then wakes the requests that wait for that org. The stream carries no event. A woken
 request reads the events collection, as a request without `wait` does.
 
-A held request also reads the events collection again on a timer. When the stream is down or turned off, events are
-still served, only later.
+When the stream fails, the gateway opens it again. It then wakes every held request, because an event that was stored
+in between gave no signal. While the stream is down, a held request gets a new event only when its wait is over.
 
-| Setting                                                | Value            | Where it is set                                         |
-|--------------------------------------------------------|------------------|---------------------------------------------------------|
-| Time a request is held when `wait` has no value        | 90 seconds       | `fint.provider.event.long-poll.default-wait`            |
-| Longest time a request is held                         | 15 minutes       | `fint.provider.event.long-poll.max-wait`                |
-| How often a held request reads again on its timer      | every 15 seconds | `fint.provider.event.long-poll.requery-interval`        |
-| Whether the change stream is used                      | on               | `fint.provider.event.long-poll.change-stream.enabled`   |
-| Longest time the database holds one read of the stream | 1 second         | `fint.provider.event.long-poll.change-stream.max-await` |
+| Setting                                                | Value      | Where it is set                                         |
+|--------------------------------------------------------|------------|---------------------------------------------------------|
+| Time a request is held when `wait` has no value        | 90 seconds | `fint.provider.event.long-poll.default-wait`            |
+| Longest time a request is held                         | 15 minutes | `fint.provider.event.long-poll.max-wait`                |
+| Longest time the database holds one read of the stream | 1 second   | `fint.provider.event.long-poll.change-stream-max-await` |
 
-All five are set in the adapter-gateway. A longer `wait` in a request is cut to the longest time. The gateway does not
+All three are set in the adapter-gateway. A longer `wait` in a request is cut to the longest time. The gateway does not
 see that an adapter went away while its request is held, and the longest time ends such a request.
 
 ## The life of an event

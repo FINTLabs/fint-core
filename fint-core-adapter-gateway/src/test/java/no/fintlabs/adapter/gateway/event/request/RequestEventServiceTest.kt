@@ -65,14 +65,12 @@ class RequestEventServiceTest {
     }
 
     @Test
-    fun `a held request finds the event on its timer without a signal`() {
-        val service = service(requeryInterval = Duration.ofMillis(50))
-        val answer = CompletableFuture.supplyAsync { service.getEvents(orgs, scope, wait = LONG) }
-        assertThat(firstRead.await(5, TimeUnit.SECONDS)).isTrue
+    fun `a held request reads once more when the wait is over`() {
+        every { eventStore.findPending(COLLECTION, any(), scope) } returnsMany listOf(emptyList(), listOf(event))
 
-        pending = listOf(event)
+        assertThat(service().getEvents(orgs, scope, wait = SHORT)).containsExactly(event)
 
-        assertThat(answer.get(5, TimeUnit.SECONDS)).containsExactly(event)
+        verify(exactly = 2) { eventStore.findPending(COLLECTION, any(), scope) }
     }
 
     @Test
@@ -101,15 +99,13 @@ class RequestEventServiceTest {
         assertThat(answer.get(5, TimeUnit.SECONDS)).isEmpty()
     }
 
-    private fun service(
-        maxWait: Duration = LONG,
-        requeryInterval: Duration = LONG,
-    ) = RequestEventService(
-        eventStore,
-        Clock.fixed(Instant.parse("2026-11-19T08:00:00Z"), ZoneOffset.UTC),
-        eventSignal,
-        EventLongPollProperties(maxWait = maxWait, requeryInterval = requeryInterval),
-    )
+    private fun service(maxWait: Duration = LONG) =
+        RequestEventService(
+            eventStore,
+            Clock.fixed(Instant.parse("2026-11-19T08:00:00Z"), ZoneOffset.UTC),
+            eventSignal,
+            EventLongPollProperties(maxWait = maxWait),
+        )
 
     private fun request(id: String): RequestFintEvent =
         RequestFintEvent().apply {

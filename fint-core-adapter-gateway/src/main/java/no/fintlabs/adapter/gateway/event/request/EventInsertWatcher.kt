@@ -12,11 +12,7 @@ import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
-/**
- * Signals [EventSignal] when an event is stored, from one change stream on the database.
- * The stream is a hint only. Held requests also look for events on a timer, so a stream that
- * fails or misses an insert costs time and loses no event.
- */
+/** Signals [EventSignal] when an event is stored, from one change stream on the database. */
 @Component
 class EventInsertWatcher(
     private val template: MongoTemplate,
@@ -38,7 +34,6 @@ class EventInsertWatcher(
     val watching: Boolean get() = streamOpen
 
     override fun start() {
-        if (!properties.changeStream.enabled) return
         thread = Thread.ofVirtual().name("event-insert-watcher").start(::watchUntilStopped)
     }
 
@@ -57,7 +52,7 @@ class EventInsertWatcher(
             } catch (e: Exception) {
                 if (!isRunning) return
                 logger.warn(
-                    "The change stream for new events failed. It opens again in {} s. Held requests find events on their timer until then.",
+                    "The change stream for new events failed. It opens again in {} s. Held requests are not woken for new events until then.",
                     retryPause.toSeconds(),
                     e,
                 )
@@ -69,15 +64,16 @@ class EventInsertWatcher(
     }
 
     private fun watch() {
-        // No resume token is kept. A new stream starts at the present, and the timer of the
-        // held requests covers the inserts in between.
         template.db
             .watch(INSERTED_EVENTS)
-            .maxAwaitTime(properties.changeStream.maxAwait.toMillis(), TimeUnit.MILLISECONDS)
+            .maxAwaitTime(properties.changeStreamMaxAwait.toMillis(), TimeUnit.MILLISECONDS)
             .cursor()
             .use { changes ->
                 streamOpen = true
                 logger.info("Watching for new events")
+                // No resume token is kept, so a new stream starts at the present. An event stored
+                // while no stream was open gave no signal, so every held request reads again.
+                eventSignal.signalAll()
                 while (isRunning) {
                     val change = changes.tryNext()
                     // Reset after a read that worked, not after the open, so a stream that

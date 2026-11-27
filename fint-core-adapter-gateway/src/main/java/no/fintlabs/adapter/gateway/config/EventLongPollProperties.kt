@@ -12,14 +12,6 @@ data class EventLongPollProperties(
     val defaultWait: Duration = Duration.ofSeconds(90),
     /** The longest time one request is held. A longer wait in the request is cut to this. */
     val maxWait: Duration = Duration.ofMinutes(15),
-    /** How often a held request looks for events again when nothing has woken it. */
-    val requeryInterval: Duration = Duration.ofSeconds(15),
-    val changeStream: ChangeStream = ChangeStream(),
-) {
-    data class ChangeStream(
-        /** Without the stream, a held request finds new events on [requeryInterval] only. */
-        val enabled: Boolean = true,
-        /** The longest time the database holds one read of the stream when there is nothing new. */
-        val maxAwait: Duration = Duration.ofSeconds(1),
-    )
-}
+    /** The longest time the database holds one read of the change stream when there is nothing new. */
+    val changeStreamMaxAwait: Duration = Duration.ofSeconds(1),
+)

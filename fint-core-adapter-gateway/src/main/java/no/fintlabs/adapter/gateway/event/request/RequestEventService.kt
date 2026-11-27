@@ -36,7 +36,7 @@ class RequestEventService(
         if (wait <= Duration.ZERO) return findEvents(orgs, scope, size)
 
         // The gateway does not see that an adapter went away while its request is held. The
-        // limit ends such a request, which otherwise reads Mongo on every signal and timer.
+        // limit ends such a request, which otherwise reads Mongo on every signal.
         val deadline = System.nanoTime() + minOf(wait, longPoll.maxWait).toNanos()
 
         // Subscribed before the first read, so an event stored between a read and the wait
@@ -53,14 +53,12 @@ class RequestEventService(
         scope: EventScope,
         size: Int,
     ): List<RequestFintEvent> {
-        val requeryNanos = longPoll.requeryInterval.toNanos()
-
         while (true) {
             val events = findEvents(orgs, scope, size)
             val remaining = deadline - System.nanoTime()
             if (events.isNotEmpty() || remaining <= 0 || !eventSignal.isRunning) return events
 
-            subscription.await(Duration.ofNanos(minOf(remaining, requeryNanos)))
+            subscription.await(Duration.ofNanos(remaining))
         }
     }
 

@@ -42,8 +42,8 @@ class EventLongPollIT : GatewayIntegrationTestBase() {
     fun `a held request answers with an event when it is stored`() {
         await until { eventInsertWatcher.watching }
 
-        // The wait is shorter than the timer of a held request, so only the change stream can
-        // wake it with the event in time.
+        // The answer must come before the wait is over, so only the change stream can wake the
+        // request in time.
         val answer = CompletableFuture.supplyAsync { getEvents(wait = 10) }
         Thread.sleep(500)
         assertThat(answer).isNotDone
