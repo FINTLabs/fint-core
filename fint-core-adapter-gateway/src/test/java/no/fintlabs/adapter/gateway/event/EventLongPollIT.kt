@@ -40,17 +40,29 @@ class EventLongPollIT : GatewayIntegrationTestBase() {
 
     @Test
     fun `a held request answers with an event when it is stored`() {
-        await until { eventInsertWatcher.watching }
-
         // The answer must come before the wait is over, so only the change stream can wake the
         // request in time.
         val answer = CompletableFuture.supplyAsync { getEvents(wait = 10) }
-        Thread.sleep(500)
+        await until { eventInsertWatcher.isWatching(collection) }
         assertThat(answer).isNotDone
 
         val request = storeRequest()
 
         val body = answer.get(5, TimeUnit.SECONDS)
+        assertThat(body).contains(request.corrId)
+    }
+
+    @Test
+    fun `a held request gets an event that was stored while the stream was closed`() {
+        val answer = CompletableFuture.supplyAsync { getEvents(wait = 20) }
+        await until { eventInsertWatcher.isWatching(collection) }
+
+        // The drop makes Mongo close the stream. The event is stored before the stream is open
+        // again, so no insert is reported for it.
+        mongoTemplate.dropCollection(collection)
+        val request = storeRequest()
+
+        val body = answer.get(10, TimeUnit.SECONDS)
         assertThat(body).contains(request.corrId)
     }
 

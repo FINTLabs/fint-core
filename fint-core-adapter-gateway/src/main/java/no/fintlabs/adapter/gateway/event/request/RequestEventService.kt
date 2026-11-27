@@ -21,6 +21,7 @@ class RequestEventService(
     private val eventStore: EventStore,
     private val clock: Clock,
     private val eventSignal: EventSignal,
+    private val eventInsertWatcher: EventInsertWatcher,
     private val longPoll: EventLongPollProperties,
 ) {
     /**
@@ -39,9 +40,12 @@ class RequestEventService(
         // limit ends such a request, which otherwise reads Mongo on every signal.
         val deadline = System.nanoTime() + minOf(wait, longPoll.maxWait).toNanos()
 
+        val collectionNames = orgs.keys.map { it.toEventCollectionName() }
+        eventInsertWatcher.watch(collectionNames)
+
         // Subscribed before the first read, so an event stored between a read and the wait
         // after it still wakes the request.
-        return eventSignal.subscribe(orgs.keys.map { it.toEventCollectionName() }).use { subscription ->
+        return eventSignal.subscribe(collectionNames).use { subscription ->
             findEventsBefore(deadline, subscription, orgs, scope, size)
         }
     }

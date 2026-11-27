@@ -85,12 +85,17 @@ sequenceDiagram
     G -->> D: [event]
 ```
 
-The gateway keeps one Mongo change stream open on the database. The stream reports that an event was stored in an
-org's collection, and the gateway then wakes the requests that wait for that org. The stream carries no event. A woken
-request reads the events collection, as a request without `wait` does.
+The gateway keeps one Mongo change stream open on each events collection that a request waits on. It opens the stream
+with the first such request. The stream reports that an event was stored, and the gateway then wakes the requests that
+wait for that org. The stream carries no event. A woken request reads the events collection, as a request without
+`wait` does.
 
-When the stream fails, the gateway opens it again. It then wakes every held request, because an event that was stored
-in between gave no signal. While the stream is down, a held request gets a new event only when its wait is over.
+The stream is on a collection and not on the database, because Azure DocumentDB reports no changes on a stream on a
+database.
+
+When a stream fails, the gateway opens it again. It then wakes the requests that wait on that collection, because an
+event that was stored in between gave no signal. While the stream is down, a held request gets a new event only when
+its wait is over.
 
 | Setting                                         | Value      | Where it is set                              |
 |-------------------------------------------------|------------|----------------------------------------------|

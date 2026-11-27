@@ -3,15 +3,18 @@ package no.fintlabs.adapter.gateway.event.request
 import com.mongodb.client.model.Aggregates
 import com.mongodb.client.model.Filters
 import com.mongodb.client.model.Projections
-import no.novari.core.shared.event.EVENT_COLLECTION_SUFFIX
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.stereotype.Component
 import java.time.Duration
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** Signals [EventSignal] when an event is stored, from one change stream on the database. */
+/**
+ * Signals [EventSignal] when an event is stored, from one change stream for each events
+ * collection that a request waits on.
+ */
 @Component
 class EventInsertWatcher(
     private val template: MongoTemplate,
@@ -19,77 +22,113 @@ class EventInsertWatcher(
 ) : SmartLifecycle {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    @Volatile
-    private var thread: Thread? = null
+    // A stream on the whole database would be one stream for all orgs, but Azure DocumentDB
+    // reports no changes on such a stream.
+    private val streams = ConcurrentHashMap<String, CollectionStream>()
 
     @Volatile
-    private var streamOpen = false
+    private var running = false
 
-    // Only the watcher thread reads and writes this.
-    private var retryPause = FIRST_RETRY_PAUSE
+    /** Opens a stream on each collection that has none. A stream stays open until the gateway stops. */
+    fun watch(collectionNames: Collection<String>) {
+        if (!running) return
+        collectionNames.forEach { name ->
+            streams.computeIfAbsent(name) { CollectionStream(it).apply { start() } }
+        }
+    }
 
-    /** Whether the stream is open and inserts are signalled. */
-    val watching: Boolean get() = streamOpen
+    /** Whether the stream on the collection is open and inserts are signalled. */
+    fun isWatching(collectionName: String): Boolean = streams[collectionName]?.open == true
 
     override fun start() {
-        thread = Thread.ofVirtual().name("event-insert-watcher").start(::watchUntilStopped)
+        running = true
     }
 
     override fun stop() {
-        val watcher = thread ?: return
-        thread = null
-        watcher.interrupt()
+        running = false
+        streams.values.forEach { it.stop() }
+        streams.clear()
     }
 
-    override fun isRunning(): Boolean = thread != null
+    override fun isRunning(): Boolean = running
 
-    private fun watchUntilStopped() {
-        while (isRunning) {
-            try {
-                watch()
-            } catch (e: Exception) {
-                if (!isRunning) return
-                logger.warn(
-                    "The change stream for new events failed. It opens again in {} s. Held requests are not woken for new events until then.",
-                    retryPause.toSeconds(),
-                    e,
-                )
-                pauseBeforeRetry()
-            } finally {
-                streamOpen = false
-            }
+    private inner class CollectionStream(
+        private val collectionName: String,
+    ) {
+        @Volatile
+        var open = false
+            private set
+
+        @Volatile
+        private var thread: Thread? = null
+
+        // Only the thread of this stream reads and writes this.
+        private var retryPause = FIRST_RETRY_PAUSE
+
+        fun start() {
+            thread = Thread.ofVirtual().name("event-insert-watcher-$collectionName").start(::watchUntilStopped)
         }
-    }
 
-    private fun watch() {
-        template.db
-            .watch(INSERTED_EVENTS)
-            .maxAwaitTime(EMPTY_READ_TIME.toMillis(), TimeUnit.MILLISECONDS)
-            .cursor()
-            .use { changes ->
-                streamOpen = true
-                logger.info("Watching for new events")
-                // No resume token is kept, so a new stream starts at the present. An event stored
-                // while no stream was open gave no signal, so every held request reads again.
-                eventSignal.signalAll()
-                while (isRunning) {
-                    val change = changes.tryNext()
-                    // Reset after a read that worked, not after the open, so a stream that
-                    // opens and then fails each time still backs off.
-                    retryPause = FIRST_RETRY_PAUSE
-                    change?.namespace?.collectionName?.let(eventSignal::signal)
+        fun stop() {
+            thread?.interrupt()
+        }
+
+        private fun watchUntilStopped() {
+            while (running) {
+                try {
+                    watch()
+                } catch (e: Exception) {
+                    if (!running) return
+                    logger.warn(
+                        "The change stream on {} failed. It opens again in {} s. Held requests are not woken for new events until then.",
+                        collectionName,
+                        retryPause.toSeconds(),
+                        e,
+                    )
+                    pauseBeforeRetry()
+                } finally {
+                    open = false
                 }
             }
-    }
-
-    private fun pauseBeforeRetry() {
-        try {
-            Thread.sleep(retryPause)
-        } catch (_: InterruptedException) {
-            // Stopped while it waited. The loop sees that and ends.
         }
-        // A short break is over fast. A stream that stays down is retried, and logged, less often.
-        retryPause = minOf(retryPause.multipliedBy(2), LONGEST_RETRY_PAUSE)
+
+        private fun watch() {
+            template.db
+                .getCollection(collectionName)
+                .watch(INSERTS)
+                .maxAwaitTime(EMPTY_READ_TIME.toMillis(), TimeUnit.MILLISECONDS)
+                .cursor()
+                .use { changes ->
+                    open = true
+                    logger.info("Watching {} for new events", collectionName)
+                    // No resume token is kept, so a new stream starts at the present. An event
+                    // stored while no stream was open gave no signal, so the held requests read
+                    // again.
+                    eventSignal.signal(collectionName)
+                    while (running) {
+                        val change = changes.tryNext()
+                        // The database closes the stream when the collection is dropped. A closed
+                        // stream gives no error and no changes, so it must be opened again.
+                        if (change == null && changes.serverCursor == null) {
+                            throw IllegalStateException("The database closed the change stream")
+                        }
+                        // Reset after a read that worked, not after the open, so a stream that
+                        // opens and then fails each time still backs off.
+                        retryPause = FIRST_RETRY_PAUSE
+                        if (change != null) eventSignal.signal(collectionName)
+                    }
+                }
+        }
+
+        private fun pauseBeforeRetry() {
+            try {
+                Thread.sleep(retryPause)
+            } catch (_: InterruptedException) {
+                // Stopped while it waited. The loop sees that and ends.
+            }
+            // A short break is over fast. A stream that stays down is retried, and logged, less often.
+            retryPause = minOf(retryPause.multipliedBy(2), LONGEST_RETRY_PAUSE)
+        }
     }
 
     private companion object {
@@ -100,15 +139,10 @@ class EventInsertWatcher(
         // nothing is stored for this long, it answers with nothing and the watcher reads again.
         val EMPTY_READ_TIME: Duration = Duration.ofSeconds(1)
 
-        // Only the collection name is needed, so the event itself is not sent on the stream.
-        val INSERTED_EVENTS =
+        // Only the fact of an insert is needed, so the event itself is not sent on the stream.
+        val INSERTS =
             listOf(
-                Aggregates.match(
-                    Filters.and(
-                        Filters.eq("operationType", "insert"),
-                        Filters.regex("ns.coll", "$EVENT_COLLECTION_SUFFIX$"),
-                    ),
-                ),
+                Aggregates.match(Filters.eq("operationType", "insert")),
                 Aggregates.project(Projections.include("ns", "operationType")),
             )
     }

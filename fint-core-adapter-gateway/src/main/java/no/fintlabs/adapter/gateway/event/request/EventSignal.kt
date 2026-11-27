@@ -33,11 +33,6 @@ class EventSignal : SmartLifecycle {
         subscriptions[collectionName]?.forEach { it.wake() }
     }
 
-    /** Wakes every held request. */
-    fun signalAll() {
-        subscriptions.values.forEach { waiting -> waiting.forEach { it.wake() } }
-    }
-
     override fun start() {
         stopped = false
     }
@@ -46,7 +41,7 @@ class EventSignal : SmartLifecycle {
     // delay a graceful shutdown.
     override fun stop() {
         stopped = true
-        signalAll()
+        subscriptions.values.forEach { waiting -> waiting.forEach { it.wake() } }
     }
 
     override fun isRunning(): Boolean = !stopped

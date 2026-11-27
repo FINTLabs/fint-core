@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
 class RequestEventServiceTest {
     private val eventStore = mockk<EventStore>()
     private val eventSignal = EventSignal()
+    private val eventInsertWatcher = mockk<EventInsertWatcher>(relaxed = true)
     private val orgs = mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE)
     private val scope = EventScope("utdanning")
     private val event = request("stored")
@@ -42,6 +43,14 @@ class RequestEventServiceTest {
         assertThat(service().getEvents(orgs, scope)).isEmpty()
 
         verify(exactly = 1) { eventStore.findPending(COLLECTION, any(), scope) }
+        verify(exactly = 0) { eventInsertWatcher.watch(any()) }
+    }
+
+    @Test
+    fun `with a wait, the collections of the request are watched`() {
+        service().getEvents(orgs, scope, wait = SHORT)
+
+        verify { eventInsertWatcher.watch(listOf(COLLECTION)) }
     }
 
     @Test
@@ -104,6 +113,7 @@ class RequestEventServiceTest {
             eventStore,
             Clock.fixed(Instant.parse("2026-11-19T08:00:00Z"), ZoneOffset.UTC),
             eventSignal,
+            eventInsertWatcher,
             EventLongPollProperties(maxWait = maxWait),
         )
 

@@ -49,18 +49,6 @@ class EventSignalTest {
     }
 
     @Test
-    fun `a signal to all wakes the subscriptions on every collection`() {
-        signal.subscribe(listOf("fintlabs_no_events")).use { first ->
-            signal.subscribe(listOf("vtfk_no_events")).use { second ->
-                signal.signalAll()
-
-                assertThat(elapsed { first.await(LONG) }).isLessThan(Duration.ofSeconds(5))
-                assertThat(elapsed { second.await(LONG) }).isLessThan(Duration.ofSeconds(5))
-            }
-        }
-    }
-
-    @Test
     fun `a stop wakes every subscription and ends later waits at once`() {
         signal.subscribe(listOf("fintlabs_no_events")).use { subscription ->
             val woken = CompletableFuture.runAsync { subscription.await(LONG) }
