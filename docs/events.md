@@ -50,6 +50,61 @@ sequenceDiagram
 The gateway stores the resource and marks the event answered in one Mongo transaction. A validate never stores anything,
 and neither does a create that failed.
 
+## Waiting for events
+
+An adapter can ask the gateway to hold an empty answer. It adds `wait` to the request.
+
+| Request                                            | How long an empty answer is held |
+|----------------------------------------------------|----------------------------------|
+| `GET /provider/event/utdanning/vurdering`          | Not held                         |
+| `GET /provider/event/utdanning/vurdering?wait`     | 90 seconds, the default          |
+| `GET /provider/event/utdanning/vurdering?wait=600` | 600 seconds                      |
+
+The default stays below the 120 seconds after which the access gateway cuts a request. A caller that does not go
+through the access gateway can ask for a longer wait.
+
+- When events are pending, the gateway answers at once.
+- When no events are pending, the gateway holds the request and answers when an event arrives.
+- When the wait is over, the gateway answers with an empty list. The adapter then asks again.
+
+An event stays pending until it is answered. A request that is sent while the adapter still works on an event gets that
+event again at once. An adapter answers the events it holds before it asks for more.
+
+```mermaid
+sequenceDiagram
+    participant A as client-api
+    participant M as Events collection
+    participant G as adapter-gateway
+    participant D as Adapter
+    D ->> G: GET /provider/event/utdanning/vurdering?wait
+    G ->> M: pending events the contract covers
+    Note over G: none, so the request is held
+    A ->> M: save event (PENDING)
+    M -->> G: change stream reports an insert
+    G ->> M: pending events the contract covers
+    G -->> D: [event]
+```
+
+The gateway keeps one Mongo change stream open on each events collection that a request waits on. It opens the stream
+with the first such request. The stream reports that an event was stored, and the gateway then wakes the requests that
+wait for that org. The stream carries no event. A woken request reads the events collection, as a request without
+`wait` does.
+
+The stream is on a collection and not on the database, because Azure DocumentDB reports no changes on a stream on a
+database.
+
+When a stream fails, the gateway opens it again. It then wakes the requests that wait on that collection, because an
+event that was stored in between gave no signal. While the stream is down, a held request gets a new event only when
+its wait is over.
+
+| Setting                                         | Value      | Where it is set                              |
+|-------------------------------------------------|------------|----------------------------------------------|
+| Time a request is held when `wait` has no value | 90 seconds | `fint.provider.event.long-poll.default-wait` |
+| Longest time a request is held                  | 15 minutes | `fint.provider.event.long-poll.max-wait`     |
+
+Both are set in the adapter-gateway. A longer `wait` in a request is cut to the longest time. The gateway does not
+see that an adapter went away while its request is held, and the longest time ends such a request.
+
 ## The life of an event
 
 ```mermaid

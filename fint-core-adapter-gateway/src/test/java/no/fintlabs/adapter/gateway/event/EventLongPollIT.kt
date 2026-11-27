@@ -1,0 +1,101 @@
+package no.fintlabs.adapter.gateway.event
+
+import no.fintlabs.adapter.gateway.GatewayIntegrationTestBase
+import no.fintlabs.adapter.gateway.event.request.EventInsertWatcher
+import no.fintlabs.adapter.models.event.RequestFintEvent
+import no.fintlabs.adapter.operation.OperationType
+import no.novari.core.shared.event.EventStore
+import no.novari.core.shared.event.toEventCollectionName
+import no.novari.core.shared.model.OrgId
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.kotlin.await
+import org.awaitility.kotlin.until
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+
+class EventLongPollIT : GatewayIntegrationTestBase() {
+    @Autowired
+    private lateinit var eventStore: EventStore
+
+    @Autowired
+    private lateinit var eventInsertWatcher: EventInsertWatcher
+
+    @Autowired
+    private lateinit var mongoTemplate: MongoTemplate
+
+    private val collection get() = OrgId.from(orgId).toEventCollectionName()
+
+    @BeforeEach
+    fun cleanCollection() {
+        mongoTemplate.dropCollection(collection)
+    }
+
+    @Test
+    fun `a held request answers with an event when it is stored`() {
+        // The answer must come before the wait is over, so only the change stream can wake the
+        // request in time.
+        val answer = CompletableFuture.supplyAsync { getEvents(wait = 10) }
+        await until { eventInsertWatcher.isWatching(collection) }
+        assertThat(answer).isNotDone
+
+        val request = storeRequest()
+
+        val body = answer.get(5, TimeUnit.SECONDS)
+        assertThat(body).contains(request.corrId)
+    }
+
+    @Test
+    fun `a held request gets an event that was stored while the stream was closed`() {
+        val answer = CompletableFuture.supplyAsync { getEvents(wait = 20) }
+        await until { eventInsertWatcher.isWatching(collection) }
+
+        // The drop makes Mongo close the stream. The event is stored before the stream is open
+        // again, so no insert is reported for it.
+        mongoTemplate.dropCollection(collection)
+        val request = storeRequest()
+
+        val body = answer.get(10, TimeUnit.SECONDS)
+        assertThat(body).contains(request.corrId)
+    }
+
+    @Test
+    fun `a request without a wait answers at once with nothing`() {
+        assertThat(getEvents(wait = null)).isEqualTo("[]")
+    }
+
+    private fun getEvents(wait: Int?): String {
+        val request = get("/provider/event/$domainName").with(authentication(mockPrincipal))
+        wait?.let { request.param("wait", it.toString()) }
+
+        return mockMvc
+            .perform(request)
+            .andReturn()
+            .response.contentAsString
+    }
+
+    private fun storeRequest(): RequestFintEvent {
+        val request =
+            RequestFintEvent().apply {
+                corrId = UUID.randomUUID().toString()
+                orgId = this@EventLongPollIT.orgId
+                domainName = this@EventLongPollIT.domainName
+                packageName = this@EventLongPollIT.packageName
+                resourceName = this@EventLongPollIT.resourceName
+                operationType = OperationType.CREATE
+                created = System.currentTimeMillis()
+                timeToLive = created + 900_000
+                value = """{"systemId":{"identifikatorverdi":"123"}}"""
+            }
+
+        eventStore.save(request, Instant.ofEpochMilli(request.created).plusSeconds(1_800), collection)
+        return request
+    }
+}

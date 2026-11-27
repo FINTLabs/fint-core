@@ -1,6 +1,7 @@
 package no.fintlabs.adapter.gateway.security
 
 import no.fintlabs.adapter.gateway.TestcontainersConfiguration
+import no.fintlabs.adapter.gateway.config.EventLongPollProperties
 import no.fintlabs.adapter.gateway.config.OrgIdConverter
 import no.fintlabs.adapter.gateway.config.ProviderProperties
 import no.fintlabs.adapter.gateway.event.EventController
@@ -69,6 +70,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.json.JsonMapper
+import java.time.Duration
 import java.util.UUID
 
 /**
@@ -504,6 +506,42 @@ class MethodSecurityIT {
         verify(requestEventService).getEvents(mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE), EventScope("utdanning"), 5)
     }
 
+    @Test
+    fun `event fetch without a wait is not held`() {
+        mockMvc
+            .perform(get("/provider/event/utdanning").with(authentication(adapter())))
+            .andExpect(status().isOk)
+
+        verify(requestEventService).getEvents(fintlabsOrg, EventScope("utdanning"), 0, Duration.ZERO)
+    }
+
+    @Test
+    fun `event fetch with an empty wait is held for the default time`() {
+        mockMvc
+            .perform(get("/provider/event/utdanning").param("wait", "").with(authentication(adapter())))
+            .andExpect(status().isOk)
+
+        verify(requestEventService).getEvents(fintlabsOrg, EventScope("utdanning"), 0, Duration.ofSeconds(90))
+    }
+
+    @Test
+    fun `event fetch with a wait in seconds is held for that time, also above the default`() {
+        mockMvc
+            .perform(get("/provider/event/utdanning").param("wait", "600").with(authentication(adapter())))
+            .andExpect(status().isOk)
+
+        verify(requestEventService).getEvents(fintlabsOrg, EventScope("utdanning"), 0, Duration.ofSeconds(600))
+    }
+
+    @Test
+    fun `event fetch with a wait that is not a number is a bad request`() {
+        mockMvc
+            .perform(get("/provider/event/utdanning").param("wait", "long").with(authentication(adapter())))
+            .andExpect(status().isBadRequest)
+    }
+
+    private val fintlabsOrg = mapOf(OrgId.from("fintlabs.no") to EventCapabilities.NONE)
+
     private fun adapter(
         assets: String = "fintlabs.no",
         roles: List<String> = listOf("FINT_Adapter_utdanning_elev"),
@@ -572,7 +610,7 @@ class MethodSecurityIT {
     @Configuration
     @Profile(PROFILE)
     @EnableAutoConfiguration(exclude = [KafkaAutoConfiguration::class])
-    @EnableConfigurationProperties(ProviderProperties::class)
+    @EnableConfigurationProperties(ProviderProperties::class, EventLongPollProperties::class)
     @Import(
         SecurityConfiguration::class,
         SecurityProblemDetailHandler::class,
